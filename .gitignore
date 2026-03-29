@@ -2,6 +2,16 @@
 .env
 **/.env
 **/.env.local
+# 其它环境文件（保留 *example* 供提交）
+**/.env.*
+!**/.env.example
+
+# 本机/服务器上的 nginx 等配置（含域名与反代，勿入库）
+worker/test.conf
+
+# TLS 私钥类（若放在仓库旁）
+*.pem
+*.key
 
 # Nested repo backup (see repo setup notes)
 .slideforge-git-backup/
