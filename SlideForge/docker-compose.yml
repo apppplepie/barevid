@@ -37,9 +37,13 @@ services:
     restart: unless-stopped
 
   backend:
+    # 与 .env 中 SLIDEFORGE_BACKEND_IMAGE 一致时：本地 build 会直接打成可 push 的标签
+    image: ${SLIDEFORGE_BACKEND_IMAGE:-barevid-backend:local}
     build:
       context: .
       dockerfile: backend/Dockerfile
+      # 避免 BuildKit provenance 导致部分环境下 docker push 到 Hub 报 400
+      provenance: false
     container_name: slideforge-backend
     env_file:
       - backend/.env
@@ -61,9 +65,11 @@ services:
     restart: unless-stopped
 
   frontend:
+    image: ${SLIDEFORGE_FRONTEND_IMAGE:-barevid-frontend:local}
     build:
       context: .
       dockerfile: frontend/Dockerfile
+      provenance: false
     container_name: slideforge-frontend
     environment:
       API_PROXY_TARGET: http://backend:8000
