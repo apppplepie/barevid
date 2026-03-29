@@ -1,0 +1,16 @@
+# 仅在有完整源码（backend/、frontend/）时使用。
+# 本地构建：docker compose -f docker-compose.yml -f docker-compose.build.yml build
+#           docker compose -f docker-compose.yml -f docker-compose.build.yml up -d
+#
+# 服务器上只放 compose + .env + backend/.env + storage + docker/mysql-init/ 时，不要带本文件，避免误触发 build。
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      provenance: false
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      provenance: false

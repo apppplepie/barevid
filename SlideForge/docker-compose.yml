@@ -5,7 +5,9 @@
 #          ② 后端启动时仍会 create_all / 迁移，与 SQL 并存时一般仅补差异。若只要纯 SQL 初始化，保持卷为空即可。
 # 更新表结构后请同步 docker/mysql-init/barevid.sql（可与仓库根 barevid.sql 对齐）。
 #
-# 启动：在 SlideForge 目录执行  docker compose up -d --build
+# 启动：
+#   服务器（只拉镜像、无源码）：docker compose pull && docker compose up -d
+#   本机构建：docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 # 修改 backend/.env 后须重建后端容器才会刷新部分变量：docker compose up -d --force-recreate backend
 #
 # 视频导出 Worker 与 API/前端分体部署：
@@ -42,13 +44,9 @@ services:
     restart: unless-stopped
 
   backend:
-    # 与 .env 中 SLIDEFORGE_BACKEND_IMAGE 一致时：本地 build 会直接打成可 push 的标签
-    image: ${SLIDEFORGE_BACKEND_IMAGE:-barevid-backend:local}
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-      # 避免 BuildKit provenance 导致部分环境下 docker push 到 Hub 报 400
-      provenance: false
+    # 服务器勿带 build：需完整目录 frontend/、backend/，否则会 lstat .../frontend 失败。
+    # 本地构建请加 -f docker-compose.build.yml（见文件头说明）。
+    image: ${SLIDEFORGE_BACKEND_IMAGE:-creepender42/barevid-backend:latest}
     container_name: slideforge-backend
     env_file:
       - backend/.env
@@ -70,11 +68,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: ${SLIDEFORGE_FRONTEND_IMAGE:-barevid-frontend:local}
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-      provenance: false
+    image: ${SLIDEFORGE_FRONTEND_IMAGE:-creepender42/barevid-frontend:latest}
     container_name: slideforge-frontend
     environment:
       API_PROXY_TARGET: http://backend:8000
