@@ -1,6 +1,10 @@
 # MySQL + 后端 + 前端。业务文件挂载：SlideForge/storage -> 容器内 /data/storage
 # MySQL 数据在 Docker 命名卷 mysql_data（非 storage 目录，避免与上传/导出文件混放）
 #
+# 库表来源：① mysql 首次启动且数据卷为空时，会执行 docker/mysql-init/barevid.sql（官方镜像 /docker-entrypoint-initdb.d）；
+#          ② 后端启动时仍会 create_all / 迁移，与 SQL 并存时一般仅补差异。若只要纯 SQL 初始化，保持卷为空即可。
+# 更新表结构后请同步 docker/mysql-init/barevid.sql（可与仓库根 barevid.sql 对齐）。
+#
 # 启动：在 SlideForge 目录执行  docker compose up -d --build
 # 修改 backend/.env 后须重建后端容器才会刷新部分变量：docker compose up -d --force-recreate backend
 #
@@ -28,6 +32,7 @@ services:
       - "${SLIDEFORGE_MYSQL_BIND_HOST:-127.0.0.1}:3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./docker/mysql-init/barevid.sql:/docker-entrypoint-initdb.d/01-barevid.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -proot || exit 1"]
       interval: 5s
