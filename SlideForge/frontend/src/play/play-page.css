@@ -1,0 +1,296 @@
+.sf-play-shell {
+  min-height: 100vh;
+  background: #05070a;
+  color: #e2e8f0;
+}
+
+.sf-play-fullbleed {
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+  z-index: 50;
+}
+
+.sf-play-msg {
+  margin: 0;
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.sf-play-err {
+  color: #f87171;
+}
+
+.sf-play-back {
+  display: inline-block;
+  margin: 0 1.5rem 1rem;
+  color: #93c5fd;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.sf-play-back:hover {
+  text-decoration: underline;
+}
+
+.sf-play-back-floating {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 60;
+  margin: 0;
+  padding: 0.35rem 0.65rem;
+  border-radius: 8px;
+  background: rgba(15, 20, 25, 0.85);
+  border: 1px solid #2a3441;
+}
+
+.sf-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.sf-scope-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sf-scope-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sf-select {
+  min-width: 9rem;
+  padding: 0.32rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid #2a3441;
+  background: #0b1220;
+  color: #e2e8f0;
+  font-size: 0.82rem;
+}
+
+.sf-select:focus {
+  outline: 2px solid rgba(96, 165, 250, 0.5);
+  outline-offset: 2px;
+}
+
+.sf-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sf-progress-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sf-progress-bar {
+  flex: 1;
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: #1e293b;
+  overflow: hidden;
+}
+
+.sf-progress-bar--deck {
+  height: 8px;
+}
+
+.sf-progress-bar--clip {
+  height: 6px;
+}
+
+.sf-progress-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(248, 250, 252, 0.35);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.sf-progress-fill {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  border-radius: 999px;
+  transition: width 0.12s linear;
+}
+
+.sf-progress-fill--clip {
+  background: linear-gradient(90deg, #a78bfa, #c4b5fd);
+}
+
+.sf-time {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sf-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sf-btn {
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #3b82f6;
+  background: #3b82f6;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.sf-btn-ghost {
+  background: transparent;
+  color: #e2e8f0;
+  border-color: #334155;
+}
+
+.sf-btn:hover {
+  filter: brightness(1.06);
+}
+
+.sf-step-label {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin-left: auto;
+}
+
+.sf-audio-err {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #f87171;
+  line-height: 1.4;
+}
+
+.sf-audio-url {
+  color: #94a3b8;
+  word-break: break-all;
+}
+
+.sf-play-clean .sf-controls,
+.sf-play-clean .sf-play-back,
+.sf-play-clean .sf-play-back-floating {
+  display: none;
+}
+
+.sf-play-export.sf-play-fullbleed {
+  overflow: hidden;
+}
+
+.sf-progress-label--timeline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.65rem;
+}
+
+.sf-timeline-hint {
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: #64748b;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.sf-timeline-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.sf-timeline-row--focus-video .sf-progress-label--timeline {
+  color: #7dd3fc;
+}
+
+.sf-timeline-row--focus-audio .sf-progress-label--timeline {
+  color: #d8b4fe;
+}
+
+.sf-progress-row--timeline {
+  align-items: center;
+}
+
+.sf-timeline-track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 14px;
+  border-radius: 8px;
+  background: #1e293b;
+}
+
+.sf-timeline-underlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  max-width: 100%;
+  background: rgba(148, 163, 184, 0.14);
+  border-radius: 8px 0 0 8px;
+  pointer-events: none;
+  z-index: 0;
+  transition: width 0.1s linear;
+}
+
+.sf-timeline-seg {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  min-width: 3px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  z-index: 1;
+  opacity: 0.88;
+  transition:
+    opacity 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.sf-timeline-seg:hover {
+  opacity: 1;
+  filter: brightness(1.08);
+}
+
+.sf-timeline-seg:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 1px;
+}
+
+.sf-timeline-seg--video {
+  background: linear-gradient(180deg, #0ea5e9, #0369a1);
+}
+
+.sf-timeline-seg--audio {
+  background: linear-gradient(180deg, #a78bfa, #6d28d9);
+}
+
+.sf-timeline-seg--current {
+  box-shadow: 0 0 0 2px rgba(248, 250, 252, 0.92);
+  opacity: 1;
+  z-index: 2;
+}

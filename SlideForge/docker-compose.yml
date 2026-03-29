@@ -1,0 +1,78 @@
+# MySQL + 后端 + 前端。业务文件挂载：SlideForge/storage -> 容器内 /data/storage
+# MySQL 数据在 Docker 命名卷 mysql_data（非 storage 目录，避免与上传/导出文件混放）
+#
+# 启动：在 SlideForge 目录执行  docker compose up -d --build
+# 修改 backend/.env 后须重建后端容器才会刷新部分变量：docker compose up -d --force-recreate backend
+#
+# 视频导出 Worker 与 API/前端分体部署：
+# - 下面 EXPORT_* 会写进任务 JSON，须是「Worker 所在机器」上浏览器与 HTTP 能访问的地址，不是后端容器里的 localhost。
+# - worker/.env 的 SLIDEFORGE_API_URL 应与 EXPORT_API_URL 指向同一套 API（协议+主机+端口一致即可）。
+# - 若 backend/.env 里配置了 EXPORT_PLAY_ORIGIN，会优先于 EXPORT_FRONTEND_URL；分体部署时请改成 Worker 可访问的前端 URL，或删掉该项只用 EXPORT_FRONTEND_URL。
+# 默认同机：127.0.0.1 + 已映射端口；远程 Worker / 反向代理：在与本文件同目录的 .env 里设置对外 URL，并按需把 bind host 改为 0.0.0.0（见 .env.example）。
+#
+# 默认映射 3307->3306，避免与本机 MySQL 抢 3306；后端在容器内仍用 mysql:3306
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: slideforge-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: barevid
+      MYSQL_USER: slideforge
+      MYSQL_PASSWORD: slideforge
+    command:
+      - mysqld
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "${SLIDEFORGE_MYSQL_BIND_HOST:-127.0.0.1}:3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -proot || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 25s
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: slideforge-backend
+    env_file:
+      - backend/.env
+    environment:
+      # 覆盖 .env 里指向 localhost 的库地址，使容器连到 mysql 服务
+      DATABASE_URL: mysql+asyncmy://slideforge:slideforge@mysql:3306/barevid?charset=utf8mb4
+      STORAGE_ROOT: /data/storage
+      # 嵌入导出任务 JSON（Worker / Playwright 侧使用）
+      EXPORT_API_URL: ${EXPORT_API_URL:-http://127.0.0.1:8000}
+      # EXPORT_PUBLIC_BASE_URL 勿在此写死：不设则由 backend/.env 或后端按 EXPORT_API_URL 推导；CDN 时在 backend/.env 配置
+      EXPORT_FRONTEND_URL: ${EXPORT_FRONTEND_URL:-http://127.0.0.1:3000}
+    ports:
+      - "${SLIDEFORGE_BACKEND_BIND_HOST:-127.0.0.1}:8000:8000"
+    volumes:
+      - ./storage:/data/storage
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: slideforge-frontend
+    environment:
+      API_PROXY_TARGET: http://backend:8000
+      VITE_EXPORT_PLAY_ORIGIN: ${EXPORT_FRONTEND_URL:-http://127.0.0.1:3000}
+    ports:
+      - "${SLIDEFORGE_FRONTEND_BIND_HOST:-127.0.0.1}:3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  mysql_data:

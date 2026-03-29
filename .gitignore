@@ -1,0 +1,25 @@
+# Secrets
+.env
+**/.env
+**/.env.local
+
+# Nested repo backup (see repo setup notes)
+.slideforge-git-backup/
+
+# Python
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.py[cod]
+*.egg-info/
+.eggs/
+
+# Node / frontend build
+**/node_modules/
+**/dist/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

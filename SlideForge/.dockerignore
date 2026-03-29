@@ -1,0 +1,27 @@
+# 缩小 docker build context（否则会出现数 GB 的 transferring context）
+.git
+.gitignore
+.gitattributes
+.cursor/
+.idea/
+.vscode/
+
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/venv/
+*.egg-info/
+
+**/node_modules/
+
+# 运行时用 compose 挂载，不应复制进镜像
+storage/
+backend/storage/
+
+# 前端镜像内会 npm ci；dist 非 dev 必需，可排除以减小体积
+frontend/dist/
+
+agent-transcripts/
+
+# 勿将密钥打进镜像；运行时由 env_file 注入
+backend/.env

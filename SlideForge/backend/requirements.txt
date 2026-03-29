@@ -1,0 +1,12 @@
+fastapi>=0.110
+python-multipart>=0.0.9
+uvicorn[standard]>=0.27
+pydantic-settings>=2.0
+openai>=1.0
+httpx>=0.27
+python-dotenv>=1.0
+sqlmodel>=0.0.16
+aiosqlite>=0.19
+asyncmy>=0.2
+cryptography>=42.0.0
+mutagen>=1.47

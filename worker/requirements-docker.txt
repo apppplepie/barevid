@@ -1,0 +1,4 @@
+# 构建 worker 容器镜像时用（含 export_video.py 子进程依赖）
+httpx>=0.27.0
+playwright>=1.42.0,<1.43
+python-dotenv>=1.0
