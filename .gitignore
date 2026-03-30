@@ -16,6 +16,11 @@ worker/test.conf
 # Nested repo backup (see repo setup notes)
 .slideforge-git-backup/
 
+# Worker local SQLite (export history)
+worker/worker_tasks.db
+worker/worker_tasks.db-wal
+worker/worker_tasks.db-shm
+
 # Python
 **/.venv/
 **/venv/

@@ -1682,6 +1682,10 @@ export default function App() {
         body.copy_deck_master_from_project_id =
           newProject.copyDeckMasterFromProjectId;
       }
+      const styleHint = (newProject.userStyleHint || '').trim();
+      if (styleHint && newProject.copyDeckMasterFromProjectId == null) {
+        body.deck_style_user_hint = styleHint;
+      }
       const res = await apiFetch<{ project_id: number }>('/api/projects', {
         method: 'POST',
         body: JSON.stringify(body),

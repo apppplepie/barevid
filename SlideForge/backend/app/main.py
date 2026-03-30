@@ -483,10 +483,11 @@ async def create_project(
         project.updated_at = now
         session.add(project)
     else:
+        uh = (body.deck_style_user_hint or "").strip() or None
         own_style = ProjectStyle(
             origin_project_id=int(project.id),
             style_preset=preset,
-            user_style_hint=None,
+            user_style_hint=uh,
             style_prompt_text="",
             style_data_json=None,
             style_base_json="",

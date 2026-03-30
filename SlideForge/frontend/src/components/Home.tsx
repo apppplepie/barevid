@@ -18,10 +18,12 @@ import {
   Pencil,
   MoreVertical,
   Download,
+  ChevronDown,
 } from 'lucide-react';
 import { WorkflowStep } from './WorkflowProgressBar';
 import type { ServerWorkflow } from '../utils/workflowFromPipeline';
 import type { VideoExportJobInfo } from './ExportVideoStatusDialog';
+import { APP_BRAND } from '../brand';
 
 export interface Project {
   id: string;
@@ -54,6 +56,8 @@ export type CreateProjectInput = Omit<
   'id' | 'lastModified' | 'workflowSteps' | 'deckMasterSourceProjectId' | 'serverWorkflow'
 > & {
   copyDeckMasterFromProjectId?: number | null;
+  /** 对应后端 `project_styles.user_style_hint` / 创建接口 `deck_style_user_hint` */
+  userStyleHint?: string;
 };
 
 function pipelineStatusLabel(project: Project): string {
@@ -64,8 +68,8 @@ function pipelineStatusLabel(project: Project): string {
   if (st === 'queued') return '加载中';
   if (st === 'structuring') return '文本结构化';
   if (st === 'synthesizing') return '配音中';
-  if (pl?.video) return '完成';
-  if (pl?.audio && pl?.deck) return '就绪';
+  if (pl?.video) return '可下载';
+  if (pl?.audio && pl?.deck) return '需导出';
   if (pl?.audio && (ds === 'generating' || !pl?.deck)) return '演示页生成中';
   if (pl?.audio) return '待演示页';
   if (pl?.outline) return '待配音';
@@ -98,7 +102,6 @@ const ASPECT_PRESETS = [
 const STYLE_PRESETS = [
   { value: 'aurora_glass', title: '极光玻璃', subtitle: '' },
   { value: 'minimal_tech', title: '极简科技', subtitle: '' },
-  { value: 'dark_neon', title: '暗黑霓虹', subtitle: '' },
   { value: 'editorial_luxury', title: '杂志高级感', subtitle: '' },
   { value: 'futuristic_hud', title: '未来 HUD', subtitle: '' },
 ] as const;
@@ -165,6 +168,8 @@ export function Home({
   );
   /** 复用已有项目的演示母版：填源项目数字 id，留空则走 AI 生成母版 */
   const [deckMasterSourceRaw, setDeckMasterSourceRaw] = useState('');
+  const [styleHintOpen, setStyleHintOpen] = useState(false);
+  const [userStyleHint, setUserStyleHint] = useState('');
   const [prompt, setPrompt] = useState('');
   const [creating, setCreating] = useState(false);
   const [managingProjectId, setManagingProjectId] = useState<string | null>(null);
@@ -198,10 +203,13 @@ export function Home({
         style: selectedStyle,
         prompt: prompt.trim(),
         copyDeckMasterFromProjectId: parsedCopyMasterId,
+        userStyleHint: userStyleHint.trim() || undefined,
       });
       setNewProjectName('');
       setPrompt('');
       setDeckMasterSourceRaw('');
+      setUserStyleHint('');
+      setStyleHintOpen(false);
     } catch {
       /* 错误已由 App 写入 createError */
     } finally {
@@ -246,7 +254,7 @@ export function Home({
         {/* Header & Create Form */}
         <section className="space-y-6">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">工程管理</h1>
+            <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">{APP_BRAND}</h1>
             <p className="text-zinc-400 mt-2">创建和管理你的视频工程项目。</p>
           </div>
           {currentUserId == null ? (
@@ -293,7 +301,7 @@ export function Home({
                 required
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
-                placeholder="例如：产品发布会口播"
+                placeholder="例如：产品发布会"
                 className="w-full rounded-xl border border-zinc-800/90 bg-zinc-950/80 px-4 py-3 text-sm text-zinc-100 shadow-inner placeholder:text-zinc-600 focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-[border-color,box-shadow]"
               />
             </div>
@@ -327,67 +335,94 @@ export function Home({
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <label className="flex items-center gap-2 text-sm font-medium text-zinc-300">
-                  <LayoutTemplate className="h-3.5 w-3.5 text-purple-400/90" />
-                  演示风格
-                  {/* <span className="text-xs font-normal text-zinc-500">（与后端 DeepSeek 预设一致）</span> */}
-                </label>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-                  {STYLE_PRESETS.map((opt) => {
-                    const on = selectedStyle === opt.value;
-                    const lockStyle = parsedCopyMasterId != null;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setSelectedStyle(opt.value)}
-                        disabled={creating || lockStyle}
-                        className={`rounded-xl border px-3 py-2.5 text-left text-sm transition-all disabled:opacity-50 ${
-                          on
-                            ? 'border-purple-500/50 bg-purple-500/10 text-zinc-100 shadow-[0_0_20px_-8px_rgba(168,85,247,0.5)]'
-                            : 'border-zinc-800/90 bg-zinc-950/50 text-zinc-400 hover:border-zinc-700 hover:bg-zinc-900/60 hover:text-zinc-200'
-                        }`}
-                      >
-                        <span className="block font-medium leading-snug">{opt.title}</span>
-                        {opt.subtitle ? (
-                          <span className="mt-0.5 block text-xs text-zinc-500">{opt.subtitle}</span>
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-                {parsedCopyMasterId != null ? (
-                  <p className="text-xs text-zinc-500">
-                    已指定母版源项目，演示风格以该项目已生成的母版为准（下方预设已禁用）。
-                  </p>
-                ) : null}
-              </div>
-
               <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-zinc-300">
-                  <LayoutTemplate className="h-3.5 w-3.5 text-violet-400/90" />
-                  复用母版（可选）
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="填源项目数字 ID，留空则由 AI 生成母版"
-                  value={deckMasterSourceRaw}
-                  onChange={(e) => setDeckMasterSourceRaw(e.target.value.replace(/\s+/g, ''))}
-                  disabled={creating}
-                  className="w-full max-w-xs rounded-xl border border-zinc-800/90 bg-zinc-950/80 px-4 py-2.5 font-mono text-sm text-zinc-100 shadow-inner placeholder:text-zinc-600 focus:border-violet-500/45 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
-                />
+                <div className="flex items-center gap-2 text-sm font-medium text-zinc-300">
+                  <LayoutTemplate className="h-3.5 w-3.5 shrink-0 text-purple-400/90" />
+                  <span>演示风格</span>
+                </div>
+                <div
+                  role="group"
+                  aria-label="复用母版与演示风格"
+                  className="flex flex-row flex-wrap items-center gap-2"
+                >
+                  <div className="flex min-w-0 items-center gap-2 px-1">
+                    <span className="shrink-0 text-sm text-zinc-400">复用母版：</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder="填 ID"
+                      value={deckMasterSourceRaw}
+                      onChange={(e) => setDeckMasterSourceRaw(e.target.value.replace(/\s+/g, ''))}
+                      disabled={creating}
+                      className="h-9 w-[6.5rem] shrink-0 rounded-lg border border-zinc-700/80 bg-zinc-950/90 px-2.5 font-mono text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-violet-500/45 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                    />
+                  </div>
+                  <div className="hidden h-8 w-px shrink-0 bg-zinc-700/70 sm:block" aria-hidden />
+                  <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+                    {STYLE_PRESETS.map((opt) => {
+                      const on = selectedStyle === opt.value;
+                      const lockStyle = parsedCopyMasterId != null;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setSelectedStyle(opt.value)}
+                          disabled={creating || lockStyle}
+                          className={`rounded-lg border px-2.5 py-2 text-left text-xs font-medium transition-all disabled:opacity-50 sm:px-3 sm:text-sm ${
+                            on
+                              ? 'border-purple-500/50 bg-purple-500/15 text-zinc-100 shadow-[0_0_16px_-6px_rgba(168,85,247,0.45)]'
+                              : 'border-zinc-700/80 bg-zinc-950/80 text-zinc-400 hover:border-zinc-600 hover:bg-zinc-900/70 hover:text-zinc-200'
+                          }`}
+                        >
+                          {opt.title}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 {copyMasterInvalid ? (
                   <p className="text-xs text-amber-200/95" role="alert">
                     请输入正整数项目 ID，或留空。
                   </p>
+                ) : parsedCopyMasterId != null ? (
+                  <p className="text-xs text-zinc-500">
+                    已填母版源项目 ID，风格以该项目母版为准；右侧预设已禁用。源项目须已有就绪的演示母版。
+                  </p>
                 ) : (
                   <p className="text-xs text-zinc-500">
-                    源项目须已有就绪的演示母版；创建后会复制其风格到本项目并直接进入场景页生成，不再调用模型生成母版。
+                    留空 ID 时由 AI 按所选风格生成母版；填写 ID 则复用该项目的演示母版并跳过风格预设。
                   </p>
                 )}
+                {parsedCopyMasterId == null ? (
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setStyleHintOpen((o) => !o)}
+                      disabled={creating}
+                      className="flex w-full items-center gap-1.5 rounded-lg py-1.5 text-left text-xs text-zinc-400 transition-colors hover:text-zinc-200 disabled:opacity-50 sm:text-sm"
+                      aria-expanded={styleHintOpen}
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform ${styleHintOpen ? 'rotate-0' : '-rotate-90'}`}
+                        aria-hidden
+                      />
+                      自定义风格（可选）
+                    </button>
+                    {styleHintOpen ? (
+                      <textarea
+                        name="user_style_hint"
+                        value={userStyleHint}
+                        onChange={(e) => setUserStyleHint(e.target.value)}
+                        disabled={creating}
+                        placeholder="例如：偏冷色科技感、少用渐变、大字报排版、参考苹果发布会…"
+                        rows={3}
+                        maxLength={4000}
+                        className="mt-1 w-full resize-y rounded-xl border border-zinc-800/90 bg-zinc-950/80 px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -403,7 +438,7 @@ export function Home({
                 required
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="粘贴你的口播素材或要点：讲什么、例子、数据、节奏偏好等。模型会按播客编辑规则整理成结构化 JSON 大纲。"
+                placeholder="粘贴你的口播素材或要点：讲什么、例子、数据、节奏偏好…"
                 rows={4}
                 className="w-full resize-y min-h-[108px] rounded-xl border border-zinc-800/90 bg-zinc-950/80 px-4 py-3 text-sm text-zinc-100 shadow-inner placeholder:text-zinc-600 focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-[border-color,box-shadow]"
               />

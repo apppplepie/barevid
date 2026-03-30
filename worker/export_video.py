@@ -370,7 +370,10 @@ async def _record_video(
                 f"localStorage.setItem('slideforge_token', {safe_token});"
             )
         page = await context.new_page()
-        await page.goto(url, wait_until="networkidle")
+        # 线上反代/Cloudflare 下，networkidle 容易因长连接或持续请求误判超时；
+        # 后面还有页面可用态检测，因此这里只要求 DOM 就绪并适当放宽导航超时。
+        nav_timeout_ms = max(60000, min(180000, duration_ms + 30000))
+        await page.goto(url, wait_until="domcontentloaded", timeout=nav_timeout_ms)
         # 经验值：给前端资源加载/首帧渲染留一段缓冲；可通过环境变量下调（默认 1200ms）。
         extra_wait_ms = 1200
         raw_extra_wait = (os.environ.get("SLIDEFORGE_EXPORT_EXTRA_WAIT_MS") or "").strip()

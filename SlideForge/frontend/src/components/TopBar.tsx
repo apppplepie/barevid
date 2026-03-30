@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Sparkles, ArrowLeft, ChevronDown, LogOut } from 'lucide-react';
 import { WorkflowProgressBar, WorkflowStep } from './WorkflowProgressBar';
+import { APP_BRAND } from '../brand';
 import { AuthDialog } from './AuthDialog';
 
 interface TopBarProps {
@@ -89,7 +90,7 @@ export function TopBar({
           </div>
         )}
         <div className="flex min-w-0 flex-col truncate">
-          <span className="truncate text-sm font-medium leading-tight">{projectName || '工程管理'}</span>
+          <span className="truncate text-sm font-medium leading-tight">{projectName || APP_BRAND}</span>
           {projectName && <span className="text-[10px] leading-tight text-zinc-500"> </span>}
         </div>
       </div>

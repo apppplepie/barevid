@@ -66,6 +66,11 @@ services:
       mysql:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      default:
+      shared_proxy:
+        aliases:
+          - barevid-api
 
   frontend:
     image: ${SLIDEFORGE_FRONTEND_IMAGE:-creepender42/barevid-frontend:latest}
@@ -78,6 +83,15 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    networks:
+      default:
+      shared_proxy:
+        aliases:
+          - barevid-web
 
 volumes:
   mysql_data:
+
+networks:
+  shared_proxy:
+    external: true

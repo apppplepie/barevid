@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { apiFetch, setStoredAuthToken } from '../api';
+import { apiFetch, getUserFacingErrorMessage, setStoredAuthToken } from '../api';
 
 type AuthDialogProps = {
   open: boolean;
@@ -36,7 +36,7 @@ export function AuthDialog({ open, onClose, onSuccess }: AuthDialogProps) {
       onSuccess();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(getUserFacingErrorMessage(err));
     } finally {
       setLoading(false);
     }

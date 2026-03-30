@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, User, Lock, ArrowRight } from 'lucide-react';
-import { apiFetch, setStoredAuthToken } from '../api';
+import { apiFetch, getUserFacingErrorMessage, setStoredAuthToken } from '../api';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -39,7 +39,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
       setMode('login');
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(getUserFacingErrorMessage(err));
     } finally {
       setLoading(false);
     }

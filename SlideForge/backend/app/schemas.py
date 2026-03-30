@@ -49,6 +49,11 @@ class ProjectCreate(BaseModel):
         ge=1,
         description="指定时从该项目的 project_styles 复制已就绪的演示母版到新项目，跳过 AI 生成母版",
     )
+    deck_style_user_hint: str | None = Field(
+        default=None,
+        max_length=4000,
+        description="用户自定义风格补充，写入 user_style_hint；仅在不复用源母版时参与母版生成",
+    )
 
 
 class RegisterRequest(BaseModel):

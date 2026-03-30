@@ -22,6 +22,8 @@ from pathlib import Path
 import httpx
 from dotenv import load_dotenv
 
+import task_db
+
 
 def _env_int(key: str, *, default: int, minimum: int = 1) -> int:
     raw = (os.environ.get(key) or "").strip()
@@ -149,6 +151,7 @@ def _process_single_job(
     headers: dict[str, str],
     job: dict,
     *,
+    worker_slot: str,
     python: str,
     export_script: Path,
     stop: threading.Event,
@@ -157,89 +160,109 @@ def _process_single_job(
     project_id = int(job["project_id"])
     print(f"claim job_id={job_id} project_id={project_id}", flush=True)
 
-    with tempfile.TemporaryDirectory(prefix="sf_export_") as td:
-        td_path = Path(td)
-        out_mp4 = td_path / "export.mp4"
-        env = os.environ.copy()
-        env["SLIDEFORGE_EXPORT_AUTHORIZATION"] = str(job["authorization"])
+    run_id = task_db.start_run(
+        backend_job_id=job_id,
+        project_id=project_id,
+        worker_slot=worker_slot,
+    )
+    outcome: tuple[bool, str | None] | None = None
 
-        cmd = [
-            python,
-            str(export_script),
-            "--project-id",
-            str(project_id),
-            "--output",
-            str(out_mp4),
-            "--frontend-url",
-            str(job["frontend_url"]),
-            "--api-url",
-            str(job["api_url"]),
-            "--width",
-            str(job["width"]),
-            "--height",
-            str(job["height"]),
-            "--media-base-url",
-            str(job["media_base_url"]),
-            "--storage-root",
-            str(td_path),
-        ]
+    try:
+        with tempfile.TemporaryDirectory(prefix="sf_export_") as td:
+            td_path = Path(td)
+            out_mp4 = td_path / "export.mp4"
+            env = os.environ.copy()
+            env["SLIDEFORGE_EXPORT_AUTHORIZATION"] = str(job["authorization"])
 
-        ok, detail = _run_export_subprocess(
-            cmd,
-            env,
-            stop,
-            timeout_seconds=_job_timeout_seconds(),
-        )
-        if not ok:
-            detail = detail or "export_video.py failed"
-            try:
-                client.post(
-                    f"{base}/internal/worker/video-export/jobs/{job_id}/fail",
-                    headers=headers,
-                    json={"error": detail},
-                ).raise_for_status()
-            except httpx.HTTPError as exc:
-                print(f"report fail error: {exc}", flush=True)
-            print(detail, file=sys.stderr)
-            return
+            cmd = [
+                python,
+                str(export_script),
+                "--project-id",
+                str(project_id),
+                "--output",
+                str(out_mp4),
+                "--frontend-url",
+                str(job["frontend_url"]),
+                "--api-url",
+                str(job["api_url"]),
+                "--width",
+                str(job["width"]),
+                "--height",
+                str(job["height"]),
+                "--media-base-url",
+                str(job["media_base_url"]),
+                "--storage-root",
+                str(td_path),
+            ]
 
-        if not out_mp4.is_file():
-            err = "missing export.mp4"
-            try:
-                client.post(
-                    f"{base}/internal/worker/video-export/jobs/{job_id}/fail",
-                    headers=headers,
-                    json={"error": err},
-                ).raise_for_status()
-            except httpx.HTTPError:
-                pass
-            print(err, file=sys.stderr)
-            return
-
-        try:
-            with out_mp4.open("rb") as fh:
-                up = client.post(
-                    f"{base}/internal/worker/video-export/jobs/{job_id}/complete",
-                    headers=headers,
-                    files={"file": ("export.mp4", fh, "video/mp4")},
-                )
-                up.raise_for_status()
-            print(f"job {job_id} completed", flush=True)
-        except httpx.HTTPError as exc:
-            print(f"upload failed: {exc}", file=sys.stderr)
-            if getattr(exc, "response", None) is not None:
+            ok, detail = _run_export_subprocess(
+                cmd,
+                env,
+                stop,
+                timeout_seconds=_job_timeout_seconds(),
+            )
+            if not ok:
+                detail = detail or "export_video.py failed"
                 try:
-                    print(exc.response.text[:2000], file=sys.stderr)
-                except Exception:
+                    client.post(
+                        f"{base}/internal/worker/video-export/jobs/{job_id}/fail",
+                        headers=headers,
+                        json={"error": detail},
+                    ).raise_for_status()
+                except httpx.HTTPError as exc:
+                    print(f"report fail error: {exc}", flush=True)
+                print(detail, file=sys.stderr)
+                outcome = (False, detail)
+                return
+
+            if not out_mp4.is_file():
+                err = "missing export.mp4"
+                try:
+                    client.post(
+                        f"{base}/internal/worker/video-export/jobs/{job_id}/fail",
+                        headers=headers,
+                        json={"error": err},
+                    ).raise_for_status()
+                except httpx.HTTPError:
                     pass
+                print(err, file=sys.stderr)
+                outcome = (False, err)
+                return
+
             try:
-                client.post(
-                    f"{base}/internal/worker/video-export/jobs/{job_id}/fail",
-                    headers=headers,
-                    json={"error": f"upload failed: {exc!s}"},
-                ).raise_for_status()
-            except httpx.HTTPError:
-                traceback.print_exc()
+                with out_mp4.open("rb") as fh:
+                    up = client.post(
+                        f"{base}/internal/worker/video-export/jobs/{job_id}/complete",
+                        headers=headers,
+                        files={"file": ("export.mp4", fh, "video/mp4")},
+                    )
+                    up.raise_for_status()
+                print(f"job {job_id} completed", flush=True)
+                outcome = (True, None)
+            except httpx.HTTPError as exc:
+                print(f"upload failed: {exc}", file=sys.stderr)
+                if getattr(exc, "response", None) is not None:
+                    try:
+                        print(exc.response.text[:2000], file=sys.stderr)
+                    except Exception:
+                        pass
+                fail_msg = f"upload failed: {exc!s}"
+                try:
+                    client.post(
+                        f"{base}/internal/worker/video-export/jobs/{job_id}/fail",
+                        headers=headers,
+                        json={"error": fail_msg},
+                    ).raise_for_status()
+                except httpx.HTTPError:
+                    traceback.print_exc()
+                outcome = (False, fail_msg)
+    except Exception as exc:
+        if outcome is None:
+            outcome = (False, str(exc) or type(exc).__name__)
+        raise
+    finally:
+        if outcome is not None:
+            task_db.finish_run(run_id, success=outcome[0], error=outcome[1])
 
 
 def _slot_loop(
@@ -285,6 +308,7 @@ def _slot_loop(
                     base,
                     headers,
                     job,
+                    worker_slot=wid,
                     python=python,
                     export_script=export_script,
                     stop=stop,
@@ -360,6 +384,8 @@ def main(argv: list[str] | None = None) -> int:
 
     base = args.api_url.rstrip("/")
     headers = {"X-SlideForge-Worker-Key": args.worker_key}
+
+    task_db.init_db()
 
     print(
         f"Worker {args.worker_id!r} connected to {base} with concurrency={args.concurrency}",

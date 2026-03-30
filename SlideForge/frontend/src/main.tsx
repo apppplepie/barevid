@@ -2,10 +2,13 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import App from './App.tsx';
+import { APP_BRAND } from './brand';
 import { PlayLayout } from './play/PlayLayout';
 import PresentPage from './play/present-page';
 import PlayPage from './play/page';
 import './index.css';
+
+document.title = APP_BRAND;
 
 const router = createBrowserRouter([
   { path: '/', element: <App /> },
