@@ -35,6 +35,8 @@ class Project(SQLModel, table=True):
     deck_width: Optional[int] = Field(default=1920)
     deck_height: Optional[int] = Field(default=1080)
     style_id: Optional[int] = Field(default=None, foreign_key="project_styles.id")
+    # 目标口播总时长（秒），结构化时写入 AI 约束；NULL 表示不限制（旧项目）
+    target_narration_seconds: Optional[int] = Field(default=None)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 

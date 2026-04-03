@@ -415,6 +415,14 @@ async def create_project(
     if not raw:
         raise HTTPException(status_code=400, detail="raw_text 不能为空")
 
+    target_sec = body.target_narration_seconds
+    if target_sec is not None:
+        if target_sec < 10 or target_sec > 1800:
+            raise HTTPException(
+                status_code=400,
+                detail="target_narration_seconds 应在 10～1800 之间",
+            )
+
     page_size = _DEFAULT_PAGE_SIZE
     if body.deck_page_size is not None:
         ps = body.deck_page_size.strip()
@@ -471,6 +479,7 @@ async def create_project(
         aspect_ratio=page_size,
         deck_width=default_w,
         deck_height=default_h,
+        target_narration_seconds=target_sec,
         created_at=now,
         updated_at=now,
     )
@@ -666,6 +675,7 @@ async def get_project(
                 else deck_master_source_project_id_from_description(project.description)
             ),
             "input_prompt": project.input_prompt,
+            "target_narration_seconds": project.target_narration_seconds,
             "status": project.status,
             "deck_status": deck_status,
             "deck_error": deck_error,

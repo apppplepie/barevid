@@ -374,6 +374,17 @@ async def _record_video(
         # 后面还有页面可用态检测，因此这里只要求 DOM 就绪并适当放宽导航超时。
         nav_timeout_ms = max(60000, min(180000, duration_ms + 30000))
         await page.goto(url, wait_until="domcontentloaded", timeout=nav_timeout_ms)
+        # 导航后先固定等待再进入可用态检测，降低 Web 字体/子资源未就绪就录进缺字形的概率。
+        # 可用 SLIDEFORGE_EXPORT_INITIAL_WAIT_MS 覆盖（0 表示关闭），上限 30s。
+        initial_wait_ms = 3000
+        raw_initial = (os.environ.get("SLIDEFORGE_EXPORT_INITIAL_WAIT_MS") or "").strip()
+        if raw_initial:
+            try:
+                initial_wait_ms = max(0, min(30000, int(raw_initial)))
+            except ValueError:
+                initial_wait_ms = 3000
+        if initial_wait_ms > 0:
+            await page.wait_for_timeout(initial_wait_ms)
         # 经验值：给前端资源加载/首帧渲染留一段缓冲；可通过环境变量下调（默认 1200ms）。
         extra_wait_ms = 1200
         raw_extra_wait = (os.environ.get("SLIDEFORGE_EXPORT_EXTRA_WAIT_MS") or "").strip()
@@ -384,6 +395,25 @@ async def _record_video(
                 extra_wait_ms = 1200
         if extra_wait_ms > 0:
             await page.wait_for_timeout(extra_wait_ms)
+        try:
+            # 等待当前文档已参与渲染的字体加载完成，减少首帧录到回退字体的概率。
+            await page.evaluate(
+                """
+                async () => {
+                  const fonts = document.fonts;
+                  if (!fonts || !fonts.ready) return true;
+                  try {
+                    await fonts.ready;
+                  } catch {
+                    // 字体等待失败时降级继续，避免个别字体源阻塞整次导出。
+                  }
+                  return true;
+                }
+                """
+            )
+        except Exception:
+            # 兼容不支持 Font Loading API 的运行环境。
+            pass
         try:
             # 放映页可用态：不再显示“加载放映数据”，且播放器主体节点已出现。
             await page.wait_for_function(

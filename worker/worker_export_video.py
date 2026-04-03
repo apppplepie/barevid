@@ -4,6 +4,9 @@ SlideForge export worker.
 
 This process polls the backend for export jobs and runs `export_video.py`
 in child processes so each export is isolated from the long-lived worker.
+
+Set ``SLIDEFORGE_WORKER_LOG_POLL=1`` to print every ~30s when the server
+returns no queued job (otherwise the loop is silent).
 """
 
 from __future__ import annotations
@@ -61,6 +64,11 @@ def _job_timeout_seconds() -> float | None:
     if value <= 0:
         return default_timeout
     return max(30.0, value)
+
+
+def _empty_queue_log_enabled() -> bool:
+    raw = (os.environ.get("SLIDEFORGE_WORKER_LOG_POLL") or "").strip().lower()
+    return raw in ("1", "true", "yes", "on")
 
 
 def _sleep_poll(seconds: float, stop: threading.Event) -> None:
@@ -280,6 +288,7 @@ def _slot_loop(
     if concurrency > 1:
         print(f"slot {slot + 1}/{concurrency} worker_id={wid!r} started", flush=True)
 
+    empty_log_at: dict[str, float] = {"t": 0.0}
     with httpx.Client(timeout=300.0) as client:
         while not stop.is_set():
             try:
@@ -297,6 +306,14 @@ def _slot_loop(
                     continue
 
                 if not job:
+                    if _empty_queue_log_enabled():
+                        now = time.monotonic()
+                        if now - empty_log_at["t"] >= 30.0:
+                            print(
+                                f"[{wid}] poll OK, server has no queued export job",
+                                flush=True,
+                            )
+                            empty_log_at["t"] = now
                     _sleep_poll(poll_seconds, stop)
                     continue
 
@@ -391,6 +408,11 @@ def main(argv: list[str] | None = None) -> int:
         f"Worker {args.worker_id!r} connected to {base} with concurrency={args.concurrency}",
         flush=True,
     )
+    if _empty_queue_log_enabled():
+        print(
+            "SLIDEFORGE_WORKER_LOG_POLL=1: logging every ~30s when queue is empty",
+            flush=True,
+        )
 
     stop = threading.Event()
     threads: list[threading.Thread] = []

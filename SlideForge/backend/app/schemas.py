@@ -54,6 +54,10 @@ class ProjectCreate(BaseModel):
         max_length=4000,
         description="用户自定义风格补充，写入 user_style_hint；仅在不复用源母版时参与母版生成",
     )
+    target_narration_seconds: int | None = Field(
+        default=None,
+        description="目标口播总时长（秒），送入结构化以约束全文 script 体量；省略表示不限制",
+    )
 
 
 class RegisterRequest(BaseModel):

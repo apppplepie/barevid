@@ -547,7 +547,10 @@ async def run_text_rebuild_job(project_id: int) -> None:
             raw = (project.input_prompt or "").strip()
             if not raw:
                 raise RuntimeError("项目缺少生成素材")
-            structured = await structure_raw_text(raw)
+            structured = await structure_raw_text(
+                raw,
+                target_narration_seconds=project.target_narration_seconds,
+            )
 
         async with async_session_maker() as session:
             project = await session.get(Project, project_id)
@@ -602,7 +605,10 @@ async def run_queued_project_pipeline_job(project_id: int) -> None:
             raw = (project.input_prompt or "").strip()
             if not raw:
                 raise RuntimeError("项目缺少生成素材")
-            structured = await structure_raw_text(raw)
+            structured = await structure_raw_text(
+                raw,
+                target_narration_seconds=project.target_narration_seconds,
+            )
 
         async with async_session_maker() as session:
             project = await session.get(Project, project_id)

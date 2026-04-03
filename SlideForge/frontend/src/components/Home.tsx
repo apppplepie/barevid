@@ -58,6 +58,8 @@ export type CreateProjectInput = Omit<
   copyDeckMasterFromProjectId?: number | null;
   /** 对应后端 `project_styles.user_style_hint` / 创建接口 `deck_style_user_hint` */
   userStyleHint?: string;
+  /** 目标口播总时长（秒），写入 `projects.target_narration_seconds` 并参与结构化提示 */
+  targetNarrationSeconds?: number;
 };
 
 function pipelineStatusLabel(project: Project): string {
@@ -105,6 +107,27 @@ const STYLE_PRESETS = [
   { value: 'editorial_luxury', title: '杂志高级感', subtitle: '' },
   { value: 'futuristic_hud', title: '未来 HUD', subtitle: '' },
 ] as const;
+
+/** 中文口播粗略换算：约 4 字/秒（仅作预期，实际随语速与停顿变化） */
+const NARRATION_CHARS_PER_SECOND = 4;
+const NARRATION_DURATION_PRESETS = [
+  { sec: 30, label: '30 秒' },
+  { sec: 60, label: '1 分钟' },
+  { sec: 180, label: '3 分钟' },
+  { sec: 300, label: '5 分钟' },
+] as const;
+
+function formatDurationHint(sec: number): string {
+  if (sec < 60) return `${sec} 秒`;
+  if (sec % 60 === 0) return `${sec / 60} 分钟`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m} 分 ${s} 秒`;
+}
+
+function approxNarrationChars(sec: number): number {
+  return Math.max(1, Math.round(sec * NARRATION_CHARS_PER_SECOND));
+}
 
 /** 卡片上展示的母版号：复用则显示源项目 id，自建则显示本项目 id */
 function deckMasterDisplayNo(project: Project): string {
@@ -171,6 +194,12 @@ export function Home({
   const [styleHintOpen, setStyleHintOpen] = useState(false);
   const [userStyleHint, setUserStyleHint] = useState('');
   const [prompt, setPrompt] = useState('');
+  /** none：不限制；preset：固定档位；custom：自填秒数 */
+  const [narrationDurationMode, setNarrationDurationMode] = useState<
+    'none' | 'preset' | 'custom'
+  >('none');
+  const [narrationDurationPresetSec, setNarrationDurationPresetSec] = useState<number>(60);
+  const [narrationCustomSecondsRaw, setNarrationCustomSecondsRaw] = useState('90');
   const [creating, setCreating] = useState(false);
   const [managingProjectId, setManagingProjectId] = useState<string | null>(null);
   const [manageError, setManageError] = useState<string | null>(null);
@@ -187,10 +216,22 @@ export function Home({
   })();
   const copyMasterInvalid =
     Boolean(deckMasterSourceRaw.trim()) && parsedCopyMasterId === null;
+  const parsedCustomSec = Number.parseInt(narrationCustomSecondsRaw.replace(/\s/g, ''), 10);
+  const customSecValid =
+    Number.isFinite(parsedCustomSec) && parsedCustomSec >= 10 && parsedCustomSec <= 1800;
+  const targetNarrationSecondsForSubmit =
+    narrationDurationMode === 'none'
+      ? undefined
+      : narrationDurationMode === 'preset'
+        ? narrationDurationPresetSec
+        : parsedCustomSec;
+  const narrationDurationInvalid =
+    narrationDurationMode === 'custom' && !customSecValid;
   const canSubmit =
     Boolean(newProjectName.trim()) &&
     Boolean(prompt.trim()) &&
-    !copyMasterInvalid;
+    !copyMasterInvalid &&
+    !narrationDurationInvalid;
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,12 +245,16 @@ export function Home({
         prompt: prompt.trim(),
         copyDeckMasterFromProjectId: parsedCopyMasterId,
         userStyleHint: userStyleHint.trim() || undefined,
+        targetNarrationSeconds: targetNarrationSecondsForSubmit,
       });
       setNewProjectName('');
       setPrompt('');
       setDeckMasterSourceRaw('');
       setUserStyleHint('');
       setStyleHintOpen(false);
+      setNarrationDurationMode('none');
+      setNarrationDurationPresetSec(60);
+      setNarrationCustomSecondsRaw('90');
     } catch {
       /* 错误已由 App 写入 createError */
     } finally {
@@ -424,6 +469,107 @@ export function Home({
                   </div>
                 ) : null}
               </div>
+            </div>
+
+            <div className="relative flex flex-col gap-3 rounded-xl border border-zinc-800/80 bg-zinc-950/35 px-4 py-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-zinc-300">
+                <Clock className="h-3.5 w-3.5 text-cyan-400/90" />
+                口播目标时长
+                <span className="text-xs font-normal text-zinc-500">（可选）</span>
+              </label>
+              <p className="text-xs text-zinc-500">
+                选填。需要控制成片口播体量时再选；不选则由 AI 按素材信息量自行把握。若填写，换算按约每秒{' '}
+                {NARRATION_CHARS_PER_SECOND} 字估算，实际随语速、停顿略有偏差。
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setNarrationDurationMode('none')}
+                  disabled={creating}
+                  className={`rounded-lg border px-2.5 py-2 text-left text-xs font-medium transition-all disabled:opacity-50 sm:px-3 sm:text-sm ${
+                    narrationDurationMode === 'none'
+                      ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-100'
+                      : 'border-zinc-700/80 bg-zinc-950/80 text-zinc-400 hover:border-zinc-600 hover:bg-zinc-900/70 hover:text-zinc-200'
+                  }`}
+                >
+                  不限制
+                </button>
+                {NARRATION_DURATION_PRESETS.map((p) => {
+                  const on =
+                    narrationDurationMode === 'preset' && narrationDurationPresetSec === p.sec;
+                  return (
+                    <button
+                      key={p.sec}
+                      type="button"
+                      onClick={() => {
+                        setNarrationDurationMode('preset');
+                        setNarrationDurationPresetSec(p.sec);
+                      }}
+                      disabled={creating}
+                      className={`rounded-lg border px-2.5 py-2 text-left text-xs font-medium transition-all disabled:opacity-50 sm:px-3 sm:text-sm ${
+                        on
+                          ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-100'
+                          : 'border-zinc-700/80 bg-zinc-950/80 text-zinc-400 hover:border-zinc-600 hover:bg-zinc-900/70 hover:text-zinc-200'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setNarrationDurationMode('custom')}
+                  disabled={creating}
+                  className={`rounded-lg border px-2.5 py-2 text-left text-xs font-medium transition-all disabled:opacity-50 sm:px-3 sm:text-sm ${
+                    narrationDurationMode === 'custom'
+                      ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-100'
+                      : 'border-zinc-700/80 bg-zinc-950/80 text-zinc-400 hover:border-zinc-600 hover:bg-zinc-900/70 hover:text-zinc-200'
+                  }`}
+                >
+                  自定义秒数
+                </button>
+              </div>
+              {narrationDurationMode === 'custom' ? (
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs text-zinc-500">秒数（10～1800）</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={narrationCustomSecondsRaw}
+                      onChange={(e) => setNarrationCustomSecondsRaw(e.target.value.replace(/[^\d]/g, ''))}
+                      disabled={creating}
+                      className="h-9 w-28 rounded-lg border border-zinc-700/80 bg-zinc-950/90 px-2.5 font-mono text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-cyan-500/45 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                    />
+                  </div>
+                  {customSecValid ? (
+                    <p className="text-xs text-zinc-400">
+                      约 {formatDurationHint(parsedCustomSec)} → 口播全文约{' '}
+                      <span className="font-medium text-zinc-200">
+                        {approxNarrationChars(parsedCustomSec)}
+                      </span>{' '}
+                      字
+                    </p>
+                  ) : narrationCustomSecondsRaw.trim() ? (
+                    <p className="text-xs text-amber-200/95" role="alert">
+                      请输入 10～1800 之间的整数秒。
+                    </p>
+                  ) : null}
+                </div>
+              ) : narrationDurationMode === 'preset' ? (
+                <p className="text-xs text-zinc-400">
+                  当前 {formatDurationHint(narrationDurationPresetSec)} → 口播全文约{' '}
+                  <span className="font-medium text-zinc-200">
+                    {approxNarrationChars(narrationDurationPresetSec)}
+                  </span>{' '}
+                  字
+                </p>
+              ) : (
+                <p className="text-xs text-zinc-500">
+                  未设定目标时长，结构化时不附加口播字数/时长约束。
+                </p>
+              )}
             </div>
 
             <div className="relative flex flex-col gap-2">

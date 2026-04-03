@@ -122,6 +122,7 @@ CREATE TABLE `projects`  (
   `deck_width` int NULL DEFAULT NULL,
   `deck_height` int NULL DEFAULT NULL,
   `style_id` int NULL DEFAULT NULL,
+  `target_narration_seconds` int NULL DEFAULT NULL COMMENT '目标口播总时长（秒），结构化时约束用',
   `created_at` datetime NOT NULL,
   `updated_at` datetime NOT NULL,
   PRIMARY KEY (`id`) USING BTREE,

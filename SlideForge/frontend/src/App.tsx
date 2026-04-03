@@ -921,7 +921,7 @@ export default function App() {
     [aiPanelClip, currentProjectId, workspacePages],
   );
 
-  /** 仅流水线未完成、某步「进行中」、或口播重配请求进行中时轮询 manifest / 项目详情 */
+  /** 编辑器内当前项目：用于轮询与主工作台步骤（与 currentProject 在工程页等价） */
   const pollEditorProject =
     currentView === 'editor' && currentProjectId
       ? projects.find((p) => p.id === currentProjectId)
@@ -933,13 +933,53 @@ export default function App() {
   );
   const pollWorkflowRunning =
     pollEditorProject?.workflowSteps?.some((s) => s.state === 'running') ?? false;
-  const shouldPollEditorData =
+  /** 轮询项目详情：流水线未齐、任一步 running、或顶栏重配进行中 */
+  const shouldPollProjectDetail =
     Boolean(pollEditorProject) &&
     (!pollPipelineSatisfied ||
       pollWorkflowRunning ||
       headerAudioRegenPending ||
       headerDeckRegenPending ||
       (retryPollBoostUntil != null && retryPollBoostUntil > Date.now()));
+
+  /** 与顶栏一致：口播重配/演示重生成时把对应步置为 running，主工作台门禁与顶栏同步 */
+  const workspaceWorkflowSteps = useMemo(
+    () =>
+      applyEditorPendingToSteps(pollEditorProject?.workflowSteps ?? [], {
+        audio: headerAudioRegenPending,
+        deck: headerDeckRegenPending,
+      }),
+    [
+      pollEditorProject?.workflowSteps,
+      headerAudioRegenPending,
+      headerDeckRegenPending,
+    ],
+  );
+
+  /** 文本+口播均 success 才解锁时间轴；pending 覆盖见 workspaceWorkflowSteps */
+  const editorTimelineUnlocked = useMemo(() => {
+    const st = workspaceWorkflowSteps;
+    if (st && st.length > 0) {
+      const tex = st.find((s) => s.id === 'text');
+      const aud = st.find((s) => s.id === 'audio');
+      if (tex && aud) {
+        return tex.state === 'success' && aud.state === 'success';
+      }
+    }
+    const plp = pollEditorProject?.pipeline;
+    return Boolean(plp?.outline && plp?.audio);
+  }, [workspaceWorkflowSteps, pollEditorProject?.pipeline]);
+
+  /** 流水线三态变化时补拉一次 play-manifest（不定时轮询画面） */
+  const manifestReloadKey = useMemo(() => {
+    const plp = pollEditorProject?.pipeline;
+    if (!plp) return '0-0-0';
+    return `${plp.outline ? 1 : 0}-${plp.audio ? 1 : 0}-${plp.deck ? 1 : 0}`;
+  }, [
+    pollEditorProject?.pipeline?.outline,
+    pollEditorProject?.pipeline?.audio,
+    pollEditorProject?.pipeline?.deck,
+  ]);
 
   useEffect(() => {
     if (retryPollBoostUntil == null) return;
@@ -1100,90 +1140,94 @@ export default function App() {
 
     let cancelled = false;
     const pidKey = String(pid);
-    if (manifestPidHydratedRef.current !== pidKey) {
-      manifestPidHydratedRef.current = pidKey;
-      setTimelineBlocking(true);
-      setTimelineError(null);
-    }
 
-    const loadManifest = () => {
-      void (async () => {
-        try {
-          const manifest = await apiFetch<PlayManifest>(`/api/projects/${pid}/play-manifest`);
-          if (cancelled) return;
-
-          const built = buildTimelineFromPlayManifest(manifest);
-          const psz = (manifest.deck_page_size || '').trim();
-          setPreviewDeckPageSize(psz || null);
-          setWorkspacePages(built.pages);
-          setClips(built.clips);
-          setPlaySteps(built.steps);
-          setTotalDurationMs(built.totalDurationMs);
-          const firstAudio = built.clips.find((c) => c.type === 'audio');
-          let nextSel = firstAudio?.id || built.clips[0]?.id || '';
-          let nextMode: ClipSelectionMode = nextSel
-            ? firstAudio
-              ? 'audio'
-              : 'video'
-            : 'none';
-          try {
-            const persistedPid = localStorage.getItem(LS_CLIP_PROJECT);
-            const persistedCid = localStorage.getItem(LS_CLIP);
-            const persistedModeRaw = localStorage.getItem(LS_CLIP_MODE);
-            const persistedMode: ClipSelectionMode =
-              persistedModeRaw === 'video' || persistedModeRaw === 'audio' || persistedModeRaw === 'none'
-                ? persistedModeRaw
-                : 'none';
-            if (
-              persistedPid === String(pid)
-            ) {
-              if (persistedMode === 'none') {
-                nextSel = '';
-                nextMode = 'none';
-              } else if (
-                persistedCid &&
-                built.clips.some((c) => c.id === persistedCid)
-              ) {
-                nextSel = persistedCid;
-                nextMode = persistedMode;
-              }
-            }
-          } catch {
-            /* ignore */
-          }
-          setSelectedClipId(nextSel);
-          setSelectionMode(nextMode);
-          setTimelineError(null);
-        } catch (e) {
-          if (!cancelled) {
-            setTimelineError(e instanceof Error ? e.message : String(e));
-            setPreviewDeckPageSize(null);
-            setWorkspacePages([]);
-            setClips([]);
-            setPlaySteps([]);
-            setSelectedClipId('');
-            setSelectionMode('none');
-          }
-        } finally {
-          if (!cancelled) setTimelineBlocking(false);
-        }
-      })();
-    };
-
-    loadManifest();
-
-    if (!shouldPollEditorData) {
+    if (!editorTimelineUnlocked) {
+      if (manifestPidHydratedRef.current !== pidKey) {
+        manifestPidHydratedRef.current = pidKey;
+        setTimelineError(null);
+      }
+      setTimelineBlocking(false);
       return () => {
         cancelled = true;
       };
     }
 
-    const interval = window.setInterval(loadManifest, 4000);
+    if (manifestPidHydratedRef.current !== pidKey) {
+      manifestPidHydratedRef.current = pidKey;
+      setTimelineError(null);
+    }
+    setTimelineBlocking(true);
+
+    void (async () => {
+      try {
+        const manifest = await apiFetch<PlayManifest>(`/api/projects/${pid}/play-manifest`);
+        if (cancelled) return;
+
+        const built = buildTimelineFromPlayManifest(manifest);
+        const psz = (manifest.deck_page_size || '').trim();
+        setPreviewDeckPageSize(psz || null);
+        setWorkspacePages(built.pages);
+        setClips(built.clips);
+        setPlaySteps(built.steps);
+        setTotalDurationMs(built.totalDurationMs);
+        const firstAudio = built.clips.find((c) => c.type === 'audio');
+        let nextSel = firstAudio?.id || built.clips[0]?.id || '';
+        let nextMode: ClipSelectionMode = nextSel
+          ? firstAudio
+            ? 'audio'
+            : 'video'
+          : 'none';
+        try {
+          const persistedPid = localStorage.getItem(LS_CLIP_PROJECT);
+          const persistedCid = localStorage.getItem(LS_CLIP);
+          const persistedModeRaw = localStorage.getItem(LS_CLIP_MODE);
+          const persistedMode: ClipSelectionMode =
+            persistedModeRaw === 'video' || persistedModeRaw === 'audio' || persistedModeRaw === 'none'
+              ? persistedModeRaw
+              : 'none';
+          if (persistedPid === String(pid)) {
+            if (persistedMode === 'none') {
+              nextSel = '';
+              nextMode = 'none';
+            } else if (
+              persistedCid &&
+              built.clips.some((c) => c.id === persistedCid)
+            ) {
+              nextSel = persistedCid;
+              nextMode = persistedMode;
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+        setSelectedClipId(nextSel);
+        setSelectionMode(nextMode);
+        setTimelineError(null);
+      } catch (e) {
+        if (!cancelled) {
+          setTimelineError(e instanceof Error ? e.message : String(e));
+          setPreviewDeckPageSize(null);
+          setWorkspacePages([]);
+          setClips([]);
+          setPlaySteps([]);
+          setSelectedClipId('');
+          setSelectionMode('none');
+        }
+      } finally {
+        if (!cancelled) setTimelineBlocking(false);
+      }
+    })();
+
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
     };
-  }, [currentView, currentProjectId, shouldPollEditorData, editorDataVersion]);
+  }, [
+    currentView,
+    currentProjectId,
+    editorTimelineUnlocked,
+    manifestReloadKey,
+    editorDataVersion,
+  ]);
 
   useEffect(() => {
     if (currentView !== 'editor' || !currentProjectId) {
@@ -1210,13 +1254,13 @@ export default function App() {
 
     sync();
 
-    if (!shouldPollEditorData) {
+    if (!shouldPollProjectDetail) {
       return () => {};
     }
 
     const t = window.setInterval(sync, 4000);
     return () => window.clearInterval(t);
-  }, [currentView, currentProjectId, shouldPollEditorData, editorDataVersion]);
+  }, [currentView, currentProjectId, shouldPollProjectDetail, editorDataVersion]);
 
   useEffect(() => {
     if (currentView !== 'editor' || userId === null) return;
@@ -1686,6 +1730,10 @@ export default function App() {
       if (styleHint && newProject.copyDeckMasterFromProjectId == null) {
         body.deck_style_user_hint = styleHint;
       }
+      const tns = newProject.targetNarrationSeconds;
+      if (typeof tns === 'number' && Number.isFinite(tns) && tns >= 10 && tns <= 1800) {
+        body.target_narration_seconds = Math.round(tns);
+      }
       const res = await apiFetch<{ project_id: number }>('/api/projects', {
         method: 'POST',
         body: JSON.stringify(body),
@@ -1868,17 +1916,6 @@ export default function App() {
 
   const pl = currentProject?.pipeline;
   const serverPipelineSatisfied = Boolean(pl?.outline && pl?.audio && pl?.deck);
-  const editorTimelineUnlocked = useMemo(() => {
-    const st = currentProject?.workflowSteps;
-    if (st && st.length > 0) {
-      const tex = st.find((s) => s.id === 'text');
-      const aud = st.find((s) => s.id === 'audio');
-      if (tex && aud) {
-        return tex.state === 'success' && aud.state === 'success';
-      }
-    }
-    return Boolean(pl?.outline && pl?.audio);
-  }, [currentProject?.workflowSteps, pl?.outline, pl?.audio]);
   const editorUiBlocked =
     !editorTimelineUnlocked || (timelineBlocking && clips.length === 0);
 
@@ -2179,7 +2216,7 @@ export default function App() {
         />
 
         <MainWorkspace
-          steps={currentProject?.workflowSteps}
+          steps={workspaceWorkflowSteps}
           timelineUnlocked={editorTimelineUnlocked}
           currentTime={currentTime}
           clips={clips}
