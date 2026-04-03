@@ -48,20 +48,20 @@ export function AuthDialog({ open, onClose, onSuccess }: AuthDialogProps) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 light:bg-slate-900/40 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="auth-dialog-title"
     >
-      <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-950 shadow-xl">
-        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-          <h2 id="auth-dialog-title" className="text-sm font-medium text-zinc-200">
+      <div className="w-full max-w-md rounded-xl border border-zinc-800 light:border-slate-200 bg-zinc-950 light:bg-white shadow-xl light:shadow-slate-200/60">
+        <div className="flex items-center justify-between border-b border-zinc-800 light:border-slate-200 px-4 py-3">
+          <h2 id="auth-dialog-title" className="text-sm font-medium text-zinc-200 light:text-slate-800">
             {mode === 'login' ? '登录' : '注册'}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            className="rounded-md p-1.5 text-zinc-500 light:text-slate-400 transition-colors hover:bg-zinc-800 light:hover:bg-slate-100 hover:text-zinc-200 light:hover:text-slate-700"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
@@ -69,27 +69,27 @@ export function AuthDialog({ open, onClose, onSuccess }: AuthDialogProps) {
         </div>
         <form onSubmit={submit} className="flex flex-col gap-4 p-4">
           {error ? (
-            <div className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-xs text-red-200">
+            <div className="rounded-lg border border-red-500/40 bg-red-950/40 light:bg-red-50 px-3 py-2 text-xs text-red-200 light:text-red-700">
               {error}
             </div>
           ) : null}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-500">用户名</label>
+            <label className="text-xs font-medium text-zinc-500 light:text-slate-500">用户名</label>
             <input
               autoComplete="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-purple-500/50 focus:outline-none"
+              className="w-full rounded-lg border border-zinc-800 light:border-slate-200 bg-zinc-900 light:bg-slate-50 px-3 py-2 text-sm text-zinc-100 light:text-slate-900 focus:border-purple-500/50 focus:outline-none placeholder:text-zinc-600 light:placeholder:text-slate-400"
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-500">密码</label>
+            <label className="text-xs font-medium text-zinc-500 light:text-slate-500">密码</label>
             <input
               type="password"
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-purple-500/50 focus:outline-none"
+              className="w-full rounded-lg border border-zinc-800 light:border-slate-200 bg-zinc-900 light:bg-slate-50 px-3 py-2 text-sm text-zinc-100 light:text-slate-900 focus:border-purple-500/50 focus:outline-none placeholder:text-zinc-600 light:placeholder:text-slate-400"
             />
           </div>
           <div className="flex flex-col gap-2 pt-1">
@@ -106,12 +106,12 @@ export function AuthDialog({ open, onClose, onSuccess }: AuthDialogProps) {
                 setMode(mode === 'login' ? 'register' : 'login');
                 setError(null);
               }}
-              className="w-full rounded-md px-2 py-2 text-center text-xs text-zinc-500 transition-colors hover:bg-zinc-900 hover:text-zinc-300"
+              className="w-full rounded-md px-2 py-2 text-center text-xs text-zinc-500 light:text-slate-500 transition-colors hover:bg-zinc-900 light:hover:bg-slate-100 hover:text-zinc-300 light:hover:text-slate-700"
             >
               {mode === 'login' ? '没有账号？注册' : '已有账号？登录'}
             </button>
           </div>
-          <p className="text-[11px] leading-relaxed text-zinc-600">
+          <p className="text-[11px] leading-relaxed text-zinc-600 light:text-slate-400">
             登录后请求会携带你的会话令牌；未登录无法调用工程与项目接口。
           </p>
         </form>

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { X } from 'lucide-react';
+import { useTheme } from './ThemeContext';
 import { ExportVideoChoiceDialog } from './components/ExportVideoChoiceDialog';
 import {
   ExportVideoStatusDialog,
@@ -219,6 +220,7 @@ function readInitialRoute(): { view: 'home' | 'editor'; projectId: string | null
 }
 
 export default function App() {
+  const { toggleTheme } = useTheme();
   const initialRoute = readInitialRoute();
   const [username, setUsername] = useState<string | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
@@ -1964,7 +1966,7 @@ export default function App() {
 
   if (!sessionReady) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-zinc-950 font-sans text-zinc-400">
+      <div className="flex h-screen w-full items-center justify-center bg-zinc-950 light:bg-slate-50 font-sans text-zinc-400 light:text-slate-500">
         正在恢复会话…
       </div>
     );
@@ -1972,11 +1974,12 @@ export default function App() {
 
   if (currentView === 'home') {
     return (
-      <div className="h-screen w-full bg-zinc-950 text-zinc-100 flex flex-col overflow-hidden font-sans selection:bg-purple-500/30">
+      <div className="h-screen w-full bg-zinc-950 light:bg-slate-50 text-zinc-100 light:text-slate-900 flex flex-col overflow-hidden font-sans selection:bg-purple-500/30">
         <TopBar
           username={userId !== null ? username : null}
           onLogin={() => void bootstrap()}
           onLogout={() => void handleLogout()}
+          onToggleTheme={toggleTheme}
         />
         {projectsError ? (
           <div
@@ -2019,11 +2022,12 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen w-full bg-zinc-950 text-zinc-100 flex flex-col overflow-hidden font-sans selection:bg-purple-500/30">
+    <div className="h-screen w-full bg-zinc-950 light:bg-slate-50 text-zinc-100 light:text-slate-900 flex flex-col overflow-hidden font-sans selection:bg-purple-500/30">
       <TopBar
         username={userId !== null ? username : null}
         onLogin={() => void bootstrap()}
         onLogout={() => void handleLogout()}
+        onToggleTheme={toggleTheme}
         projectName={currentProject?.name}
         onBackToHome={() => {
           suppressNextUrlProjectHydrateRef.current = true;
@@ -2174,7 +2178,7 @@ export default function App() {
         />
 
         <div
-          className="w-1.5 hover:bg-purple-500 bg-zinc-800 cursor-col-resize shrink-0 z-20 transition-colors"
+          className="w-1.5 hover:bg-purple-500 bg-zinc-800 light:bg-slate-200 cursor-col-resize shrink-0 z-20 transition-colors"
           onMouseDown={handleSidebarMouseDown}
         />
 
@@ -2216,11 +2220,11 @@ export default function App() {
       </div>
 
       <div
-        className="h-1.5 hover:bg-purple-500 bg-zinc-800 cursor-row-resize shrink-0 z-20 transition-colors relative"
+        className="h-1.5 hover:bg-purple-500 bg-zinc-800 light:bg-slate-200 cursor-row-resize shrink-0 z-20 transition-colors relative"
         onMouseDown={handleTimelineMouseDown}
       >
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-8 h-0.5 bg-zinc-600 rounded-full" />
+          <div className="w-8 h-0.5 bg-zinc-600 light:bg-slate-300 rounded-full" />
         </div>
       </div>
 

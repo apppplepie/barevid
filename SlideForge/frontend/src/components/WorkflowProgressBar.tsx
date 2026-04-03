@@ -86,7 +86,7 @@ export function WorkflowProgressBar({
           <div key={step.id} className="flex items-center">
             {index > 0 ? (
               <div
-                className={`mx-0.5 h-px w-4 shrink-0 rounded-full sm:mx-1 sm:w-5 ${segLit ? 'bg-zinc-500/50' : 'bg-zinc-800'}`}
+                className={`mx-0.5 h-px w-4 shrink-0 rounded-full sm:mx-1 sm:w-5 ${segLit ? 'bg-zinc-500/50 light:bg-slate-400/60' : 'bg-zinc-800 light:bg-slate-200'}`}
                 aria-hidden
               />
             ) : null}
@@ -105,7 +105,7 @@ export function WorkflowProgressBar({
                     !isSuccess &&
                       !isRunning &&
                       !isError &&
-                      'border-zinc-700/80 bg-zinc-900/80 text-zinc-500',
+                      'border-zinc-700/80 light:border-slate-300 bg-zinc-900/80 light:bg-slate-100 text-zinc-500 light:text-slate-400',
                   ]
                     .filter(Boolean)
                     .join(' ')}
@@ -186,10 +186,10 @@ export function WorkflowProgressBar({
                 <span
                   className={[
                     'inline max-w-[2.25rem] truncate text-[9px] font-medium tracking-wide sm:max-w-[5.5rem] sm:text-[11px]',
-                    isSuccess && 'text-zinc-200',
-                    isRunning && 'text-zinc-100',
-                    isError && 'text-red-200/90',
-                    !isSuccess && !isRunning && !isError && 'text-zinc-500',
+                    isSuccess && 'text-zinc-200 light:text-slate-700',
+                    isRunning && 'text-zinc-100 light:text-slate-800',
+                    isError && 'text-red-200/90 light:text-red-600',
+                    !isSuccess && !isRunning && !isError && 'text-zinc-500 light:text-slate-400',
                   ]
                     .filter(Boolean)
                     .join(' ')}
@@ -209,7 +209,7 @@ export function WorkflowProgressBar({
         <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
           <div
             className={`mx-0.5 h-px w-4 shrink-0 rounded-full sm:mx-1 sm:w-6 ${
-              downloadEnabled || downloadLoading ? 'bg-zinc-500/50' : 'bg-zinc-800'
+              downloadEnabled || downloadLoading ? 'bg-zinc-500/50 light:bg-slate-400/60' : 'bg-zinc-800 light:bg-slate-200'
             }`}
             aria-hidden
           />
@@ -241,10 +241,10 @@ export function WorkflowProgressBar({
               downloadLoading &&
                 downloadEnabled &&
                 videoReady &&
-                'cursor-wait border border-zinc-600/50 bg-zinc-900/90 text-zinc-300',
+                'cursor-wait border border-zinc-600/50 light:border-slate-300 bg-zinc-900/90 light:bg-slate-100 text-zinc-300 light:text-slate-600',
               !downloadEnabled &&
                 !downloadLoading &&
-                'cursor-not-allowed border border-transparent text-zinc-600',
+                'cursor-not-allowed border border-transparent text-zinc-600 light:text-slate-400',
             ]
               .filter(Boolean)
               .join(' ')}

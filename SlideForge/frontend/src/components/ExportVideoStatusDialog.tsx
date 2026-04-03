@@ -76,7 +76,7 @@ export function ExportVideoStatusDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 light:bg-slate-900/30 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="export-status-title"
@@ -85,19 +85,19 @@ export function ExportVideoStatusDialog({
       }}
     >
       <div
-        className="w-full max-w-md rounded-xl border border-zinc-700/90 bg-zinc-950 p-5 shadow-2xl ring-1 ring-black/50"
+        className="w-full max-w-md rounded-xl border border-zinc-700/90 light:border-slate-200 bg-zinc-950 light:bg-white p-5 shadow-2xl ring-1 ring-black/50 light:ring-slate-200/60"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-3">
           <div
             className={
               job?.status === 'succeeded'
-                ? 'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-500/35 bg-emerald-500/10 text-emerald-300'
+                ? 'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-500/35 bg-emerald-500/10 light:bg-emerald-100/80 text-emerald-300 light:text-emerald-600'
                 : job?.status === 'failed'
-                  ? 'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-red-500/35 bg-red-500/10 text-red-300'
+                  ? 'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-red-500/35 bg-red-500/10 light:bg-red-100/80 text-red-300 light:text-red-600'
                   : inProgress || workflowExporting
-                    ? 'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-300'
-                    : 'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-zinc-600 bg-zinc-800/80 text-zinc-400'
+                    ? 'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-sky-500/30 bg-sky-500/10 light:bg-sky-100/80 text-sky-300 light:text-sky-600'
+                    : 'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-zinc-600 light:border-slate-300 bg-zinc-800/80 light:bg-slate-100 text-zinc-400 light:text-slate-500'
             }
           >
             {job?.status === 'succeeded' ? (
@@ -111,26 +111,26 @@ export function ExportVideoStatusDialog({
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <h2 id="export-status-title" className="text-base font-semibold text-zinc-100">
+            <h2 id="export-status-title" className="text-base font-semibold text-zinc-100 light:text-slate-900">
               视频导出 · {title}
             </h2>
-            <p className="mt-2 text-sm leading-relaxed text-zinc-400">{detail}</p>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-400 light:text-slate-600">{detail}</p>
           </div>
         </div>
 
-        <dl className="mt-4 space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-3 text-sm">
+        <dl className="mt-4 space-y-2 rounded-lg border border-zinc-800 light:border-slate-200 bg-zinc-900/50 light:bg-slate-50 px-3 py-3 text-sm">
           <div className="flex justify-between gap-2">
-            <dt className="flex items-center gap-1.5 text-zinc-500">
+            <dt className="flex items-center gap-1.5 text-zinc-500 light:text-slate-500">
               <ListVideo className="h-3.5 w-3.5 shrink-0" aria-hidden />
               任务 ID
             </dt>
-            <dd className="font-mono text-zinc-200 tabular-nums">
+            <dd className="font-mono text-zinc-200 light:text-slate-800 tabular-nums">
               {job?.job_id != null ? String(job.job_id) : '—'}
             </dd>
           </div>
           <div className="flex justify-between gap-2">
-            <dt className="text-zinc-500">队列状态</dt>
-            <dd className="text-zinc-200">
+            <dt className="text-zinc-500 light:text-slate-500">队列状态</dt>
+            <dd className="text-zinc-200 light:text-slate-800">
               {job?.status === 'queued'
                 ? '进行中 · 等待 worker'
                 : job?.status === 'running'
@@ -146,36 +146,36 @@ export function ExportVideoStatusDialog({
           </div>
           {job?.worker_id ? (
             <div className="flex justify-between gap-2">
-              <dt className="flex items-center gap-1.5 text-zinc-500">
+              <dt className="flex items-center gap-1.5 text-zinc-500 light:text-slate-500">
                 <Server className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 Worker
               </dt>
-              <dd className="truncate text-right text-zinc-200" title={job.worker_id}>
+              <dd className="truncate text-right text-zinc-200 light:text-slate-800" title={job.worker_id}>
                 {job.worker_id}
               </dd>
             </div>
           ) : null}
           <div className="flex justify-between gap-2">
-            <dt className="text-zinc-500">入队时间</dt>
-            <dd className="text-right text-zinc-300">{fmtTime(job?.created_at)}</dd>
+            <dt className="text-zinc-500 light:text-slate-500">入队时间</dt>
+            <dd className="text-right text-zinc-300 light:text-slate-700">{fmtTime(job?.created_at)}</dd>
           </div>
           {job?.status === 'running' || job?.status === 'succeeded' ? (
             <div className="flex justify-between gap-2">
-              <dt className="text-zinc-500">开始处理</dt>
-              <dd className="text-right text-zinc-300">{fmtTime(job?.started_at)}</dd>
+              <dt className="text-zinc-500 light:text-slate-500">开始处理</dt>
+              <dd className="text-right text-zinc-300 light:text-slate-700">{fmtTime(job?.started_at)}</dd>
             </div>
           ) : null}
           {job?.status === 'succeeded' || job?.status === 'failed' ? (
             <div className="flex justify-between gap-2">
-              <dt className="text-zinc-500">结束时间</dt>
-              <dd className="text-right text-zinc-300">{fmtTime(job?.finished_at)}</dd>
+              <dt className="text-zinc-500 light:text-slate-500">结束时间</dt>
+              <dd className="text-right text-zinc-300 light:text-slate-700">{fmtTime(job?.finished_at)}</dd>
             </div>
           ) : null}
         </dl>
 
-        <p className="mt-3 text-xs text-zinc-500">
+        <p className="mt-3 text-xs text-zinc-500 light:text-slate-500">
           若长时间停在排队，请检查 worker 与服务器{' '}
-          <code className="rounded bg-zinc-800 px-1 py-0.5 text-[10px] text-zinc-400">
+          <code className="rounded bg-zinc-800 light:bg-slate-100 px-1 py-0.5 text-[10px] text-zinc-400 light:text-slate-600">
             EXPORT_WORKER_TOKEN
           </code>{' '}
           是否一致。
@@ -185,7 +185,7 @@ export function ExportVideoStatusDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-zinc-600 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-white"
+            className="rounded-lg border border-zinc-600 light:border-slate-300 bg-zinc-800 light:bg-slate-100 px-4 py-2 text-sm font-medium text-zinc-200 light:text-slate-700 transition-colors hover:bg-zinc-700 light:hover:bg-slate-200 hover:text-white light:hover:text-slate-900"
           >
             关闭
           </button>

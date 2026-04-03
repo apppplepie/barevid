@@ -40,7 +40,7 @@ export function Timeline({
 
   if (isGenerating) {
     return (
-      <div style={{ height }} className="flex w-full min-h-0 min-w-0 shrink-0 flex-col items-center justify-center border-t border-zinc-800 bg-zinc-900/80 text-sm text-zinc-600 backdrop-blur-md z-30">
+      <div style={{ height }} className="flex w-full min-h-0 min-w-0 shrink-0 flex-col items-center justify-center border-t border-zinc-800 light:border-slate-200 bg-zinc-900/80 light:bg-white/90 text-sm text-zinc-600 light:text-slate-400 backdrop-blur-md z-30">
         时间轴将在生成后可用
       </div>
     );
@@ -91,31 +91,31 @@ export function Timeline({
   };
 
   return (
-    <div style={{ height }} className="flex w-full min-h-0 min-w-0 shrink-0 flex-col border-t border-zinc-800 bg-zinc-900/80 backdrop-blur-md z-30">
-      <div className="flex h-12 min-h-12 min-w-0 shrink-0 items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-950/50 px-2 sm:px-4">
+    <div style={{ height }} className="flex w-full min-h-0 min-w-0 shrink-0 flex-col border-t border-zinc-800 light:border-slate-200 bg-zinc-900/80 light:bg-white/95 backdrop-blur-md z-30">
+      <div className="flex h-12 min-h-12 min-w-0 shrink-0 items-center justify-between gap-2 border-b border-zinc-800 light:border-slate-200 bg-zinc-950/50 light:bg-slate-50/80 px-2 sm:px-4">
         <div className="flex min-w-0 shrink-0 items-center gap-0.5 sm:gap-1">
           <button
             type="button"
             onClick={() => onSeek(0)}
-            className="shrink-0 rounded-md p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+            className="shrink-0 rounded-md p-2 text-zinc-400 light:text-slate-500 transition-colors hover:bg-zinc-800 light:hover:bg-slate-100 hover:text-white light:hover:text-slate-900"
           >
             <SkipBack className="h-4 w-4" />
           </button>
           <button
             type="button"
             onClick={onTogglePlay}
-            className="shrink-0 rounded-md p-2 text-zinc-100 transition-colors hover:bg-zinc-800 hover:text-white"
+            className="shrink-0 rounded-md p-2 text-zinc-100 light:text-slate-800 transition-colors hover:bg-zinc-800 light:hover:bg-slate-100 hover:text-white light:hover:text-slate-900"
           >
             {isPlaying ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
           </button>
           <button
             type="button"
             onClick={() => onSeek(100)}
-            className="shrink-0 rounded-md p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+            className="shrink-0 rounded-md p-2 text-zinc-400 light:text-slate-500 transition-colors hover:bg-zinc-800 light:hover:bg-slate-100 hover:text-white light:hover:text-slate-900"
           >
             <SkipForward className="h-4 w-4" />
           </button>
-          <div className="ml-2 shrink-0 whitespace-nowrap rounded border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-[10px] text-purple-400 shadow-inner sm:ml-4 sm:px-3 sm:text-xs">
+          <div className="ml-2 shrink-0 whitespace-nowrap rounded border border-zinc-800 light:border-slate-200 bg-zinc-900 light:bg-white px-2 py-1 font-mono text-[10px] text-purple-400 shadow-inner sm:ml-4 sm:px-3 sm:text-xs">
             {formatTime(currentTime)}
           </div>
         </div>
@@ -129,22 +129,22 @@ export function Timeline({
               'shrink-0 rounded-md p-2 transition-colors',
               subtitlesVisible
                 ? 'border border-purple-500/40 bg-purple-500/15 text-purple-300 hover:bg-purple-500/25'
-                : 'border border-transparent text-zinc-400 hover:bg-zinc-800 hover:text-white',
+                : 'border border-transparent text-zinc-400 light:text-slate-500 hover:bg-zinc-800 light:hover:bg-slate-100 hover:text-white light:hover:text-slate-900',
             ].join(' ')}
           >
             <Captions className="h-4 w-4" />
           </button>
         </div>
       </div>
-      
+
       {/* Tracks Area */}
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
         {/* Time Ruler */}
-        <div className="h-6 border-b border-zinc-800 flex relative text-[10px] text-zinc-500 font-mono select-none bg-zinc-950/30">
-          <div className="w-24 shrink-0 border-r border-zinc-800" />
+        <div className="h-6 border-b border-zinc-800 light:border-slate-200 flex relative text-[10px] text-zinc-500 light:text-slate-400 font-mono select-none bg-zinc-950/30 light:bg-slate-50/50">
+          <div className="w-24 shrink-0 border-r border-zinc-800 light:border-slate-200" />
           <div className="flex-1 relative overflow-hidden cursor-text" onClick={handleTimelineClick} ref={timelineRef}>
             {Array.from({ length: 20 }).map((_, i) => (
-              <div key={i} className="absolute top-0 bottom-0 border-l border-zinc-800/50 flex flex-col justify-end pb-0.5 pl-1" style={{ left: `${i * 5}%` }}>
+              <div key={i} className="absolute top-0 bottom-0 border-l border-zinc-800/50 light:border-slate-300/50 flex flex-col justify-end pb-0.5 pl-1" style={{ left: `${i * 5}%` }}>
                 {formatTimeLabel(i * 5)}
               </div>
             ))}
@@ -212,9 +212,9 @@ export function Timeline({
 
 function Track({ name, icon, color, children }: { name: string, icon: React.ReactNode, color: string, children: React.ReactNode }) {
   return (
-    <div className="flex h-12 min-h-12 min-w-0 overflow-hidden rounded-md border border-zinc-800/50 bg-zinc-950/50 group">
-      <div className="flex w-24 shrink-0 flex-col justify-center border-r border-zinc-800 bg-zinc-900/80 px-2 z-10 transition-colors group-hover:bg-zinc-800">
-        <div className="flex items-center gap-1.5 text-zinc-400">
+    <div className="flex h-12 min-h-12 min-w-0 overflow-hidden rounded-md border border-zinc-800/50 light:border-slate-200 bg-zinc-950/50 light:bg-slate-50/80 group">
+      <div className="flex w-24 shrink-0 flex-col justify-center border-r border-zinc-800 light:border-slate-200 bg-zinc-900/80 light:bg-white px-2 z-10 transition-colors group-hover:bg-zinc-800 light:group-hover:bg-slate-100">
+        <div className="flex items-center gap-1.5 text-zinc-400 light:text-slate-500">
           {icon}
           <span className="text-[10px] font-medium uppercase tracking-wider truncate">{name}</span>
         </div>

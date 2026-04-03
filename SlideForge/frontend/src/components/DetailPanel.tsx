@@ -56,7 +56,7 @@ export function DetailPanel({
     return (
       <div
         style={{ width: width || 320, maxWidth: '100%' }}
-        className="relative z-10 flex min-h-0 max-w-full min-w-0 shrink-0 flex-col items-center justify-center self-stretch overflow-hidden border-r border-zinc-800 bg-zinc-900/60 text-sm text-zinc-600"
+        className="relative z-10 flex min-h-0 max-w-full min-w-0 shrink-0 flex-col items-center justify-center self-stretch overflow-hidden border-r border-zinc-800 light:border-slate-200 bg-zinc-900/60 light:bg-white/90 text-sm text-zinc-600 light:text-slate-400"
       >
         等待生成...
       </div>
@@ -66,7 +66,7 @@ export function DetailPanel({
   return (
     <div
       style={{ width: width || 320, maxWidth: '100%' }}
-      className="relative z-10 flex min-h-0 max-w-full min-w-0 shrink-0 flex-col self-stretch overflow-hidden border-r border-zinc-800 bg-zinc-900/60"
+      className="relative z-10 flex min-h-0 max-w-full min-w-0 shrink-0 flex-col self-stretch overflow-hidden border-r border-zinc-800 light:border-slate-200 bg-zinc-900/60 light:bg-white/90"
     >
       <AnimatePresence mode="wait">
         {surface === 'audio' ? (
@@ -254,12 +254,12 @@ function AudioDetails({
       </div>
 
       <div className="flex flex-col gap-3 shrink-0">
-        <div className="flex items-center justify-between text-xs font-medium text-zinc-500 uppercase tracking-wider">
+        <div className="flex items-center justify-between text-xs font-medium text-zinc-500 light:text-slate-500 uppercase tracking-wider">
           <span>播放</span>
           <span className="text-purple-400">{formatTime(currentSecondsInClip)} / {clip.duration}</span>
         </div>
-        <div className="flex h-10 items-center rounded-lg border border-zinc-800/80 bg-zinc-950 px-3">
-          <div className="relative h-1 w-full overflow-hidden rounded-full bg-zinc-700">
+        <div className="flex h-10 items-center rounded-lg border border-zinc-800/80 light:border-slate-200 bg-zinc-950 light:bg-slate-50 px-3">
+          <div className="relative h-1 w-full overflow-hidden rounded-full bg-zinc-700 light:bg-slate-200">
             <div
               className="absolute left-0 top-0 h-full rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.45)] transition-[width] duration-75"
               style={{ width: `${progress * 100}%` }}
@@ -269,10 +269,10 @@ function AudioDetails({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <div className="flex shrink-0 items-center justify-between text-xs font-medium uppercase tracking-wider text-zinc-500">
+        <div className="flex shrink-0 items-center justify-between text-xs font-medium uppercase tracking-wider text-zinc-500 light:text-slate-500">
           <span>实时字幕</span>
         </div>
-        <div className="flex min-h-[120px] min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-zinc-800/80 bg-zinc-950/50 text-sm text-zinc-300 break-words">
+        <div className="flex min-h-[120px] min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-zinc-800/80 light:border-slate-200 bg-zinc-950/50 light:bg-slate-50 text-sm text-zinc-300 light:text-slate-700 break-words">
           {sentenceCues && sentenceCues.length > 0 ? (
             <div
               ref={captionScrollRef}
@@ -288,7 +288,7 @@ function AudioDetails({
                     className={
                       idx === activeCueIndex
                         ? 'scroll-mt-0 rounded border border-purple-500/30 bg-purple-500/20 px-1.5 py-0.5 text-zinc-100'
-                        : 'rounded border border-transparent px-1.5 py-0.5 text-zinc-500'
+                        : 'rounded border border-transparent px-1.5 py-0.5 text-zinc-500 light:text-slate-400'
                     }
                   >
                     {cue.text}
@@ -297,7 +297,7 @@ function AudioDetails({
               </div>
             </div>
           ) : (
-            <div className="shrink-0 p-3 text-zinc-400">
+            <div className="shrink-0 p-3 text-zinc-400 light:text-slate-600">
               {step?.narration_text || clip.content || 'No narration available.'}
             </div>
           )}
@@ -448,7 +448,7 @@ function PageDetails({
 
       <div className="flex flex-col gap-3 shrink-0">
         <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-zinc-500">
+          <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-zinc-500 light:text-slate-500">
             <span>页面上下文</span>
             <span className="font-mono normal-case tracking-normal text-blue-400">
               {clip.duration}
@@ -462,7 +462,7 @@ function PageDetails({
           readOnly
           value={pageContextBrief}
           rows={1}
-          className="min-h-32 max-h-64 w-full min-w-0 resize-none overflow-y-auto rounded-lg border border-zinc-800/80 bg-zinc-950 p-3 text-sm leading-relaxed text-zinc-300 [field-sizing:content]"
+          className="min-h-32 max-h-64 w-full min-w-0 resize-none overflow-y-auto rounded-lg border border-zinc-800/80 light:border-slate-200 bg-zinc-950 light:bg-slate-50 p-3 text-sm leading-relaxed text-zinc-300 light:text-slate-700 [field-sizing:content]"
         />
       </div>
 
@@ -470,7 +470,7 @@ function PageDetails({
         <button
           type="button"
           onClick={() => setNodesExpanded(!nodesExpanded)}
-          className="flex w-full items-center justify-between text-left text-xs font-medium uppercase tracking-wider text-zinc-500 transition-colors hover:text-zinc-300"
+          className="flex w-full items-center justify-between text-left text-xs font-medium uppercase tracking-wider text-zinc-500 light:text-slate-500 transition-colors hover:text-zinc-300 light:hover:text-slate-700"
         >
           <div className="flex items-center gap-1">
             <motion.div animate={{ rotate: nodesExpanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
@@ -497,27 +497,27 @@ function PageDetails({
               type="button"
               key={node.id}
               onClick={() => onSeek?.(node.time)}
-              className="group relative flex w-full min-w-0 items-center gap-3 rounded-xl p-2 text-left transition-all duration-150 hover:bg-zinc-800/40 focus:outline-none focus:ring-1 focus:ring-blue-500/40 focus:ring-offset-0"
+              className="group relative flex w-full min-w-0 items-center gap-3 rounded-xl p-2 text-left transition-all duration-150 hover:bg-zinc-800/40 light:hover:bg-slate-100/80 focus:outline-none focus:ring-1 focus:ring-blue-500/40 focus:ring-offset-0"
             >
               {/* 圆形指示器 - 内嵌圆环，悬浮时变为实心光晕 */}
               <div className="relative z-10 flex h-2.5 w-2.5 shrink-0 items-center justify-center">
-                <div className="h-2 w-2 rounded-full border border-zinc-500 bg-zinc-900 transition-all duration-150 group-hover:border-blue-400 group-hover:bg-blue-500/20" />
+                <div className="h-2 w-2 rounded-full border border-zinc-500 light:border-slate-300 bg-zinc-900 light:bg-white transition-all duration-150 group-hover:border-blue-400 group-hover:bg-blue-500/20" />
               </div>
 
               {/* 节点标题 */}
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-400 transition-colors duration-150 group-hover:text-zinc-200">
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-400 light:text-slate-500 transition-colors duration-150 group-hover:text-zinc-200 light:group-hover:text-slate-800">
                 {node.title}
               </span>
 
               {/* 时间戳 */}
-              <span className="ml-auto font-mono text-[11px] tabular-nums text-zinc-600 transition-colors duration-150 group-hover:text-blue-400/80">
+              <span className="ml-auto font-mono text-[11px] tabular-nums text-zinc-600 light:text-slate-400 transition-colors duration-150 group-hover:text-blue-400/80">
                 {formatSecondsFromTimelinePercent(node.time, totalDurationMs)}
               </span>
             </button>
           ))}
 
           {(!clip.nodes || clip.nodes.length === 0) && (
-            <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-700/60 bg-zinc-800/20 px-3 py-2 text-xs text-zinc-500">
+            <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-700/60 light:border-slate-300/60 bg-zinc-800/20 light:bg-slate-100/50 px-3 py-2 text-xs text-zinc-500 light:text-slate-400">
               <span className="i-lucide:inbox h-3.5 w-3.5 opacity-50" /> {/* 需要确保图标库支持，或直接使用文字符号 */}
               <span>暂无节点</span>
             </div>
