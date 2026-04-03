@@ -13,12 +13,12 @@ function DeckPageStatePlaceholder({
   subtitle: string;
 }) {
   return (
-    <div className="flex min-h-0 min-w-0 h-full w-full flex-col items-center justify-center gap-4 bg-gradient-to-br from-zinc-950 to-black p-6 text-center text-zinc-100">
+    <div className="flex min-h-0 min-w-0 h-full w-full flex-col items-center justify-center gap-4 bg-gradient-to-br from-zinc-950 to-black light:from-slate-100 light:to-slate-50 p-6 text-center text-zinc-100 light:text-slate-900">
       <div
         className={`flex h-16 w-16 items-center justify-center rounded-2xl border ${
           variant === 'error'
-            ? 'border-red-500/30 bg-red-500/10'
-            : 'border-zinc-700/80 bg-zinc-900/80'
+            ? 'border-red-500/30 bg-red-500/10 light:bg-red-50'
+            : 'border-zinc-700/80 light:border-slate-300 bg-zinc-900/80 light:bg-white'
         }`}
       >
         {variant === 'error' ? (
@@ -28,14 +28,14 @@ function DeckPageStatePlaceholder({
         )}
       </div>
       <div className="max-w-md space-y-2">
-        <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-[0.2em] text-zinc-500">
+        <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-[0.2em] text-zinc-500 light:text-slate-400">
           <LayoutTemplate className="h-3.5 w-3.5" aria-hidden />
           演示页
         </div>
-        <h2 className="text-lg font-semibold text-zinc-100 sm:text-xl">{page.title}</h2>
-        <p className="text-sm text-zinc-400">{subtitle}</p>
+        <h2 className="text-lg font-semibold text-zinc-100 light:text-slate-900 sm:text-xl">{page.title}</h2>
+        <p className="text-sm text-zinc-400 light:text-slate-600">{subtitle}</p>
         {variant === 'error' && page.deckError ? (
-          <p className="rounded-lg border border-red-500/20 bg-red-950/30 px-3 py-2 text-left text-xs leading-relaxed text-red-100/90">
+          <p className="rounded-lg border border-red-500/20 bg-red-950/30 light:bg-red-50 px-3 py-2 text-left text-xs leading-relaxed text-red-100/90 light:text-red-700">
             {page.deckError}
           </p>
         ) : null}

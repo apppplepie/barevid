@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Sparkles, ArrowLeft, ChevronDown, LogOut } from 'lucide-react';
+import { Sparkles, ArrowLeft, ChevronDown, LogOut, Sun, Moon } from 'lucide-react';
 import { WorkflowProgressBar, WorkflowStep } from './WorkflowProgressBar';
 import { APP_BRAND } from '../brand';
 import { AuthDialog } from './AuthDialog';
+import { useTheme } from '../ThemeContext';
 
 interface TopBarProps {
   projectName?: string;
@@ -20,6 +21,7 @@ interface TopBarProps {
   username?: string | null;
   onLogin?: () => void;
   onLogout?: () => void;
+  onToggleTheme?: () => void;
 }
 
 export function TopBar({
@@ -37,10 +39,12 @@ export function TopBar({
   username: controlledUsername,
   onLogin,
   onLogout,
+  onToggleTheme,
 }: TopBarProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { theme } = useTheme();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -73,14 +77,14 @@ export function TopBar({
   };
 
   return (
-    <header className="relative z-20 flex h-14 min-h-14 min-w-0 shrink-0 items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-950/80 px-3 backdrop-blur-md sm:gap-3 sm:px-4">
+    <header className="relative z-20 flex h-14 min-h-14 min-w-0 shrink-0 items-center justify-between gap-2 border-b border-zinc-800 light:border-slate-200 bg-zinc-950/80 light:bg-white/90 px-3 backdrop-blur-md sm:gap-3 sm:px-4">
       {/* flex-shrink 更大：窄屏时优先压缩左侧工程名，流水线区域保留给下载按钮 */}
       <div className="flex min-w-0 flex-[1_2_0%] items-center gap-2 sm:gap-3">
         {onBackToHome ? (
           <button
             type="button"
             onClick={onBackToHome}
-            className="-ml-2 flex items-center gap-2 rounded-md p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+            className="-ml-2 flex items-center gap-2 rounded-md p-2 text-zinc-400 light:text-slate-500 transition-colors hover:bg-zinc-800 light:hover:bg-slate-100 hover:text-zinc-100 light:hover:text-slate-900"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
@@ -90,8 +94,8 @@ export function TopBar({
           </div>
         )}
         <div className="flex min-w-0 flex-col truncate">
-          <span className="truncate text-sm font-medium leading-tight">{projectName || APP_BRAND}</span>
-          {projectName && <span className="text-[10px] leading-tight text-zinc-500"> </span>}
+          <span className="truncate text-sm font-medium leading-tight text-zinc-100 light:text-slate-900">{projectName || APP_BRAND}</span>
+          {projectName && <span className="text-[10px] leading-tight text-zinc-500 light:text-slate-400"> </span>}
         </div>
       </div>
 
@@ -116,6 +120,17 @@ export function TopBar({
           />
         ) : null}
 
+        {/* Theme toggle */}
+        <button
+          type="button"
+          onClick={onToggleTheme}
+          className="shrink-0 rounded-md p-1.5 text-zinc-400 light:text-slate-500 transition-colors hover:bg-zinc-800 light:hover:bg-slate-100 hover:text-zinc-100 light:hover:text-slate-800"
+          aria-label={theme === 'dark' ? '切换浅色模式' : '切换深色模式'}
+          title={theme === 'dark' ? '切换浅色模式' : '切换深色模式'}
+        >
+          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </button>
+
         {/* 仅首页（工程管理）显示登录/用户；进入具体工程编辑页不占用顶栏 */}
         {!projectName ? (
           <div className="relative z-30 shrink-0" ref={dropdownRef}>
@@ -130,7 +145,7 @@ export function TopBar({
               <button
                 type="button"
                 onClick={handleLogin}
-                className="rounded-md bg-zinc-800 px-4 py-1.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-white"
+                className="rounded-md bg-zinc-800 light:bg-slate-100 px-4 py-1.5 text-sm font-medium text-zinc-300 light:text-slate-700 transition-colors hover:bg-zinc-700 light:hover:bg-slate-200 hover:text-white light:hover:text-slate-900"
               >
                 Login
               </button>
@@ -141,27 +156,27 @@ export function TopBar({
                   onClick={() => setShowDropdown(!showDropdown)}
                   aria-expanded={showDropdown}
                   aria-haspopup="menu"
-                  className="flex max-w-[12rem] items-center gap-1.5 rounded-md border border-zinc-700/90 bg-zinc-800/90 px-2.5 py-1.5 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-800 hover:text-white"
+                  className="flex max-w-[12rem] items-center gap-1.5 rounded-md border border-zinc-700/90 light:border-slate-300 bg-zinc-800/90 light:bg-slate-100 px-2.5 py-1.5 text-sm font-medium text-zinc-200 light:text-slate-700 transition-colors hover:border-zinc-600 light:hover:border-slate-400 hover:bg-zinc-800 light:hover:bg-slate-200 hover:text-white light:hover:text-slate-900"
                 >
                   <span className="min-w-0 truncate">{displayUsername}</span>
                   <ChevronDown
-                    className={`h-3.5 w-3.5 shrink-0 text-zinc-500 transition-transform ${showDropdown ? 'rotate-180' : ''}`}
+                    className={`h-3.5 w-3.5 shrink-0 text-zinc-500 light:text-slate-400 transition-transform ${showDropdown ? 'rotate-180' : ''}`}
                     aria-hidden
                   />
                 </button>
 
                 {showDropdown && (
                   <div
-                    className="absolute right-0 top-full mt-1.5 w-44 rounded-lg border border-zinc-700/90 bg-zinc-900 py-1 shadow-xl ring-1 ring-black/40"
+                    className="absolute right-0 top-full mt-1.5 w-44 rounded-lg border border-zinc-700/90 light:border-slate-200 bg-zinc-900 light:bg-white py-1 shadow-xl ring-1 ring-black/40 light:ring-slate-200/60"
                     role="menu"
                   >
                     <button
                       type="button"
                       role="menuitem"
                       onClick={handleLogout}
-                      className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-200 transition-colors hover:bg-zinc-800/90"
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-200 light:text-slate-700 transition-colors hover:bg-zinc-800/90 light:hover:bg-slate-50"
                     >
-                      <LogOut className="h-4 w-4 shrink-0 text-zinc-400" />
+                      <LogOut className="h-4 w-4 shrink-0 text-zinc-400 light:text-slate-400" />
                       退出登录
                     </button>
                   </div>

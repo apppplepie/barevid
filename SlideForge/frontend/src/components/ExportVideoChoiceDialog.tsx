@@ -34,7 +34,7 @@ export function ExportVideoChoiceDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 light:bg-slate-900/30 p-4 backdrop-blur-[2px]"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !busy) onClose();
@@ -44,13 +44,13 @@ export function ExportVideoChoiceDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="export-choice-title"
-        className="w-full max-w-sm rounded-xl border border-zinc-700/90 bg-zinc-900 p-4 shadow-2xl ring-1 ring-black/40 sm:p-5"
+        className="w-full max-w-sm rounded-xl border border-zinc-700/90 light:border-slate-200 bg-zinc-900 light:bg-white p-4 shadow-2xl ring-1 ring-black/40 light:ring-slate-200/60 sm:p-5"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
           <h2
             id="export-choice-title"
-            className="text-sm font-semibold text-zinc-100 sm:text-base"
+            className="text-sm font-semibold text-zinc-100 light:text-slate-900 sm:text-base"
           >
             {serverHasVideo ? '导出成片' : '导出视频'}
           </h2>
@@ -58,13 +58,13 @@ export function ExportVideoChoiceDialog({
             type="button"
             disabled={busy}
             onClick={onClose}
-            className="rounded-md p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300 disabled:opacity-40"
+            className="rounded-md p-1 text-zinc-500 light:text-slate-400 transition-colors hover:bg-zinc-800 light:hover:bg-slate-100 hover:text-zinc-300 light:hover:text-slate-700 disabled:opacity-40"
             aria-label="关闭"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
-        <p className="mt-2 text-xs leading-relaxed text-zinc-400 sm:text-sm">
+        <p className="mt-2 text-xs leading-relaxed text-zinc-400 light:text-slate-600 sm:text-sm">
           {serverHasVideo
             ? '可选择直接下载当前已生成的文件，或重新录制合成（耗时较长）。'
             : '将打开放映页录制并合成视频，可能需要数分钟，请保持页面不要关闭。'}
@@ -74,7 +74,7 @@ export function ExportVideoChoiceDialog({
             type="button"
             disabled={busy}
             onClick={onClose}
-            className="order-3 rounded-lg border border-zinc-700/80 px-3 py-2 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-800/80 sm:order-1 sm:px-4 sm:text-sm"
+            className="order-3 rounded-lg border border-zinc-700/80 light:border-slate-300 px-3 py-2 text-xs font-medium text-zinc-300 light:text-slate-700 transition-colors hover:bg-zinc-800/80 light:hover:bg-slate-100 sm:order-1 sm:px-4 sm:text-sm"
           >
             取消
           </button>
@@ -84,7 +84,7 @@ export function ExportVideoChoiceDialog({
                 type="button"
                 disabled={busy}
                 onClick={() => void onDownloadOnly()}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-violet-500/35 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-100 transition-colors hover:border-violet-400/45 hover:bg-violet-500/16 sm:px-4 sm:text-sm"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-violet-500/35 bg-violet-500/10 light:bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-100 light:text-violet-700 transition-colors hover:border-violet-400/45 hover:bg-violet-500/16 light:hover:bg-violet-100 sm:px-4 sm:text-sm"
               >
                 {busy ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

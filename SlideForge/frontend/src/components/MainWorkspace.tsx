@@ -214,7 +214,7 @@ export function MainWorkspace({
   if (showInitialPipelineGate) {
     const isError = activeGateStep.state === 'error';
     return (
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center bg-zinc-950 relative">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center bg-zinc-950 light:bg-slate-50 relative">
         <div className="flex flex-col items-center gap-4">
           {isError ? (
             <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
@@ -224,12 +224,12 @@ export function MainWorkspace({
             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
           )}
           <div className="text-center">
-            <h3 className="text-lg font-medium text-zinc-200">
+            <h3 className="text-lg font-medium text-zinc-200 light:text-slate-800">
               {isError
                 ? `${activeGateStep.label} 出错`
                 : `正在处理：${activeGateStep.label}…`}
             </h3>
-            <p className="text-sm text-zinc-500 mt-1">
+            <p className="text-sm text-zinc-500 light:text-slate-500 mt-1">
               {isError
                 ? '可在顶部进度条该步骤上点击重试。'
                 : '可能需要一点时间。'}
@@ -242,12 +242,12 @@ export function MainWorkspace({
 
   if (timelineLoading) {
     return (
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center bg-zinc-950 relative">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center bg-zinc-950 light:bg-slate-50 relative">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
           <div className="text-center">
-            <h3 className="text-lg font-medium text-zinc-200">加载时间轴...</h3>
-            <p className="text-sm text-zinc-500 mt-1">从服务器同步音频片段...</p>
+            <h3 className="text-lg font-medium text-zinc-200 light:text-slate-800">加载时间轴...</h3>
+            <p className="text-sm text-zinc-500 light:text-slate-500 mt-1">从服务器同步音频片段...</p>
           </div>
         </div>
       </div>
@@ -260,7 +260,7 @@ export function MainWorkspace({
 
   return (
     <div
-      className={`flex min-h-0 min-w-0 flex-1 flex-col bg-zinc-950 relative ${previewNoScrollbar}`}
+      className={`flex min-h-0 min-w-0 flex-1 flex-col bg-zinc-950 light:bg-slate-50 relative ${previewNoScrollbar}`}
     >
       {/* Preview Area */}
       <div
@@ -268,7 +268,7 @@ export function MainWorkspace({
       >
         <div
           ref={previewShellRef}
-          className={`flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden border border-zinc-800 bg-black shadow-2xl relative group ${previewNoScrollbar} ${
+          className={`flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden border border-zinc-800 light:border-slate-200 bg-black shadow-2xl relative group ${previewNoScrollbar} ${
             isPreviewFullscreen ? 'rounded-none' : 'rounded-xl'
           }`}
         >
@@ -291,8 +291,8 @@ export function MainWorkspace({
                   />
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-3 text-zinc-600">
-                  <MonitorPlay className="w-16 h-16 text-zinc-700" />
+                <div className="flex flex-col items-center gap-3 text-zinc-600 light:text-slate-400">
+                  <MonitorPlay className="w-16 h-16 text-zinc-700 light:text-slate-300" />
                   <span className="text-sm">没有活动页面</span>
                 </div>
               )}
@@ -300,7 +300,7 @@ export function MainWorkspace({
 
             {/* Audio-driven step marker */}
             {activeAudioClip && (
-              <div className="pointer-events-none absolute top-3 left-3 z-10 max-w-[calc(100%-1.5rem)] truncate rounded-full border border-zinc-700/60 bg-zinc-900/80 px-2.5 py-1 text-[11px] font-mono text-zinc-200 backdrop-blur sm:top-4 sm:left-4 sm:px-3 sm:text-xs">
+              <div className="pointer-events-none absolute top-3 left-3 z-10 max-w-[calc(100%-1.5rem)] truncate rounded-full border border-zinc-700/60 light:border-slate-300/60 bg-zinc-900/80 light:bg-white/90 px-2.5 py-1 text-[11px] font-mono text-zinc-200 light:text-slate-700 backdrop-blur sm:top-4 sm:left-4 sm:px-3 sm:text-xs">
                 {activeAudioClip.label}
               </div>
             )}

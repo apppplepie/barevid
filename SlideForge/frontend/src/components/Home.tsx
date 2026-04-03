@@ -293,21 +293,21 @@ export function Home({
   };
 
   return (
-    <div className="flex-1 bg-zinc-950 text-zinc-100 overflow-y-auto p-8">
+    <div className="flex-1 bg-zinc-950 light:bg-slate-50 text-zinc-100 light:text-slate-900 overflow-y-auto p-8">
       <div className="max-w-5xl mx-auto space-y-12">
         
         {/* Header & Create Form */}
         <section className="space-y-6">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">{APP_BRAND}</h1>
-            <p className="text-zinc-400 mt-2">创建和管理你的视频工程项目。</p>
+            <h1 className="text-3xl font-semibold tracking-tight text-zinc-100 light:text-slate-900">{APP_BRAND}</h1>
+            <p className="text-zinc-400 light:text-slate-500 mt-2">创建和管理你的视频工程项目。</p>
           </div>
           {currentUserId == null ? (
-            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 px-6 py-14 text-center">
-              <p className="text-sm text-zinc-300">
+            <div className="rounded-2xl border border-zinc-800/80 light:border-slate-200 bg-zinc-900/40 light:bg-white px-6 py-14 text-center">
+              <p className="text-sm text-zinc-300 light:text-slate-700">
                 请先登录后再使用创建项目、编辑工程与云共享等功能。
               </p>
-              <p className="mt-3 text-xs text-zinc-500">点击右上角「Login」登录或注册账号。</p>
+              <p className="mt-3 text-xs text-zinc-500 light:text-slate-400">点击右上角「Login」登录或注册账号。</p>
             </div>
           ) : (
             <>
@@ -322,7 +322,7 @@ export function Home({
 
               <form
             onSubmit={(e) => void handleCreate(e)}
-            className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-b from-zinc-900/80 to-zinc-950/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)_inset] flex flex-col gap-6"
+            className="relative overflow-hidden rounded-2xl border border-zinc-800/80 light:border-slate-200 bg-gradient-to-b from-zinc-900/80 to-zinc-950/90 light:from-white light:to-slate-50/90 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)_inset] light:shadow-slate-200/60 light:shadow-sm flex flex-col gap-6"
           >
             <div
               className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 rounded-full bg-purple-600/10 blur-3xl"
@@ -334,7 +334,7 @@ export function Home({
             />
 
             <div className="relative space-y-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-zinc-300">
+              <label className="flex items-center gap-2 text-sm font-medium text-zinc-300 light:text-slate-700">
                 <Type className="h-3.5 w-3.5 text-purple-400/90" />
                 项目名称
                 {/* <span className="text-xs font-normal text-zinc-500">
@@ -347,13 +347,13 @@ export function Home({
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
                 placeholder="例如：产品发布会"
-                className="w-full rounded-xl border border-zinc-800/90 bg-zinc-950/80 px-4 py-3 text-sm text-zinc-100 shadow-inner placeholder:text-zinc-600 focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-[border-color,box-shadow]"
+                className="w-full rounded-xl border border-zinc-800/90 light:border-slate-200 bg-zinc-950/80 light:bg-white px-4 py-3 text-sm text-zinc-100 light:text-slate-900 shadow-inner placeholder:text-zinc-600 light:placeholder:text-slate-400 focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-[border-color,box-shadow]"
               />
             </div>
 
             <div className="relative space-y-6">
               <div className="space-y-3">
-                <label className="flex items-center gap-2 text-sm font-medium text-zinc-300">
+                <label className="flex items-center gap-2 text-sm font-medium text-zinc-300 light:text-slate-700">
                   <Monitor className="h-3.5 w-3.5 text-purple-400/90" />
                   画面比例
                 </label>
@@ -368,12 +368,12 @@ export function Home({
                         disabled={creating}
                         className={`rounded-xl border px-3 py-2.5 text-left text-sm transition-all disabled:opacity-50 ${
                           on
-                            ? 'border-purple-500/50 bg-purple-500/10 text-zinc-100 shadow-[0_0_20px_-8px_rgba(168,85,247,0.5)]'
-                            : 'border-zinc-800/90 bg-zinc-950/50 text-zinc-400 hover:border-zinc-700 hover:bg-zinc-900/60 hover:text-zinc-200'
+                            ? 'border-purple-500/50 bg-purple-500/10 text-zinc-100 light:text-slate-900 shadow-[0_0_20px_-8px_rgba(168,85,247,0.5)]'
+                            : 'border-zinc-800/90 light:border-slate-200 bg-zinc-950/50 light:bg-white text-zinc-400 light:text-slate-500 hover:border-zinc-700 light:hover:border-slate-300 hover:bg-zinc-900/60 light:hover:bg-slate-50 hover:text-zinc-200 light:hover:text-slate-700'
                         }`}
                       >
                         <span className="block font-medium tabular-nums">{opt.title}</span>
-                        <span className="block text-xs text-zinc-500">{opt.hint}</span>
+                        <span className="block text-xs text-zinc-500 light:text-slate-400">{opt.hint}</span>
                       </button>
                     );
                   })}
@@ -381,7 +381,7 @@ export function Home({
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm font-medium text-zinc-300">
+                <div className="flex items-center gap-2 text-sm font-medium text-zinc-300 light:text-slate-700">
                   <LayoutTemplate className="h-3.5 w-3.5 shrink-0 text-purple-400/90" />
                   <span>演示风格</span>
                 </div>
@@ -391,7 +391,7 @@ export function Home({
                   className="flex flex-row flex-wrap items-center gap-2"
                 >
                   <div className="flex min-w-0 items-center gap-2 px-1">
-                    <span className="shrink-0 text-sm text-zinc-400">复用母版：</span>
+                    <span className="shrink-0 text-sm text-zinc-400 light:text-slate-600">复用母版：</span>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -400,10 +400,10 @@ export function Home({
                       value={deckMasterSourceRaw}
                       onChange={(e) => setDeckMasterSourceRaw(e.target.value.replace(/\s+/g, ''))}
                       disabled={creating}
-                      className="h-9 w-[6.5rem] shrink-0 rounded-lg border border-zinc-700/80 bg-zinc-950/90 px-2.5 font-mono text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-violet-500/45 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                      className="h-9 w-[6.5rem] shrink-0 rounded-lg border border-zinc-700/80 light:border-slate-200 bg-zinc-950/90 light:bg-white px-2.5 font-mono text-sm text-zinc-100 light:text-slate-900 placeholder:text-zinc-600 light:placeholder:text-slate-400 focus:border-violet-500/45 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
                     />
                   </div>
-                  <div className="hidden h-8 w-px shrink-0 bg-zinc-700/70 sm:block" aria-hidden />
+                  <div className="hidden h-8 w-px shrink-0 bg-zinc-700/70 light:bg-slate-300/70 sm:block" aria-hidden />
                   <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
                     {STYLE_PRESETS.map((opt) => {
                       const on = selectedStyle === opt.value;
@@ -416,8 +416,8 @@ export function Home({
                           disabled={creating || lockStyle}
                           className={`rounded-lg border px-2.5 py-2 text-left text-xs font-medium transition-all disabled:opacity-50 sm:px-3 sm:text-sm ${
                             on
-                              ? 'border-purple-500/50 bg-purple-500/15 text-zinc-100 shadow-[0_0_16px_-6px_rgba(168,85,247,0.45)]'
-                              : 'border-zinc-700/80 bg-zinc-950/80 text-zinc-400 hover:border-zinc-600 hover:bg-zinc-900/70 hover:text-zinc-200'
+                              ? 'border-purple-500/50 bg-purple-500/15 text-zinc-100 light:text-slate-900 shadow-[0_0_16px_-6px_rgba(168,85,247,0.45)]'
+                              : 'border-zinc-700/80 light:border-slate-200 bg-zinc-950/80 light:bg-white text-zinc-400 light:text-slate-500 hover:border-zinc-600 light:hover:border-slate-300 hover:bg-zinc-900/70 light:hover:bg-slate-50 hover:text-zinc-200 light:hover:text-slate-700'
                           }`}
                         >
                           {opt.title}
@@ -431,11 +431,11 @@ export function Home({
                     请输入正整数项目 ID，或留空。
                   </p>
                 ) : parsedCopyMasterId != null ? (
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-xs text-zinc-500 light:text-slate-400">
                     已填母版源项目 ID，风格以该项目母版为准；右侧预设已禁用。源项目须已有就绪的演示母版。
                   </p>
                 ) : (
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-xs text-zinc-500 light:text-slate-400">
                     留空 ID 时由 AI 按所选风格生成母版；填写 ID 则复用该项目的演示母版并跳过风格预设。
                   </p>
                 )}
@@ -445,11 +445,11 @@ export function Home({
                       type="button"
                       onClick={() => setStyleHintOpen((o) => !o)}
                       disabled={creating}
-                      className="flex w-full items-center gap-1.5 rounded-lg py-1.5 text-left text-xs text-zinc-400 transition-colors hover:text-zinc-200 disabled:opacity-50 sm:text-sm"
+                      className="flex w-full items-center gap-1.5 rounded-lg py-1.5 text-left text-xs text-zinc-400 light:text-slate-500 transition-colors hover:text-zinc-200 light:hover:text-slate-700 disabled:opacity-50 sm:text-sm"
                       aria-expanded={styleHintOpen}
                     >
                       <ChevronDown
-                        className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform ${styleHintOpen ? 'rotate-0' : '-rotate-90'}`}
+                        className={`h-4 w-4 shrink-0 text-zinc-500 light:text-slate-400 transition-transform ${styleHintOpen ? 'rotate-0' : '-rotate-90'}`}
                         aria-hidden
                       />
                       自定义风格（可选）
@@ -463,7 +463,7 @@ export function Home({
                         placeholder="例如：偏冷色科技感、少用渐变、大字报排版、参考苹果发布会…"
                         rows={3}
                         maxLength={4000}
-                        className="mt-1 w-full resize-y rounded-xl border border-zinc-800/90 bg-zinc-950/80 px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                        className="mt-1 w-full resize-y rounded-xl border border-zinc-800/90 light:border-slate-200 bg-zinc-950/80 light:bg-white px-3 py-2.5 text-sm text-zinc-100 light:text-slate-900 placeholder:text-zinc-600 light:placeholder:text-slate-400 focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
                       />
                     ) : null}
                   </div>
@@ -573,7 +573,7 @@ export function Home({
             </div>
 
             <div className="relative flex flex-col gap-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-zinc-300">
+              <label className="flex items-center gap-2 text-sm font-medium text-zinc-300 light:text-slate-700">
                 <Sparkles className="h-3.5 w-3.5 text-amber-400/90" />
                 主题与要点
                 {/* <span className="text-xs font-normal text-zinc-500">
@@ -586,7 +586,7 @@ export function Home({
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="粘贴你的口播素材或要点：讲什么、例子、数据、节奏偏好…"
                 rows={4}
-                className="w-full resize-y min-h-[108px] rounded-xl border border-zinc-800/90 bg-zinc-950/80 px-4 py-3 text-sm text-zinc-100 shadow-inner placeholder:text-zinc-600 focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-[border-color,box-shadow]"
+                className="w-full resize-y min-h-[108px] rounded-xl border border-zinc-800/90 light:border-slate-200 bg-zinc-950/80 light:bg-white px-4 py-3 text-sm text-zinc-100 light:text-slate-900 shadow-inner placeholder:text-zinc-600 light:placeholder:text-slate-400 focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-[border-color,box-shadow]"
               />
             </div>
 
@@ -606,7 +606,7 @@ export function Home({
               <button
                 type="submit"
                 disabled={!canSubmit || creating}
-                className="flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-purple-600 px-6 py-3 text-sm font-medium text-white shadow-[0_0_24px_-6px_rgba(168,85,247,0.55)] transition-all hover:bg-purple-500 hover:shadow-[0_0_28px_-4px_rgba(192,132,252,0.45)] disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500 disabled:shadow-none sm:w-auto sm:min-w-[148px]"
+                className="flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-purple-600 px-6 py-3 text-sm font-medium text-white shadow-[0_0_24px_-6px_rgba(168,85,247,0.55)] transition-all hover:bg-purple-500 hover:shadow-[0_0_28px_-4px_rgba(192,132,252,0.45)] disabled:cursor-not-allowed disabled:bg-zinc-800 light:disabled:bg-slate-200 disabled:text-zinc-500 light:disabled:text-slate-400 disabled:shadow-none sm:w-auto sm:min-w-[148px]"
               >
                 {creating ? (
                   <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
@@ -625,7 +625,7 @@ export function Home({
           <>
         {/* Project List */}
         <section className="space-y-6">
-          <h2 className="text-xl font-medium text-zinc-200 flex items-center gap-2">
+          <h2 className="text-xl font-medium text-zinc-200 light:text-slate-800 flex items-center gap-2">
             <Folder className="w-5 h-5 text-purple-400" />
             最近项目
           </h2>
@@ -637,10 +637,10 @@ export function Home({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className={`bg-zinc-900/40 border rounded-xl p-5 text-left transition-all group flex flex-col gap-4 relative ${
+                className={`bg-zinc-900/40 light:bg-white border rounded-xl p-5 text-left transition-all group flex flex-col gap-4 relative ${
                   project.isShared
-                    ? 'border-zinc-800/80 opacity-85 cursor-not-allowed'
-                    : 'border-zinc-800/80 hover:border-purple-500/50 hover:bg-zinc-900/80 cursor-pointer'
+                    ? 'border-zinc-800/80 light:border-slate-200 opacity-85 cursor-not-allowed'
+                    : 'border-zinc-800/80 light:border-slate-200 hover:border-purple-500/50 hover:bg-zinc-900/80 light:hover:bg-slate-50 cursor-pointer'
                 }`}
                 onClick={() => {
                   if (project.isShared) return;
@@ -648,7 +648,7 @@ export function Home({
                 }}
               >
                 <div className="flex items-start justify-between">
-                  <div className="w-10 h-10 rounded-lg bg-zinc-800/50 flex items-center justify-center group-hover:bg-purple-500/20 group-hover:text-purple-400 transition-colors">
+                  <div className="w-10 h-10 rounded-lg bg-zinc-800/50 light:bg-slate-100 flex items-center justify-center group-hover:bg-purple-500/20 group-hover:text-purple-400 transition-colors text-zinc-400 light:text-slate-500">
                     <Video className="w-5 h-5" />
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
@@ -673,19 +673,19 @@ export function Home({
                           e.stopPropagation();
                           setManagingProjectId((prev) => (prev === project.id ? null : project.id));
                         }}
-                        className="rounded-md bg-zinc-800 p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200"
+                        className="rounded-md bg-zinc-800 light:bg-slate-100 p-1.5 text-zinc-400 light:text-slate-500 transition-colors hover:bg-zinc-700 light:hover:bg-slate-200 hover:text-zinc-200 light:hover:text-slate-800"
                         title="管理"
                       >
                         <MoreVertical className="h-3.5 w-3.5" />
                       </button>
                       {managingProjectId === project.id ? (
                         <div
-                          className="absolute right-0 top-8 z-20 w-44 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900/95 shadow-xl backdrop-blur"
+                          className="absolute right-0 top-8 z-20 w-44 overflow-hidden rounded-lg border border-zinc-700 light:border-slate-200 bg-zinc-900/95 light:bg-white shadow-xl backdrop-blur"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <button
                             type="button"
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-200 transition-colors hover:bg-zinc-800"
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-200 light:text-slate-700 transition-colors hover:bg-zinc-800 light:hover:bg-slate-50"
                             onClick={() => {
                               setRenameDialog({ id: project.id, currentName: project.name });
                               setRenameValue(project.name);
@@ -698,7 +698,7 @@ export function Home({
                           <button
                             type="button"
                             disabled={copyingProjectId === project.id}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-200 transition-colors hover:bg-zinc-800"
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-200 light:text-slate-700 transition-colors hover:bg-zinc-800 light:hover:bg-slate-50"
                             onClick={() => {
                               void handleCopy(project.id);
                             }}
@@ -713,7 +713,7 @@ export function Home({
                           {project.pipeline?.video ? (
                             <button
                               type="button"
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-200 transition-colors hover:bg-zinc-800"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-200 light:text-slate-700 transition-colors hover:bg-zinc-800 light:hover:bg-slate-50"
                               onClick={() => {
                                 void withManage(async () => onDownloadProject(project.id));
                               }}
@@ -724,7 +724,7 @@ export function Home({
                           ) : null}
                           <button
                             type="button"
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-200 transition-colors hover:bg-zinc-800"
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-200 light:text-slate-700 transition-colors hover:bg-zinc-800 light:hover:bg-slate-50"
                             onClick={() => {
                               void withManage(async () => {
                                 if (project.isShared) {
@@ -756,12 +756,12 @@ export function Home({
                 </div>
                 
                 <div>
-                  <h3 className="text-base font-medium text-zinc-200 group-hover:text-white transition-colors truncate">{project.name}</h3>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-2 text-xs text-zinc-500">
+                  <h3 className="text-base font-medium text-zinc-200 light:text-slate-800 group-hover:text-white light:group-hover:text-slate-900 transition-colors truncate">{project.name}</h3>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-2 text-xs text-zinc-500 light:text-slate-500">
                     <span className="flex items-center gap-1"><Monitor className="w-3 h-3" /> {project.screenSize}</span>
-                    <span className="w-1 h-1 shrink-0 rounded-full bg-zinc-700 max-sm:hidden" />
+                    <span className="w-1 h-1 shrink-0 rounded-full bg-zinc-700 light:bg-slate-300 max-sm:hidden" />
                     <span className="flex items-center gap-1"><LayoutTemplate className="w-3 h-3" /> {project.style}</span>
-                    <span className="w-1 h-1 shrink-0 rounded-full bg-zinc-700 max-sm:hidden" />
+                    <span className="w-1 h-1 shrink-0 rounded-full bg-zinc-700 light:bg-slate-300 max-sm:hidden" />
                     <DeckMasterBadge project={project} />
                   </div>
                   {project.isShared ? (
@@ -787,7 +787,7 @@ export function Home({
 
         {/* Cloud Sharing Directory */}
         <section className="space-y-6">
-          <h2 className="text-xl font-medium text-zinc-200 flex items-center gap-2">
+          <h2 className="text-xl font-medium text-zinc-200 light:text-slate-800 flex items-center gap-2">
             <Cloud className="w-5 h-5 text-blue-400" />
             云共享
           </h2>

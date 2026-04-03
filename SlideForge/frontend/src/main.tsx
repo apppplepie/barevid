@@ -6,6 +6,7 @@ import { APP_BRAND } from './brand';
 import { PlayLayout } from './play/PlayLayout';
 import PresentPage from './play/present-page';
 import PlayPage from './play/page';
+import { ThemeProvider } from './ThemeContext';
 import './index.css';
 
 document.title = APP_BRAND;
@@ -25,6 +26,8 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <ThemeProvider>
+      <RouterProvider router={router} />
+    </ThemeProvider>
   </StrictMode>,
 );

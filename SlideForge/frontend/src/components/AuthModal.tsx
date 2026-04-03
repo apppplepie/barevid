@@ -54,50 +54,50 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            className="fixed inset-0 bg-black/60 light:bg-slate-900/40 backdrop-blur-sm z-50"
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl z-50 overflow-hidden"
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-zinc-950 light:bg-white border border-zinc-800 light:border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden"
           >
             <div className="p-6 relative">
               <button
                 onClick={onClose}
-                className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full transition-colors"
+                className="absolute top-4 right-4 p-2 text-zinc-400 light:text-slate-400 hover:text-white light:hover:text-slate-700 hover:bg-zinc-900 light:hover:bg-slate-100 rounded-full transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
 
               <div className="text-center mb-8">
-                <h2 className="text-2xl font-semibold text-white mb-2">
+                <h2 className="text-2xl font-semibold text-white light:text-slate-900 mb-2">
                   {mode === 'login' ? 'Welcome back' : 'Create an account'}
                 </h2>
-                <p className="text-sm text-zinc-400">
-                  {mode === 'login' 
-                    ? 'Enter your details to access your projects.' 
+                <p className="text-sm text-zinc-400 light:text-slate-500">
+                  {mode === 'login'
+                    ? 'Enter your details to access your projects.'
                     : 'Sign up to start creating and sharing projects.'}
                 </p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 {error ? (
-                  <div className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-xs text-red-200">
+                  <div className="rounded-lg border border-red-500/40 bg-red-950/40 light:bg-red-50 px-3 py-2 text-xs text-red-200 light:text-red-700">
                     {error}
                   </div>
                 ) : null}
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-zinc-300">用户名</label>
+                  <label className="text-sm font-medium text-zinc-300 light:text-slate-700">用户名</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <User className="h-4 w-4 text-zinc-500" />
+                      <User className="h-4 w-4 text-zinc-500 light:text-slate-400" />
                     </div>
                     <input
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-zinc-600"
+                      className="w-full bg-zinc-900 light:bg-slate-50 border border-zinc-800 light:border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-200 light:text-slate-900 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-zinc-600 light:placeholder:text-slate-400"
                       placeholder="请输入用户名"
                       required
                     />
@@ -105,16 +105,16 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-zinc-300">密码</label>
+                  <label className="text-sm font-medium text-zinc-300 light:text-slate-700">密码</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Lock className="h-4 w-4 text-zinc-500" />
+                      <Lock className="h-4 w-4 text-zinc-500 light:text-slate-400" />
                     </div>
                     <input
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-zinc-600"
+                      className="w-full bg-zinc-900 light:bg-slate-50 border border-zinc-800 light:border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-200 light:text-slate-900 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-zinc-600 light:placeholder:text-slate-400"
                       placeholder="请输入密码"
                       required
                     />
@@ -124,7 +124,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
                 <button
                   type="submit"
                   disabled={loading || !username.trim() || !password.trim()}
-                  className="w-full mt-6 px-4 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white rounded-xl flex items-center justify-center gap-2 text-sm font-medium transition-all shadow-[0_0_15px_rgba(168,85,247,0.2)] hover:shadow-[0_0_20px_rgba(168,85,247,0.4)] disabled:shadow-none"
+                  className="w-full mt-6 px-4 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-800 light:disabled:bg-slate-200 disabled:text-zinc-500 light:disabled:text-slate-400 text-white rounded-xl flex items-center justify-center gap-2 text-sm font-medium transition-all shadow-[0_0_15px_rgba(168,85,247,0.2)] hover:shadow-[0_0_20px_rgba(168,85,247,0.4)] disabled:shadow-none"
                 >
                   {loading ? '请稍候…' : mode === 'login' ? '登录' : '注册'}
                   <ArrowRight className="w-4 h-4" />
@@ -134,10 +134,10 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
               <div className="mt-6 text-center">
                 <button
                   onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
-                  className="text-sm text-zinc-400 hover:text-purple-400 transition-colors"
+                  className="text-sm text-zinc-400 light:text-slate-500 hover:text-purple-400 transition-colors"
                 >
-                  {mode === 'login' 
-                    ? "没有账号？注册" 
+                  {mode === 'login'
+                    ? "没有账号？注册"
                     : '已有账号？登录'}
                 </button>
               </div>
