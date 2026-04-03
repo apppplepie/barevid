@@ -28,7 +28,7 @@ function DeckPageStatePlaceholder({
         )}
       </div>
       <div className="max-w-md space-y-2">
-        <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-[0.2em] text-zinc-500 light:text-slate-400">
+        <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-[0.2em] text-sf-muted">
           <LayoutTemplate className="h-3.5 w-3.5" aria-hidden />
           演示页
         </div>
@@ -206,20 +206,20 @@ export function PageRenderer({
 
 function OverviewPage({ page }: { page: PageData }) {
   return (
-    <div className="flex min-h-0 min-w-0 h-full w-full max-w-full flex-col gap-6 overflow-x-hidden overflow-y-auto overscroll-contain bg-gradient-to-br from-zinc-950 to-black p-6 text-zinc-100 [-ms-overflow-style:none] [scrollbar-width:none] sm:p-10 [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0">
+    <div className="flex min-h-0 min-w-0 h-full w-full max-w-full flex-col gap-6 overflow-x-hidden overflow-y-auto overscroll-contain bg-gradient-to-br from-zinc-950 to-black light:from-slate-100 light:to-slate-50 p-6 text-zinc-100 light:text-slate-900 [-ms-overflow-style:none] [scrollbar-width:none] sm:p-10 [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0">
       <header className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500 light:text-slate-500">
             Overview
           </p>
           <h2 className="truncate text-2xl font-semibold sm:text-3xl">{page.title}</h2>
           {page.subtitle ? (
-            <p className="text-sm text-zinc-400 mt-2 max-w-xl">
+            <p className="text-sm text-zinc-400 light:text-slate-600 mt-2 max-w-xl">
               {page.subtitle}
             </p>
           ) : null}
         </div>
-        <div className="shrink-0 whitespace-nowrap rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1.5 font-mono text-[10px] text-zinc-300 sm:px-4 sm:py-2 sm:text-xs">
+        <div className="shrink-0 whitespace-nowrap rounded-full border border-zinc-800 light:border-slate-200 bg-zinc-900 light:bg-white px-3 py-1.5 font-mono text-[10px] text-zinc-300 light:text-slate-700 sm:px-4 sm:py-2 sm:text-xs">
           自动同步
         </div>
       </header>
@@ -228,27 +228,27 @@ function OverviewPage({ page }: { page: PageData }) {
         {(page.metrics || []).map((metric) => (
           <div
             key={metric.label}
-            className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+            className="min-w-0 rounded-xl border border-zinc-800 light:border-slate-200 bg-zinc-900/50 light:bg-white/90 p-4 shadow-sm light:shadow-slate-200/50"
           >
-            <p className="text-xs text-zinc-500 uppercase tracking-wider">
+            <p className="text-xs text-zinc-500 light:text-slate-500 uppercase tracking-wider">
               {metric.label}
             </p>
             <p className="text-2xl font-semibold mt-2">{metric.value}</p>
             {metric.delta ? (
-              <p className="text-xs text-zinc-400 mt-1">{metric.delta}</p>
+              <p className="text-xs text-zinc-400 light:text-slate-600 mt-1">{metric.delta}</p>
             ) : null}
           </div>
         ))}
       </section>
 
-      <section className="min-w-0 flex-1 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 sm:p-6">
-        <h3 className="text-sm font-semibold text-zinc-200 mb-3">
+      <section className="min-w-0 flex-1 rounded-2xl border border-zinc-800 light:border-slate-200 bg-zinc-900/40 light:bg-slate-50/95 p-4 sm:p-6">
+        <h3 className="text-sm font-semibold text-zinc-200 light:text-slate-800 mb-3">
           实时笔记
         </h3>
-        <ul className="text-sm text-zinc-400 space-y-2">
+        <ul className="text-sm text-zinc-400 light:text-slate-600 space-y-2">
           {(page.bullets || []).map((item) => (
             <li key={item} className="flex items-start gap-2">
-              <span className="mt-1 h-1.5 w-1.5 rounded-full bg-cyan-400" />
+              <span className="mt-1 h-1.5 w-1.5 rounded-full bg-cyan-400 light:bg-cyan-500" />
               <span>{item}</span>
             </li>
           ))}
@@ -260,14 +260,14 @@ function OverviewPage({ page }: { page: PageData }) {
 
 function SignalsPage({ page }: { page: PageData }) {
   return (
-    <div className="flex min-h-0 min-w-0 h-full w-full max-w-full flex-col gap-6 overflow-x-hidden overflow-y-auto overscroll-contain bg-gradient-to-br from-zinc-950 to-black p-6 text-zinc-100 [-ms-overflow-style:none] [scrollbar-width:none] sm:p-10 [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0">
+    <div className="flex min-h-0 min-w-0 h-full w-full max-w-full flex-col gap-6 overflow-x-hidden overflow-y-auto overscroll-contain bg-gradient-to-br from-zinc-950 to-black light:from-slate-100 light:to-slate-50 p-6 text-zinc-100 light:text-slate-900 [-ms-overflow-style:none] [scrollbar-width:none] sm:p-10 [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0">
       <header className="min-w-0">
-        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500 light:text-slate-500">
           信号
         </p>
         <h2 className="truncate text-2xl font-semibold sm:text-3xl">{page.title}</h2>
         {page.subtitle ? (
-          <p className="text-sm text-zinc-400 mt-2 max-w-xl">
+          <p className="text-sm text-zinc-400 light:text-slate-600 mt-2 max-w-xl">
             {page.subtitle}
           </p>
         ) : null}
@@ -277,22 +277,22 @@ function SignalsPage({ page }: { page: PageData }) {
         {(page.metrics || []).map((metric) => (
           <div
             key={metric.label}
-            className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+            className="min-w-0 rounded-xl border border-zinc-800 light:border-slate-200 bg-zinc-900/50 light:bg-white/90 p-4 shadow-sm light:shadow-slate-200/50"
           >
-            <p className="text-xs text-zinc-500 uppercase tracking-wider">
+            <p className="text-xs text-zinc-500 light:text-slate-500 uppercase tracking-wider">
               {metric.label}
             </p>
             <p className="text-2xl font-semibold mt-2">{metric.value}</p>
             {metric.delta ? (
-              <p className="text-xs text-purple-300 mt-1">{metric.delta}</p>
+              <p className="text-xs text-purple-300 light:text-purple-700 mt-1">{metric.delta}</p>
             ) : null}
           </div>
         ))}
       </section>
 
       <section className="grid min-w-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[2fr,1fr]">
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
-          <h3 className="text-sm font-semibold text-zinc-200 mb-4">
+        <div className="rounded-2xl border border-zinc-800 light:border-slate-200 bg-zinc-900/40 light:bg-slate-50/95 p-6">
+          <h3 className="text-sm font-semibold text-zinc-200 light:text-slate-800 mb-4">
             热度曲线
           </h3>
           <div className="flex items-end gap-2 h-40">
@@ -305,14 +305,14 @@ function SignalsPage({ page }: { page: PageData }) {
             ))}
           </div>
         </div>
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
-          <h3 className="text-sm font-semibold text-zinc-200 mb-3">
+        <div className="rounded-2xl border border-zinc-800 light:border-slate-200 bg-zinc-900/40 light:bg-slate-50/95 p-6">
+          <h3 className="text-sm font-semibold text-zinc-200 light:text-slate-800 mb-3">
             洞察
           </h3>
-          <ul className="text-sm text-zinc-400 space-y-2">
+          <ul className="text-sm text-zinc-400 light:text-slate-600 space-y-2">
             {(page.bullets || []).map((item) => (
               <li key={item} className="flex items-start gap-2">
-                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-purple-400" />
+                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-purple-400 light:bg-purple-500" />
                 <span>{item}</span>
               </li>
             ))}
@@ -325,14 +325,14 @@ function SignalsPage({ page }: { page: PageData }) {
 
 function OpsPage({ page }: { page: PageData }) {
   return (
-    <div className="flex min-h-0 min-w-0 h-full w-full max-w-full flex-col gap-6 overflow-x-hidden overflow-y-auto overscroll-contain bg-gradient-to-br from-zinc-950 to-black p-6 text-zinc-100 [-ms-overflow-style:none] [scrollbar-width:none] sm:p-10 [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0">
+    <div className="flex min-h-0 min-w-0 h-full w-full max-w-full flex-col gap-6 overflow-x-hidden overflow-y-auto overscroll-contain bg-gradient-to-br from-zinc-950 to-black light:from-slate-100 light:to-slate-50 p-6 text-zinc-100 light:text-slate-900 [-ms-overflow-style:none] [scrollbar-width:none] sm:p-10 [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0">
       <header className="min-w-0">
-        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500 light:text-slate-500">
           发布运维
         </p>
         <h2 className="truncate text-2xl font-semibold sm:text-3xl">{page.title}</h2>
         {page.subtitle ? (
-          <p className="text-sm text-zinc-400 mt-2 max-w-xl">
+          <p className="text-sm text-zinc-400 light:text-slate-600 mt-2 max-w-xl">
             {page.subtitle}
           </p>
         ) : null}
@@ -342,27 +342,27 @@ function OpsPage({ page }: { page: PageData }) {
         {(page.metrics || []).map((metric) => (
           <div
             key={metric.label}
-            className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+            className="min-w-0 rounded-xl border border-zinc-800 light:border-slate-200 bg-zinc-900/50 light:bg-white/90 p-4 shadow-sm light:shadow-slate-200/50"
           >
-            <p className="text-xs text-zinc-500 uppercase tracking-wider">
+            <p className="text-xs text-zinc-500 light:text-slate-500 uppercase tracking-wider">
               {metric.label}
             </p>
             <p className="text-2xl font-semibold mt-2">{metric.value}</p>
             {metric.delta ? (
-              <p className="text-xs text-emerald-300 mt-1">{metric.delta}</p>
+              <p className="text-xs text-emerald-300 light:text-emerald-700 mt-1">{metric.delta}</p>
             ) : null}
           </div>
         ))}
       </section>
 
-      <section className="min-w-0 flex-1 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 sm:p-6">
-        <h3 className="text-sm font-semibold text-zinc-200 mb-3">
+      <section className="min-w-0 flex-1 rounded-2xl border border-zinc-800 light:border-slate-200 bg-zinc-900/40 light:bg-slate-50/95 p-4 sm:p-6">
+        <h3 className="text-sm font-semibold text-zinc-200 light:text-slate-800 mb-3">
           检查清单
         </h3>
-        <ul className="text-sm text-zinc-400 space-y-2">
+        <ul className="text-sm text-zinc-400 light:text-slate-600 space-y-2">
           {(page.bullets || []).map((item) => (
             <li key={item} className="flex items-start gap-2">
-              <span className="mt-1 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              <span className="mt-1 h-1.5 w-1.5 rounded-full bg-emerald-400 light:bg-emerald-500" />
               <span>{item}</span>
             </li>
           ))}

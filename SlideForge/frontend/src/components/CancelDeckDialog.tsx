@@ -51,7 +51,7 @@ export function CancelDeckDialog({
             type="button"
             disabled={busy}
             onClick={onClose}
-            className="rounded-md p-1 text-zinc-500 light:text-slate-400 transition-colors hover:bg-zinc-800 light:hover:bg-slate-100 hover:text-zinc-300 light:hover:text-slate-700 disabled:opacity-40"
+            className="rounded-md p-1 text-sf-muted transition-colors hover:bg-zinc-800 light:hover:bg-slate-100 hover:text-zinc-300 light:hover:text-slate-700 disabled:opacity-40"
             aria-label="关闭"
           >
             <X className="h-4 w-4" />

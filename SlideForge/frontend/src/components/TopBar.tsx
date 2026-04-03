@@ -95,7 +95,7 @@ export function TopBar({
         )}
         <div className="flex min-w-0 flex-col truncate">
           <span className="truncate text-sm font-medium leading-tight text-zinc-100 light:text-slate-900">{projectName || APP_BRAND}</span>
-          {projectName && <span className="text-[10px] leading-tight text-zinc-500 light:text-slate-400"> </span>}
+          {projectName && <span className="text-[10px] leading-tight text-sf-muted"> </span>}
         </div>
       </div>
 
@@ -160,7 +160,7 @@ export function TopBar({
                 >
                   <span className="min-w-0 truncate">{displayUsername}</span>
                   <ChevronDown
-                    className={`h-3.5 w-3.5 shrink-0 text-zinc-500 light:text-slate-400 transition-transform ${showDropdown ? 'rotate-180' : ''}`}
+                    className={`h-3.5 w-3.5 shrink-0 text-sf-muted transition-transform ${showDropdown ? 'rotate-180' : ''}`}
                     aria-hidden
                   />
                 </button>
@@ -176,7 +176,7 @@ export function TopBar({
                       onClick={handleLogout}
                       className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-200 light:text-slate-700 transition-colors hover:bg-zinc-800/90 light:hover:bg-slate-50"
                     >
-                      <LogOut className="h-4 w-4 shrink-0 text-zinc-400 light:text-slate-400" />
+                      <LogOut className="h-4 w-4 shrink-0 text-sf-muted" />
                       退出登录
                     </button>
                   </div>

@@ -40,7 +40,7 @@ export function Timeline({
 
   if (isGenerating) {
     return (
-      <div style={{ height }} className="flex w-full min-h-0 min-w-0 shrink-0 flex-col items-center justify-center border-t border-zinc-800 light:border-slate-200 bg-zinc-900/80 light:bg-white/90 text-sm text-zinc-600 light:text-slate-400 backdrop-blur-md z-30">
+      <div style={{ height }} className="flex w-full min-h-0 min-w-0 shrink-0 flex-col items-center justify-center border-t border-zinc-800 light:border-slate-200 bg-zinc-900/80 light:bg-white/90 text-sm text-sf-muted backdrop-blur-md z-30">
         时间轴将在生成后可用
       </div>
     );
@@ -115,7 +115,7 @@ export function Timeline({
           >
             <SkipForward className="h-4 w-4" />
           </button>
-          <div className="ml-2 shrink-0 whitespace-nowrap rounded border border-zinc-800 light:border-slate-200 bg-zinc-900 light:bg-white px-2 py-1 font-mono text-[10px] text-purple-400 shadow-inner sm:ml-4 sm:px-3 sm:text-xs">
+          <div className="ml-2 shrink-0 whitespace-nowrap rounded border border-zinc-800 light:border-slate-200 bg-zinc-900 light:bg-white px-2 py-1 font-mono text-[10px] text-purple-400 light:text-purple-600 shadow-inner sm:ml-4 sm:px-3 sm:text-xs">
             {formatTime(currentTime)}
           </div>
         </div>
@@ -140,7 +140,7 @@ export function Timeline({
       {/* Tracks Area */}
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
         {/* Time Ruler */}
-        <div className="h-6 border-b border-zinc-800 light:border-slate-200 flex relative text-[10px] text-zinc-500 light:text-slate-400 font-mono select-none bg-zinc-950/30 light:bg-slate-50/50">
+        <div className="h-6 border-b border-zinc-800 light:border-slate-200 flex relative text-[10px] text-sf-muted font-mono select-none bg-zinc-950/30 light:bg-slate-50/50">
           <div className="w-24 shrink-0 border-r border-zinc-800 light:border-slate-200" />
           <div className="flex-1 relative overflow-hidden cursor-text" onClick={handleTimelineClick} ref={timelineRef}>
             {Array.from({ length: 20 }).map((_, i) => (

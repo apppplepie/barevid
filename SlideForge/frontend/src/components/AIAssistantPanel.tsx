@@ -181,7 +181,7 @@ export function AIAssistantPanel({
           exit={{ x: '100%', opacity: 0 }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
           style={{ width }}
-          className="relative h-full shrink-0 bg-[#1e1e1e] border-l border-white/10 shadow-2xl z-40 flex flex-col"
+          className="relative z-40 flex h-full shrink-0 flex-col border-l border-zinc-700/60 bg-zinc-900 shadow-2xl light:border-slate-200 light:bg-white"
         >
           {/* Resize Handle */}
           <div 
@@ -190,19 +190,19 @@ export function AIAssistantPanel({
           />
 
           {/* Header */}
-          <div className="flex min-w-0 items-center justify-between gap-2 border-b border-white/10 bg-[#252525] p-4">
+          <div className="flex min-w-0 items-center justify-between gap-2 border-b border-zinc-700/60 bg-zinc-800/80 p-4 light:border-slate-200 light:bg-slate-50">
             <div className="flex min-w-0 items-center gap-2">
-              <Sparkles className="h-4 w-4 shrink-0 text-blue-400" />
-              <h3 className="truncate text-sm font-medium">AI 草稿面板</h3>
+              <Sparkles className="h-4 w-4 shrink-0 text-blue-400 light:text-blue-600" />
+              <h3 className="truncate text-sm font-medium text-zinc-100 light:text-slate-900">AI 草稿面板</h3>
             </div>
             <div className="flex min-w-0 max-w-[55%] shrink items-center gap-2">
-              <div className="truncate text-right text-sm font-medium text-zinc-300">
+              <div className="truncate text-right text-sm font-medium text-zinc-300 light:text-slate-600">
                 {clip.label}
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="shrink-0 rounded-md p-1.5 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+                className="shrink-0 rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700/60 hover:text-zinc-100 light:text-slate-500 light:hover:bg-slate-200 light:hover:text-slate-900"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -213,24 +213,24 @@ export function AIAssistantPanel({
           {/* Conversation / Structure Area：占满中间高度，左右 HTML 对照 */}
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4">
             <div className="grid min-h-0 flex-1 grid-cols-2 gap-3">
-              <div className="flex min-h-0 flex-col rounded-lg border border-blue-500/30 bg-blue-950/10 p-3">
-                <div className="mb-2 shrink-0 text-[11px] uppercase tracking-wide text-blue-300">
+              <div className="flex min-h-0 flex-col rounded-lg border border-blue-500/30 bg-blue-950/15 light:border-sky-300/50 light:bg-sky-50/90 p-3">
+                <div className="mb-2 shrink-0 text-[11px] uppercase tracking-wide text-blue-300 light:text-sky-800">
                   已保存 HTML（Baseline）
                 </div>
-                <pre className="min-h-0 flex-1 overflow-auto rounded border border-white/10 bg-black/20 p-2 font-mono text-xs leading-relaxed text-gray-300 whitespace-pre-wrap break-all">
+                <pre className="min-h-0 flex-1 overflow-auto rounded border border-zinc-700/50 bg-black/25 p-2 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all text-zinc-300 light:border-slate-200 light:bg-slate-100 light:text-slate-700">
                   {prettyContextHtmlText || '暂无 HTML'}
                 </pre>
               </div>
-              <div className="flex min-h-0 flex-col rounded-lg border border-emerald-500/30 bg-emerald-950/10 p-3">
+              <div className="flex min-h-0 flex-col rounded-lg border border-emerald-500/30 bg-emerald-950/15 light:border-emerald-300/45 light:bg-emerald-50/80 p-3">
                 <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
-                  <div className="text-[11px] uppercase tracking-wide text-emerald-300">
+                  <div className="text-[11px] uppercase tracking-wide text-emerald-300 light:text-emerald-800">
                     可编辑草稿 HTML（Draft）
                   </div>
                   <button
                     type="button"
                     onClick={() => void handleFormatDraft()}
                     disabled={!draftInputText.trim() || isFormattingDraft}
-                    className="inline-flex h-6 items-center justify-center rounded border border-emerald-400/30 px-2 text-[11px] text-emerald-200 transition-colors hover:bg-emerald-500/15 disabled:opacity-50"
+                    className="inline-flex h-6 items-center justify-center rounded border border-emerald-400/30 px-2 text-[11px] text-emerald-200 transition-colors hover:bg-emerald-500/15 disabled:opacity-50 light:border-emerald-500/35 light:text-emerald-800 light:hover:bg-emerald-100"
                   >
                     {isFormattingDraft ? '格式化中…' : '格式化'}
                   </button>
@@ -243,22 +243,22 @@ export function AIAssistantPanel({
                     onDraftChange(next);
                   }}
                   placeholder="可在此手动编辑草稿 HTML"
-                  className="min-h-0 flex-1 resize-none overflow-auto rounded border border-white/10 bg-black/20 p-2 font-mono text-xs leading-relaxed text-gray-200 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="min-h-0 flex-1 resize-none overflow-auto rounded border border-zinc-700/50 bg-black/25 p-2 font-mono text-xs leading-relaxed text-zinc-200 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 light:border-slate-200 light:bg-white light:text-slate-800"
                 />
               </div>
             </div>
             {errorText ? (
-              <div className="shrink-0 rounded border border-rose-500/30 bg-rose-950/20 px-2 py-1.5 text-xs text-rose-200">
+              <div className="shrink-0 rounded border border-rose-500/30 bg-rose-950/25 px-2 py-1.5 text-xs text-rose-200 light:bg-rose-50 light:text-rose-800">
                 {errorText}
               </div>
             ) : null}
             {isGenerating ? (
-              <div className="shrink-0 text-xs text-zinc-400">AI 正在生成草稿…</div>
+              <div className="shrink-0 text-xs text-zinc-400 light:text-slate-500">AI 正在生成草稿…</div>
             ) : null}
           </div>
 
           {/* Input Area：输入框与按钮组底对齐；宽度不足时整块换行 */}
-          <div className="border-t border-white/10 bg-[#252525] p-4">
+          <div className="border-t border-zinc-700/60 bg-zinc-800/80 p-4 light:border-slate-200 light:bg-slate-50">
             <div className="flex flex-wrap items-end gap-x-2 gap-y-2">
               <form
                 onSubmit={handleSubmit}
@@ -274,7 +274,7 @@ export function AIAssistantPanel({
                   }}
                   placeholder="描述你希望如何修改当前片段（只针对当前 deck）"
                   rows={1}
-                  className="box-border min-h-11 max-h-[220px] w-full resize-none overflow-y-auto rounded-lg border border-white/10 bg-[#1a1a1a] px-3 py-2.5 text-sm leading-snug text-zinc-100 transition-all placeholder:text-gray-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                  className="box-border min-h-11 max-h-[220px] w-full resize-none overflow-y-auto rounded-lg border border-zinc-700/50 bg-zinc-950 px-3 py-2.5 text-sm leading-snug text-zinc-100 transition-all placeholder:text-sf-placeholder focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 light:border-slate-200 light:bg-white light:text-slate-900"
                 />
               </form>
               <div className="flex min-h-11 shrink-0 flex-wrap items-end justify-end gap-2 sm:flex-nowrap">
@@ -300,7 +300,7 @@ export function AIAssistantPanel({
                   type="button"
                   onClick={onDiscardDraft}
                   disabled={!hasDraft || isGenerating}
-                  className="box-border flex h-11 min-w-[100px] flex-1 items-center justify-center gap-2 rounded-lg border border-white/15 px-3 text-sm text-zinc-200 transition-colors hover:bg-white/5 disabled:opacity-50 sm:flex-initial sm:min-w-[110px]"
+                  className="box-border flex h-11 min-w-[100px] flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-600/60 px-3 text-sm text-zinc-200 transition-colors hover:bg-zinc-800/50 disabled:opacity-50 light:border-slate-300 light:text-slate-700 light:hover:bg-slate-100 sm:flex-initial sm:min-w-[110px]"
                 >
                   <Undo2 className="h-4 w-4" />
                   丢弃

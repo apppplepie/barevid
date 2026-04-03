@@ -105,7 +105,7 @@ export function WorkflowProgressBar({
                     !isSuccess &&
                       !isRunning &&
                       !isError &&
-                      'border-zinc-700/80 light:border-slate-300 bg-zinc-900/80 light:bg-slate-100 text-zinc-500 light:text-slate-400',
+                      'border-zinc-700/80 light:border-slate-300 bg-zinc-900/80 light:bg-slate-100 text-sf-muted',
                   ]
                     .filter(Boolean)
                     .join(' ')}
@@ -189,7 +189,7 @@ export function WorkflowProgressBar({
                     isSuccess && 'text-zinc-200 light:text-slate-700',
                     isRunning && 'text-zinc-100 light:text-slate-800',
                     isError && 'text-red-200/90 light:text-red-600',
-                    !isSuccess && !isRunning && !isError && 'text-zinc-500 light:text-slate-400',
+                    !isSuccess && !isRunning && !isError && 'text-sf-muted',
                   ]
                     .filter(Boolean)
                     .join(' ')}
@@ -230,21 +230,21 @@ export function WorkflowProgressBar({
             }
             className={[
               'inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold tracking-wide transition-all duration-200 sm:gap-2.5 sm:px-4 sm:py-1.5 sm:text-sm',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 light:focus-visible:ring-offset-white',
               downloadEnabled &&
                 (!downloadLoading || !videoReady) &&
-                'border border-violet-500/35 bg-violet-500/10 text-violet-100 hover:border-violet-400/50 hover:bg-violet-500/18 hover:text-white',
+                'border border-violet-500/35 bg-violet-500/10 text-violet-100 hover:border-violet-400/50 hover:bg-violet-500/18 hover:text-white light:border-violet-400/55 light:bg-violet-100/95 light:text-violet-900 light:hover:border-violet-500/50 light:hover:bg-violet-200/90 light:hover:text-violet-950',
               downloadLoading &&
                 downloadEnabled &&
                 !videoReady &&
-                'cursor-pointer border border-sky-500/35 bg-sky-500/10 text-sky-100 hover:border-sky-400/45 hover:bg-sky-500/16',
+                'cursor-pointer border border-sky-500/35 bg-sky-500/10 text-sky-100 hover:border-sky-400/45 hover:bg-sky-500/16 light:border-sky-400/50 light:bg-sky-100/95 light:text-sky-900 light:hover:border-sky-500/45 light:hover:bg-sky-200/85',
               downloadLoading &&
                 downloadEnabled &&
                 videoReady &&
                 'cursor-wait border border-zinc-600/50 light:border-slate-300 bg-zinc-900/90 light:bg-slate-100 text-zinc-300 light:text-slate-600',
               !downloadEnabled &&
                 !downloadLoading &&
-                'cursor-not-allowed border border-transparent text-zinc-600 light:text-slate-400',
+                'cursor-not-allowed border border-transparent text-sf-muted',
             ]
               .filter(Boolean)
               .join(' ')}

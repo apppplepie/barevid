@@ -65,7 +65,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
             <div className="p-6 relative">
               <button
                 onClick={onClose}
-                className="absolute top-4 right-4 p-2 text-zinc-400 light:text-slate-400 hover:text-white light:hover:text-slate-700 hover:bg-zinc-900 light:hover:bg-slate-100 rounded-full transition-colors"
+                className="absolute top-4 right-4 p-2 text-sf-muted hover:text-white light:hover:text-slate-700 hover:bg-zinc-900 light:hover:bg-slate-100 rounded-full transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -91,13 +91,13 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
                   <label className="text-sm font-medium text-zinc-300 light:text-slate-700">用户名</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <User className="h-4 w-4 text-zinc-500 light:text-slate-400" />
+                      <User className="h-4 w-4 text-sf-muted" />
                     </div>
                     <input
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="w-full bg-zinc-900 light:bg-slate-50 border border-zinc-800 light:border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-200 light:text-slate-900 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-zinc-600 light:placeholder:text-slate-400"
+                      className="w-full bg-zinc-900 light:bg-slate-50 border border-zinc-800 light:border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-200 light:text-slate-900 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-sf-placeholder"
                       placeholder="请输入用户名"
                       required
                     />
@@ -108,13 +108,13 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
                   <label className="text-sm font-medium text-zinc-300 light:text-slate-700">密码</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Lock className="h-4 w-4 text-zinc-500 light:text-slate-400" />
+                      <Lock className="h-4 w-4 text-sf-muted" />
                     </div>
                     <input
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full bg-zinc-900 light:bg-slate-50 border border-zinc-800 light:border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-200 light:text-slate-900 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-zinc-600 light:placeholder:text-slate-400"
+                      className="w-full bg-zinc-900 light:bg-slate-50 border border-zinc-800 light:border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-200 light:text-slate-900 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-sf-placeholder"
                       placeholder="请输入密码"
                       required
                     />

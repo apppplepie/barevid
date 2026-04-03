@@ -56,7 +56,7 @@ export function DetailPanel({
     return (
       <div
         style={{ width: width || 320, maxWidth: '100%' }}
-        className="relative z-10 flex min-h-0 max-w-full min-w-0 shrink-0 flex-col items-center justify-center self-stretch overflow-hidden border-r border-zinc-800 light:border-slate-200 bg-zinc-900/60 light:bg-white/90 text-sm text-zinc-600 light:text-slate-400"
+        className="relative z-10 flex min-h-0 max-w-full min-w-0 shrink-0 flex-col items-center justify-center self-stretch overflow-hidden border-r border-zinc-800 light:border-slate-200 bg-zinc-900/60 light:bg-white/90 text-sm text-sf-muted"
       >
         等待生成...
       </div>
@@ -288,7 +288,7 @@ function AudioDetails({
                     className={
                       idx === activeCueIndex
                         ? 'scroll-mt-0 rounded border border-purple-500/30 bg-purple-500/20 px-1.5 py-0.5 text-zinc-100'
-                        : 'rounded border border-transparent px-1.5 py-0.5 text-zinc-500 light:text-slate-400'
+                        : 'rounded border border-transparent px-1.5 py-0.5 text-sf-muted'
                     }
                   >
                     {cue.text}
@@ -478,7 +478,7 @@ function PageDetails({
             </motion.div>
             <span>片段节点</span>
           </div>
-          <ListTree className="w-3 h-3 text-zinc-500" />
+          <ListTree className="w-3 h-3 text-sf-muted" />
         </button>
         <AnimatePresence initial={false}>
   {nodesExpanded && (
@@ -510,14 +510,14 @@ function PageDetails({
               </span>
 
               {/* 时间戳 */}
-              <span className="ml-auto font-mono text-[11px] tabular-nums text-zinc-600 light:text-slate-400 transition-colors duration-150 group-hover:text-blue-400/80">
+              <span className="ml-auto font-mono text-[11px] tabular-nums text-sf-muted transition-colors duration-150 group-hover:text-blue-400/80">
                 {formatSecondsFromTimelinePercent(node.time, totalDurationMs)}
               </span>
             </button>
           ))}
 
           {(!clip.nodes || clip.nodes.length === 0) && (
-            <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-700/60 light:border-slate-300/60 bg-zinc-800/20 light:bg-slate-100/50 px-3 py-2 text-xs text-zinc-500 light:text-slate-400">
+            <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-700/60 light:border-slate-300/60 bg-zinc-800/20 light:bg-slate-100/50 px-3 py-2 text-xs text-sf-muted">
               <span className="i-lucide:inbox h-3.5 w-3.5 opacity-50" /> {/* 需要确保图标库支持，或直接使用文字符号 */}
               <span>暂无节点</span>
             </div>

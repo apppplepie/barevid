@@ -1,7 +1,7 @@
 .sf-play-shell {
   min-height: 100vh;
-  background: #05070a;
-  color: #e2e8f0;
+  background: var(--sf-play-bg);
+  color: var(--sf-play-fg);
 }
 
 .sf-play-fullbleed {
@@ -24,7 +24,7 @@
 .sf-play-back {
   display: inline-block;
   margin: 0 1.5rem 1rem;
-  color: #93c5fd;
+  color: var(--sf-play-link);
   text-decoration: none;
   font-size: 0.9rem;
 }
@@ -41,8 +41,8 @@
   margin: 0;
   padding: 0.35rem 0.65rem;
   border-radius: 8px;
-  background: rgba(15, 20, 25, 0.85);
-  border: 1px solid #2a3441;
+  background: var(--sf-back-float-bg);
+  border: 1px solid var(--sf-play-border);
 }
 
 .sf-controls {
@@ -61,7 +61,7 @@
 .sf-scope-label {
   font-size: 0.72rem;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--sf-play-label);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -70,9 +70,9 @@
   min-width: 9rem;
   padding: 0.32rem 0.5rem;
   border-radius: 8px;
-  border: 1px solid #2a3441;
-  background: #0b1220;
-  color: #e2e8f0;
+  border: 1px solid var(--sf-play-border);
+  background: var(--sf-play-surface);
+  color: var(--sf-play-fg);
   font-size: 0.82rem;
 }
 
@@ -90,7 +90,7 @@
 .sf-progress-label {
   font-size: 0.72rem;
   font-weight: 600;
-  color: #64748b;
+  color: var(--sf-play-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -100,7 +100,7 @@
   position: relative;
   height: 6px;
   border-radius: 999px;
-  background: #1e293b;
+  background: var(--sf-play-elevated);
   overflow: hidden;
 }
 
@@ -138,7 +138,7 @@
 
 .sf-time {
   font-size: 0.8rem;
-  color: #94a3b8;
+  color: var(--sf-play-label);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -163,8 +163,8 @@
 
 .sf-btn-ghost {
   background: transparent;
-  color: #e2e8f0;
-  border-color: #334155;
+  color: var(--sf-play-fg);
+  border-color: var(--sf-play-ghost-border);
 }
 
 .sf-btn:hover {
@@ -173,7 +173,7 @@
 
 .sf-step-label {
   font-size: 0.85rem;
-  color: #94a3b8;
+  color: var(--sf-play-label);
   margin-left: auto;
 }
 
@@ -185,7 +185,7 @@
 }
 
 .sf-audio-url {
-  color: #94a3b8;
+  color: var(--sf-play-label);
   word-break: break-all;
 }
 
@@ -209,7 +209,7 @@
 .sf-timeline-hint {
   font-size: 0.65rem;
   font-weight: 500;
-  color: #64748b;
+  color: var(--sf-play-muted);
   text-transform: none;
   letter-spacing: 0.02em;
 }
@@ -238,7 +238,7 @@
   min-width: 0;
   height: 14px;
   border-radius: 8px;
-  background: #1e293b;
+  background: var(--sf-play-elevated);
 }
 
 .sf-timeline-underlay {
@@ -290,7 +290,7 @@
 }
 
 .sf-timeline-seg--current {
-  box-shadow: 0 0 0 2px rgba(248, 250, 252, 0.92);
+  box-shadow: 0 0 0 2px var(--sf-timeline-current-ring);
   opacity: 1;
   z-index: 2;
 }

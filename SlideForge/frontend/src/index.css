@@ -4,6 +4,62 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  /* 浅色模式辅助文字用近黑，避免 slate-400 对比度不足；暗色保持 zinc 层级 */
+  --color-sf-muted: var(--sf-muted-fg);
+  --color-sf-placeholder: var(--sf-placeholder-fg);
+}
+
+/* 放映 / 调试页壳层：与主站 data-theme 同步，避免纯 hex 硬编码 */
+:root {
+  --sf-muted-fg: #a1a1aa;
+  --sf-placeholder-fg: #52525b;
+  --sf-play-bg: #05070a;
+  --sf-play-fg: #e2e8f0;
+  --sf-play-fg-secondary: #cbd5e1;
+  --sf-play-muted: #64748b;
+  --sf-play-label: #94a3b8;
+  --sf-play-border: #2a3441;
+  --sf-play-header-bg: rgba(15, 20, 25, 0.95);
+  --sf-play-link: #93c5fd;
+  --sf-play-surface: #0b1220;
+  --sf-play-elevated: #1e293b;
+  --sf-play-ghost-border: #334155;
+  --sf-slide-radial-inner: #1a2332;
+  --sf-slide-radial-outer: #0f1419;
+  --sf-caption-bg: rgba(0, 0, 0, 0.55);
+  --sf-caption-border: rgba(255, 255, 255, 0.08);
+  --sf-footer-bg: rgba(15, 20, 25, 0.85);
+  --sf-back-float-bg: rgba(15, 20, 25, 0.85);
+  --sf-timeline-current-ring: rgba(248, 250, 252, 0.92);
+  --sf-caption-line: #94a3b8;
+  --sf-caption-line-active: #f8fafc;
+  --sf-caption-body: #f1f5f9;
+}
+
+html[data-theme="light"] {
+  --sf-muted-fg: #0f172a;
+  --sf-placeholder-fg: #64748b;
+  --sf-play-bg: #f8fafc;
+  --sf-play-fg: #0f172a;
+  --sf-play-fg-secondary: #475569;
+  --sf-play-muted: #64748b;
+  --sf-play-label: #64748b;
+  --sf-play-border: #e2e8f0;
+  --sf-play-header-bg: rgba(255, 255, 255, 0.94);
+  --sf-play-link: #2563eb;
+  --sf-play-surface: #ffffff;
+  --sf-play-elevated: #e2e8f0;
+  --sf-play-ghost-border: #cbd5e1;
+  --sf-slide-radial-inner: #e2e8f0;
+  --sf-slide-radial-outer: #f8fafc;
+  --sf-caption-bg: rgba(255, 255, 255, 0.92);
+  --sf-caption-border: rgba(15, 23, 42, 0.1);
+  --sf-footer-bg: rgba(248, 250, 252, 0.96);
+  --sf-back-float-bg: rgba(255, 255, 255, 0.92);
+  --sf-timeline-current-ring: rgba(15, 23, 42, 0.22);
+  --sf-caption-line: #64748b;
+  --sf-caption-line-active: #0f172a;
+  --sf-caption-body: #334155;
 }
 
 /* Light mode variant — applied when html[data-theme="light"] */

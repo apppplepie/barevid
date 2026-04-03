@@ -61,7 +61,7 @@ export function AuthDialog({ open, onClose, onSuccess }: AuthDialogProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1.5 text-zinc-500 light:text-slate-400 transition-colors hover:bg-zinc-800 light:hover:bg-slate-100 hover:text-zinc-200 light:hover:text-slate-700"
+            className="rounded-md p-1.5 text-sf-muted transition-colors hover:bg-zinc-800 light:hover:bg-slate-100 hover:text-zinc-200 light:hover:text-slate-700"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
@@ -79,7 +79,7 @@ export function AuthDialog({ open, onClose, onSuccess }: AuthDialogProps) {
               autoComplete="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full rounded-lg border border-zinc-800 light:border-slate-200 bg-zinc-900 light:bg-slate-50 px-3 py-2 text-sm text-zinc-100 light:text-slate-900 focus:border-purple-500/50 focus:outline-none placeholder:text-zinc-600 light:placeholder:text-slate-400"
+              className="w-full rounded-lg border border-zinc-800 light:border-slate-200 bg-zinc-900 light:bg-slate-50 px-3 py-2 text-sm text-zinc-100 light:text-slate-900 focus:border-purple-500/50 focus:outline-none placeholder:text-sf-placeholder"
             />
           </div>
           <div className="space-y-1.5">
@@ -89,7 +89,7 @@ export function AuthDialog({ open, onClose, onSuccess }: AuthDialogProps) {
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-zinc-800 light:border-slate-200 bg-zinc-900 light:bg-slate-50 px-3 py-2 text-sm text-zinc-100 light:text-slate-900 focus:border-purple-500/50 focus:outline-none placeholder:text-zinc-600 light:placeholder:text-slate-400"
+              className="w-full rounded-lg border border-zinc-800 light:border-slate-200 bg-zinc-900 light:bg-slate-50 px-3 py-2 text-sm text-zinc-100 light:text-slate-900 focus:border-purple-500/50 focus:outline-none placeholder:text-sf-placeholder"
             />
           </div>
           <div className="flex flex-col gap-2 pt-1">
@@ -111,7 +111,7 @@ export function AuthDialog({ open, onClose, onSuccess }: AuthDialogProps) {
               {mode === 'login' ? '没有账号？注册' : '已有账号？登录'}
             </button>
           </div>
-          <p className="text-[11px] leading-relaxed text-zinc-600 light:text-slate-400">
+          <p className="text-[11px] leading-relaxed text-sf-muted">
             登录后请求会携带你的会话令牌；未登录无法调用工程与项目接口。
           </p>
         </form>

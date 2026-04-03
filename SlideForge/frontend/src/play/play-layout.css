@@ -2,8 +2,8 @@
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: #05070a;
-  color: #e2e8f0;
+  background: var(--sf-play-bg);
+  color: var(--sf-play-fg);
 }
 
 .sf-play-app-header {
@@ -13,12 +13,12 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 0.5rem 1rem;
-  border-bottom: 1px solid #2a3441;
-  background: rgba(15, 20, 25, 0.95);
+  border-bottom: 1px solid var(--sf-play-border);
+  background: var(--sf-play-header-bg);
 }
 
 .sf-play-app-back {
-  color: #93c5fd;
+  color: var(--sf-play-link);
   text-decoration: none;
   font-size: 0.9rem;
   padding: 0.25rem 0;
@@ -33,7 +33,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #64748b;
+  color: var(--sf-play-muted);
 }
 
 .sf-play-app-main {

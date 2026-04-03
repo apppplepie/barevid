@@ -268,12 +268,12 @@ export function MainWorkspace({
       >
         <div
           ref={previewShellRef}
-          className={`flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden border border-zinc-800 light:border-slate-200 bg-black shadow-2xl relative group ${previewNoScrollbar} ${
+          className={`flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden border border-zinc-800 light:border-slate-300 bg-black light:bg-slate-200/90 shadow-2xl relative group ${previewNoScrollbar} ${
             isPreviewFullscreen ? 'rounded-none' : 'rounded-xl'
           }`}
         >
           {/* Web Page Preview Surface */}
-          <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 to-zinc-950 opacity-70" />
+          <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 to-zinc-950 opacity-70 light:from-slate-300/50 light:to-slate-200/40 light:opacity-90" />
 
           <div
             className={`absolute inset-0 flex min-h-0 min-w-0 items-center justify-center overflow-hidden p-3 sm:p-4 ${
@@ -291,7 +291,7 @@ export function MainWorkspace({
                   />
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-3 text-zinc-600 light:text-slate-400">
+                <div className="flex flex-col items-center gap-3 text-sf-muted">
                   <MonitorPlay className="w-16 h-16 text-zinc-700 light:text-slate-300" />
                   <span className="text-sm">没有活动页面</span>
                 </div>
@@ -319,7 +319,7 @@ export function MainWorkspace({
                 }
               >
                 <p
-                  className="px-3 py-2 text-center text-xs font-medium leading-relaxed text-white sm:px-4 sm:text-base [text-shadow:1px_1px_0_#000,-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,0_1px_0_#000,0_-1px_0_#000,1px_0_0_#000,-1px_0_0_#000]"
+                  className="px-3 py-2 text-center text-xs font-medium leading-relaxed text-white sm:px-4 sm:text-base [text-shadow:1px_1px_0_#000,-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,0_1px_0_#000,0_-1px_0_#000,1px_0_0_#000,-1px_0_0_#000] light:text-slate-900 light:[text-shadow:0_0_12px_rgba(255,255,255,1),0_1px_2px_rgba(255,255,255,1),1px_1px_0_rgba(255,255,255,0.95),-1px_-1px_0_rgba(255,255,255,0.95)]"
                 >
                   {subtitleLine}
                 </p>
@@ -343,7 +343,7 @@ export function MainWorkspace({
               type="button"
               onClick={handleTogglePreviewFullscreen}
               title={isPreviewFullscreen ? '退出全屏' : '全屏预览'}
-              className="shrink-0 rounded-lg border border-zinc-700/50 bg-zinc-900/80 p-1.5 text-zinc-300 backdrop-blur-md transition-colors hover:bg-zinc-700 hover:text-white"
+              className="shrink-0 rounded-lg border border-zinc-700/50 light:border-slate-300/70 bg-zinc-900/80 light:bg-white/90 p-1.5 text-zinc-300 light:text-slate-700 backdrop-blur-md transition-colors hover:bg-zinc-700 light:hover:bg-slate-100 hover:text-white light:hover:text-slate-900"
             >
               {isPreviewFullscreen ? (
                 <Minimize2 className="h-4 w-4" />
@@ -355,7 +355,7 @@ export function MainWorkspace({
 
           {/* 全屏时底部浮动播放条 */}
           {isPreviewFullscreen && playbackReady ? (
-            <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-40 flex min-w-0 items-center gap-3 border-t border-zinc-800/80 bg-zinc-950/90 px-4 py-3 backdrop-blur-md sm:gap-4 sm:px-6 sm:py-4">
+            <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-40 flex min-w-0 items-center gap-3 border-t border-zinc-800/80 light:border-slate-200 bg-zinc-950/90 light:bg-white/95 px-4 py-3 backdrop-blur-md sm:gap-4 sm:px-6 sm:py-4">
               <button
                 type="button"
                 onClick={(e) => {
@@ -390,14 +390,14 @@ export function MainWorkspace({
                       onSeek(Math.min(100, currentTime + 2));
                     }
                   }}
-                  className="relative h-2 w-full cursor-pointer rounded-full bg-zinc-800"
+                  className="relative h-2 w-full cursor-pointer rounded-full bg-zinc-800 light:bg-slate-200"
                 >
                   <div
                     className="absolute left-0 top-0 h-full rounded-full bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]"
                     style={{ width: `${currentTime}%` }}
                   />
                 </div>
-                <div className="flex justify-between font-mono text-[10px] text-zinc-500 sm:text-xs">
+                <div className="flex justify-between font-mono text-[10px] text-zinc-500 light:text-slate-500 sm:text-xs">
                   <span>{formatClock(globalMs / 1000)}</span>
                   <span>{formatClock(totalDurationMs / 1000)}</span>
                 </div>
@@ -409,7 +409,7 @@ export function MainWorkspace({
                   handleTogglePreviewFullscreen();
                 }}
                 title="退出全屏"
-                className="shrink-0 rounded-lg border border-zinc-700/60 bg-zinc-900/90 p-2 text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-white"
+                className="shrink-0 rounded-lg border border-zinc-700/60 light:border-slate-300 bg-zinc-900/90 light:bg-slate-100 p-2 text-zinc-300 light:text-slate-700 transition-colors hover:bg-zinc-800 light:hover:bg-slate-200 hover:text-white light:hover:text-slate-900"
               >
                 <Minimize2 className="h-4 w-4" />
               </button>

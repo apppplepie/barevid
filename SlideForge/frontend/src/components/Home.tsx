@@ -24,6 +24,7 @@ import { WorkflowStep } from './WorkflowProgressBar';
 import type { ServerWorkflow } from '../utils/workflowFromPipeline';
 import type { VideoExportJobInfo } from './ExportVideoStatusDialog';
 import { APP_BRAND } from '../brand';
+import { SfTag, projectPipelineTagTone } from './ui/SfTag';
 
 export interface Project {
   id: string;
@@ -78,21 +79,6 @@ function pipelineStatusLabel(project: Project): string {
   return '处理中';
 }
 
-function pipelineStatusClass(project: Project): string {
-  const st = (project.serverStatus || '').toLowerCase();
-  const pl = project.pipeline;
-  if (st === 'failed') return 'border-red-500/35 bg-red-950/40 text-red-200';
-  if (pl?.video) return 'border-emerald-500/40 bg-emerald-950/35 text-emerald-100';
-  if (pl?.audio && pl?.deck) return 'border-blue-500/35 bg-blue-950/25 text-blue-100';
-  if (st === 'queued') {
-    return 'border-cyan-500/40 bg-cyan-950/30 text-cyan-100';
-  }
-  if (st === 'structuring' || st === 'synthesizing') {
-    return 'border-amber-500/35 bg-amber-950/25 text-amber-100';
-  }
-  return 'border-zinc-600/50 bg-zinc-800/60 text-zinc-300';
-}
-
 const ASPECT_PRESETS = [
   { value: '16:9', title: '16:9', hint: '横屏' },
   { value: '4:3', title: '4:3', hint: '标准' },
@@ -136,23 +122,6 @@ function deckMasterDisplayNo(project: Project): string {
   }
   const n = Number.parseInt(String(project.id), 10);
   return Number.isFinite(n) ? String(n) : String(project.id);
-}
-
-function DeckMasterBadge({ project }: { project: Project }) {
-  const no = deckMasterDisplayNo(project);
-  const reused = project.deckMasterSourceProjectId != null;
-  return (
-    <span
-      className={
-        reused
-          ? 'inline-flex shrink-0 items-center rounded-md border border-violet-500/50 bg-violet-950/50 px-2 py-0.5 font-mono text-[11px] tabular-nums leading-none text-violet-100'
-          : 'inline-flex shrink-0 items-center rounded-md border border-zinc-600/70 bg-zinc-900/70 px-2 py-0.5 font-mono text-[11px] tabular-nums leading-none text-zinc-300'
-      }
-      title={reused ? `演示母版复用自项目 ${no}` : `本项目演示母版（项目 ID ${no}）`}
-    >
-      母版{no}
-    </span>
-  );
 }
 
 interface HomeProps {
@@ -307,7 +276,7 @@ export function Home({
               <p className="text-sm text-zinc-300 light:text-slate-700">
                 请先登录后再使用创建项目、编辑工程与云共享等功能。
               </p>
-              <p className="mt-3 text-xs text-zinc-500 light:text-slate-400">点击右上角「Login」登录或注册账号。</p>
+              <p className="mt-3 text-xs text-sf-muted">点击右上角「Login」登录或注册账号。</p>
             </div>
           ) : (
             <>
@@ -347,7 +316,7 @@ export function Home({
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
                 placeholder="例如：产品发布会"
-                className="w-full rounded-xl border border-zinc-800/90 light:border-slate-200 bg-zinc-950/80 light:bg-white px-4 py-3 text-sm text-zinc-100 light:text-slate-900 shadow-inner placeholder:text-zinc-600 light:placeholder:text-slate-400 focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-[border-color,box-shadow]"
+                className="w-full rounded-xl border border-zinc-800/90 light:border-slate-200 bg-zinc-950/80 light:bg-white px-4 py-3 text-sm text-zinc-100 light:text-slate-900 shadow-inner placeholder:text-sf-placeholder focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-[border-color,box-shadow]"
               />
             </div>
 
@@ -373,7 +342,7 @@ export function Home({
                         }`}
                       >
                         <span className="block font-medium tabular-nums">{opt.title}</span>
-                        <span className="block text-xs text-zinc-500 light:text-slate-400">{opt.hint}</span>
+                        <span className="block text-xs text-sf-muted">{opt.hint}</span>
                       </button>
                     );
                   })}
@@ -400,7 +369,7 @@ export function Home({
                       value={deckMasterSourceRaw}
                       onChange={(e) => setDeckMasterSourceRaw(e.target.value.replace(/\s+/g, ''))}
                       disabled={creating}
-                      className="h-9 w-[6.5rem] shrink-0 rounded-lg border border-zinc-700/80 light:border-slate-200 bg-zinc-950/90 light:bg-white px-2.5 font-mono text-sm text-zinc-100 light:text-slate-900 placeholder:text-zinc-600 light:placeholder:text-slate-400 focus:border-violet-500/45 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                      className="h-9 w-[6.5rem] shrink-0 rounded-lg border border-zinc-700/80 light:border-slate-200 bg-zinc-950/90 light:bg-white px-2.5 font-mono text-sm text-zinc-100 light:text-slate-900 placeholder:text-sf-placeholder focus:border-violet-500/45 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
                     />
                   </div>
                   <div className="hidden h-8 w-px shrink-0 bg-zinc-700/70 light:bg-slate-300/70 sm:block" aria-hidden />
@@ -431,11 +400,11 @@ export function Home({
                     请输入正整数项目 ID，或留空。
                   </p>
                 ) : parsedCopyMasterId != null ? (
-                  <p className="text-xs text-zinc-500 light:text-slate-400">
+                  <p className="text-xs text-sf-muted">
                     已填母版源项目 ID，风格以该项目母版为准；右侧预设已禁用。源项目须已有就绪的演示母版。
                   </p>
                 ) : (
-                  <p className="text-xs text-zinc-500 light:text-slate-400">
+                  <p className="text-xs text-sf-muted">
                     留空 ID 时由 AI 按所选风格生成母版；填写 ID 则复用该项目的演示母版并跳过风格预设。
                   </p>
                 )}
@@ -449,7 +418,7 @@ export function Home({
                       aria-expanded={styleHintOpen}
                     >
                       <ChevronDown
-                        className={`h-4 w-4 shrink-0 text-zinc-500 light:text-slate-400 transition-transform ${styleHintOpen ? 'rotate-0' : '-rotate-90'}`}
+                        className={`h-4 w-4 shrink-0 text-sf-muted transition-transform ${styleHintOpen ? 'rotate-0' : '-rotate-90'}`}
                         aria-hidden
                       />
                       自定义风格（可选）
@@ -463,7 +432,7 @@ export function Home({
                         placeholder="例如：偏冷色科技感、少用渐变、大字报排版、参考苹果发布会…"
                         rows={3}
                         maxLength={4000}
-                        className="mt-1 w-full resize-y rounded-xl border border-zinc-800/90 light:border-slate-200 bg-zinc-950/80 light:bg-white px-3 py-2.5 text-sm text-zinc-100 light:text-slate-900 placeholder:text-zinc-600 light:placeholder:text-slate-400 focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                        className="mt-1 w-full resize-y rounded-xl border border-zinc-800/90 light:border-slate-200 bg-zinc-950/80 light:bg-white px-3 py-2.5 text-sm text-zinc-100 light:text-slate-900 placeholder:text-sf-placeholder focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
                       />
                     ) : null}
                   </div>
@@ -471,13 +440,13 @@ export function Home({
               </div>
             </div>
 
-            <div className="relative flex flex-col gap-3 rounded-xl border border-zinc-800/80 bg-zinc-950/35 px-4 py-3">
-              <label className="flex items-center gap-2 text-sm font-medium text-zinc-300">
-                <Clock className="h-3.5 w-3.5 text-cyan-400/90" />
+            <div className="relative flex flex-col gap-3 rounded-xl border border-zinc-800/80 light:border-slate-200 bg-zinc-950/35 light:bg-slate-50/90 px-4 py-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-zinc-300 light:text-slate-700">
+                <Clock className="h-3.5 w-3.5 text-cyan-400/90 light:text-cyan-600" />
                 口播目标时长
-                <span className="text-xs font-normal text-zinc-500">（可选）</span>
+                <span className="text-xs font-normal text-zinc-500 light:text-slate-500">（可选）</span>
               </label>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-zinc-500 light:text-slate-500">
                 选填。需要控制成片口播体量时再选；不选则由 AI 按素材信息量自行把握。若填写，换算按约每秒{' '}
                 {NARRATION_CHARS_PER_SECOND} 字估算，实际随语速、停顿略有偏差。
               </p>
@@ -488,8 +457,8 @@ export function Home({
                   disabled={creating}
                   className={`rounded-lg border px-2.5 py-2 text-left text-xs font-medium transition-all disabled:opacity-50 sm:px-3 sm:text-sm ${
                     narrationDurationMode === 'none'
-                      ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-100'
-                      : 'border-zinc-700/80 bg-zinc-950/80 text-zinc-400 hover:border-zinc-600 hover:bg-zinc-900/70 hover:text-zinc-200'
+                      ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-100 light:border-cyan-500/45 light:bg-cyan-100 light:text-cyan-900'
+                      : 'border-zinc-700/80 bg-zinc-950/80 text-zinc-400 hover:border-zinc-600 hover:bg-zinc-900/70 hover:text-zinc-200 light:border-slate-200 light:bg-white light:text-slate-600 light:hover:border-slate-300 light:hover:bg-slate-50 light:hover:text-slate-800'
                   }`}
                 >
                   不限制
@@ -508,8 +477,8 @@ export function Home({
                       disabled={creating}
                       className={`rounded-lg border px-2.5 py-2 text-left text-xs font-medium transition-all disabled:opacity-50 sm:px-3 sm:text-sm ${
                         on
-                          ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-100'
-                          : 'border-zinc-700/80 bg-zinc-950/80 text-zinc-400 hover:border-zinc-600 hover:bg-zinc-900/70 hover:text-zinc-200'
+                          ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-100 light:border-cyan-500/45 light:bg-cyan-100 light:text-cyan-900'
+                          : 'border-zinc-700/80 bg-zinc-950/80 text-zinc-400 hover:border-zinc-600 hover:bg-zinc-900/70 hover:text-zinc-200 light:border-slate-200 light:bg-white light:text-slate-600 light:hover:border-slate-300 light:hover:bg-slate-50 light:hover:text-slate-800'
                       }`}
                     >
                       {p.label}
@@ -522,8 +491,8 @@ export function Home({
                   disabled={creating}
                   className={`rounded-lg border px-2.5 py-2 text-left text-xs font-medium transition-all disabled:opacity-50 sm:px-3 sm:text-sm ${
                     narrationDurationMode === 'custom'
-                      ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-100'
-                      : 'border-zinc-700/80 bg-zinc-950/80 text-zinc-400 hover:border-zinc-600 hover:bg-zinc-900/70 hover:text-zinc-200'
+                      ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-100 light:border-cyan-500/45 light:bg-cyan-100 light:text-cyan-900'
+                      : 'border-zinc-700/80 bg-zinc-950/80 text-zinc-400 hover:border-zinc-600 hover:bg-zinc-900/70 hover:text-zinc-200 light:border-slate-200 light:bg-white light:text-slate-600 light:hover:border-slate-300 light:hover:bg-slate-50 light:hover:text-slate-800'
                   }`}
                 >
                   自定义秒数
@@ -532,7 +501,7 @@ export function Home({
               {narrationDurationMode === 'custom' ? (
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="flex flex-col gap-1">
-                    <span className="text-xs text-zinc-500">秒数（10～1800）</span>
+                    <span className="text-xs text-zinc-500 light:text-slate-500">秒数（10～1800）</span>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -540,33 +509,33 @@ export function Home({
                       value={narrationCustomSecondsRaw}
                       onChange={(e) => setNarrationCustomSecondsRaw(e.target.value.replace(/[^\d]/g, ''))}
                       disabled={creating}
-                      className="h-9 w-28 rounded-lg border border-zinc-700/80 bg-zinc-950/90 px-2.5 font-mono text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-cyan-500/45 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                      className="h-9 w-28 rounded-lg border border-zinc-700/80 bg-zinc-950/90 px-2.5 font-mono text-sm text-zinc-100 placeholder:text-sf-placeholder focus:border-cyan-500/45 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 light:border-slate-200 light:bg-white light:text-slate-900"
                     />
                   </div>
                   {customSecValid ? (
-                    <p className="text-xs text-zinc-400">
+                    <p className="text-xs text-zinc-400 light:text-slate-600">
                       约 {formatDurationHint(parsedCustomSec)} → 口播全文约{' '}
-                      <span className="font-medium text-zinc-200">
+                      <span className="font-medium text-zinc-200 light:text-slate-800">
                         {approxNarrationChars(parsedCustomSec)}
                       </span>{' '}
                       字
                     </p>
                   ) : narrationCustomSecondsRaw.trim() ? (
-                    <p className="text-xs text-amber-200/95" role="alert">
+                    <p className="text-xs text-amber-200/95 light:text-amber-800" role="alert">
                       请输入 10～1800 之间的整数秒。
                     </p>
                   ) : null}
                 </div>
               ) : narrationDurationMode === 'preset' ? (
-                <p className="text-xs text-zinc-400">
+                <p className="text-xs text-zinc-400 light:text-slate-600">
                   当前 {formatDurationHint(narrationDurationPresetSec)} → 口播全文约{' '}
-                  <span className="font-medium text-zinc-200">
+                  <span className="font-medium text-zinc-200 light:text-slate-800">
                     {approxNarrationChars(narrationDurationPresetSec)}
                   </span>{' '}
                   字
                 </p>
               ) : (
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-zinc-500 light:text-slate-500">
                   未设定目标时长，结构化时不附加口播字数/时长约束。
                 </p>
               )}
@@ -586,14 +555,14 @@ export function Home({
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="粘贴你的口播素材或要点：讲什么、例子、数据、节奏偏好…"
                 rows={4}
-                className="w-full resize-y min-h-[108px] rounded-xl border border-zinc-800/90 light:border-slate-200 bg-zinc-950/80 light:bg-white px-4 py-3 text-sm text-zinc-100 light:text-slate-900 shadow-inner placeholder:text-zinc-600 light:placeholder:text-slate-400 focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-[border-color,box-shadow]"
+                className="w-full resize-y min-h-[108px] rounded-xl border border-zinc-800/90 light:border-slate-200 bg-zinc-950/80 light:bg-white px-4 py-3 text-sm text-zinc-100 light:text-slate-900 shadow-inner placeholder:text-sf-placeholder focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-[border-color,box-shadow]"
               />
             </div>
 
             {createError ? (
               <p
                 role="alert"
-                className="relative rounded-lg border border-red-500/35 bg-red-950/25 px-3 py-2 text-sm text-red-200/95"
+                className="relative rounded-lg border border-red-500/35 bg-red-950/25 px-3 py-2 text-sm text-red-200/95 light:border-red-400/45 light:bg-red-50 light:text-red-800"
               >
                 {createError}
               </p>
@@ -652,14 +621,12 @@ export function Home({
                     <Video className="w-5 h-5" />
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
-                    <span
-                      className={`rounded-md border px-2 py-0.5 text-[10px] font-medium leading-tight ${pipelineStatusClass(project)}`}
-                    >
+                    <SfTag tone={projectPipelineTagTone(project)} size="xs">
                       {pipelineStatusLabel(project)}
-                    </span>
+                    </SfTag>
                     {project.isShared ? (
                       <span
-                        className="inline-flex items-center gap-1 rounded-md border border-amber-500/35 bg-amber-950/30 px-2 py-0.5 text-[10px] font-medium leading-tight text-amber-100"
+                        className="inline-flex items-center gap-1 rounded-md border border-amber-500/35 bg-amber-950/30 px-2 py-0.5 text-[10px] font-medium leading-tight text-amber-100 light:border-amber-400/50 light:bg-amber-100 light:text-amber-900"
                         title="已上传云，需先设为私有才能打开"
                       >
                         <Lock className="h-3 w-3" />
@@ -740,7 +707,7 @@ export function Home({
                           </button>
                           <button
                             type="button"
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-300 transition-colors hover:bg-red-950/40"
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-300 transition-colors hover:bg-red-950/40 light:text-red-700 light:hover:bg-red-50"
                             onClick={() => {
                               setDeleteDialog({ id: project.id, name: project.name });
                               setManagingProjectId(null);
@@ -762,15 +729,25 @@ export function Home({
                     <span className="w-1 h-1 shrink-0 rounded-full bg-zinc-700 light:bg-slate-300 max-sm:hidden" />
                     <span className="flex items-center gap-1"><LayoutTemplate className="w-3 h-3" /> {project.style}</span>
                     <span className="w-1 h-1 shrink-0 rounded-full bg-zinc-700 light:bg-slate-300 max-sm:hidden" />
-                    <DeckMasterBadge project={project} />
+                    <SfTag
+                      tone={project.deckMasterSourceProjectId != null ? 'violet' : 'neutral'}
+                      mono
+                      title={
+                        project.deckMasterSourceProjectId != null
+                          ? `演示母版复用自项目 ${deckMasterDisplayNo(project)}`
+                          : `本项目演示母版（项目 ID ${deckMasterDisplayNo(project)}）`
+                      }
+                    >
+                      母版{deckMasterDisplayNo(project)}
+                    </SfTag>
                   </div>
                   {project.isShared ? (
-                    <p className="mt-2 text-[11px] text-amber-200/90">
+                    <p className="mt-2 text-[11px] text-amber-200/90 light:text-amber-800">
                       已上传云，防止并发冲突，禁止编辑，设为私有可编辑。
                     </p>
                   ) : null}
                 </div>
-                <div className="mt-auto flex items-center gap-1 text-xs font-mono text-zinc-500">
+                <div className="mt-auto flex items-center gap-1 text-xs font-mono text-zinc-500 light:text-slate-500">
                   <Clock className="h-3 w-3" />
                   {project.lastModified}
                 </div>
@@ -778,7 +755,7 @@ export function Home({
             ))}
             
             {recentProjects.length === 0 && (
-              <div className="col-span-full py-12 text-center text-zinc-500 border border-dashed border-zinc-800 rounded-xl">
+              <div className="col-span-full py-12 text-center text-zinc-500 light:text-slate-500 border border-dashed border-zinc-800 light:border-slate-300 rounded-xl">
                 没有找到项目。创建一个项目以开始。
               </div>
             )}
@@ -799,18 +776,16 @@ export function Home({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className="bg-zinc-900/40 border border-zinc-800/80 hover:border-blue-500/50 hover:bg-zinc-900/80 rounded-xl p-5 text-left transition-all group flex flex-col gap-4 relative"
+                className="bg-zinc-900/40 light:bg-white border border-zinc-800/80 light:border-slate-200 hover:border-blue-500/50 hover:bg-zinc-900/80 light:hover:bg-slate-50 rounded-xl p-5 text-left transition-all group flex flex-col gap-4 relative shadow-sm light:shadow-slate-200/40"
               >
                 <div className="flex items-start justify-between">
-                  <div className="w-10 h-10 rounded-lg bg-zinc-800/50 flex items-center justify-center group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-colors">
+                  <div className="w-10 h-10 rounded-lg bg-zinc-800/50 light:bg-slate-100 flex items-center justify-center group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-colors text-zinc-400 light:text-slate-500">
                     <Video className="w-5 h-5" />
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
-                    <span
-                      className={`rounded-md border px-2 py-0.5 text-[10px] font-medium leading-tight ${pipelineStatusClass(project)}`}
-                    >
+                    <SfTag tone={projectPipelineTagTone(project)} size="xs">
                       {pipelineStatusLabel(project)}
-                    </span>
+                    </SfTag>
                     <button
                       type="button"
                       disabled={copyingProjectId === project.id}
@@ -818,7 +793,7 @@ export function Home({
                         e.stopPropagation();
                         void handleCopy(project.id);
                       }}
-                      className="rounded-md bg-zinc-800 p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-md bg-zinc-800 light:bg-slate-100 p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-60 light:text-slate-500 light:hover:bg-slate-200 light:hover:text-slate-800"
                       title="复制到我的项目"
                     >
                       {copyingProjectId === project.id ? (
@@ -831,31 +806,41 @@ export function Home({
                 </div>
                 
                 <div>
-                  <h3 className="text-base font-medium text-zinc-200 group-hover:text-white transition-colors truncate">{project.name}</h3>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-2 text-xs text-zinc-500">
+                  <h3 className="text-base font-medium text-zinc-200 light:text-slate-800 group-hover:text-white light:group-hover:text-slate-900 transition-colors truncate">{project.name}</h3>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-2 text-xs text-zinc-500 light:text-slate-500">
                     <span className="flex items-center gap-1">
                       <User className="w-3 h-3" /> {project.author || 'Unknown'}
                     </span>
                     {currentUserId != null &&
                     project.ownerUserId != null &&
                     project.ownerUserId === currentUserId ? (
-                      <span className="rounded border border-amber-500/35 bg-amber-950/25 px-1.5 py-0.5 text-[10px] font-medium text-amber-100/95">
+                      <span className="rounded border border-amber-500/35 bg-amber-950/25 px-1.5 py-0.5 text-[10px] font-medium text-amber-100/95 light:border-amber-400/50 light:bg-amber-100 light:text-amber-900">
                         我上传
                       </span>
                     ) : null}
-                    <span className="w-1 h-1 shrink-0 rounded-full bg-zinc-700 max-sm:hidden" />
+                    <span className="w-1 h-1 shrink-0 rounded-full bg-zinc-700 light:bg-slate-300 max-sm:hidden" />
                     <span className="flex items-center gap-1">
                       <Monitor className="w-3 h-3" /> {project.screenSize}
                     </span>
-                    <span className="w-1 h-1 shrink-0 rounded-full bg-zinc-700 max-sm:hidden" />
+                    <span className="w-1 h-1 shrink-0 rounded-full bg-zinc-700 light:bg-slate-300 max-sm:hidden" />
                     <span className="flex items-center gap-1">
                       <LayoutTemplate className="w-3 h-3" /> {project.style}
                     </span>
-                    <span className="w-1 h-1 shrink-0 rounded-full bg-zinc-700 max-sm:hidden" />
-                    <DeckMasterBadge project={project} />
+                    <span className="w-1 h-1 shrink-0 rounded-full bg-zinc-700 light:bg-slate-300 max-sm:hidden" />
+                    <SfTag
+                      tone={project.deckMasterSourceProjectId != null ? 'violet' : 'neutral'}
+                      mono
+                      title={
+                        project.deckMasterSourceProjectId != null
+                          ? `演示母版复用自项目 ${deckMasterDisplayNo(project)}`
+                          : `本项目演示母版（项目 ID ${deckMasterDisplayNo(project)}）`
+                      }
+                    >
+                      母版{deckMasterDisplayNo(project)}
+                    </SfTag>
                   </div>
                 </div>
-                <div className="mt-auto flex items-center gap-1 text-xs font-mono text-zinc-500">
+                <div className="mt-auto flex items-center gap-1 text-xs font-mono text-zinc-500 light:text-slate-500">
                   <Clock className="h-3 w-3" />
                   {project.lastModified}
                 </div>
@@ -873,7 +858,7 @@ export function Home({
             ))}
             
             {sharedProjects.length === 0 && (
-              <div className="col-span-full py-12 text-center text-zinc-500 border border-dashed border-zinc-800 rounded-xl">
+              <div className="col-span-full py-12 text-center text-zinc-500 light:text-slate-500 border border-dashed border-zinc-800 light:border-slate-300 rounded-xl">
                 暂无已上传云的项目。将项目「上传云」后（含你自己上传的），会出现在此处；他人共享的也会列出作者用户名。
               </div>
             )}
@@ -884,10 +869,10 @@ export function Home({
 
       </div>
       {renameDialog ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-xl border border-zinc-700 bg-zinc-900 p-4 shadow-2xl">
-            <h3 className="text-sm font-medium text-zinc-100">修改项目名</h3>
-            <p className="mt-1 text-xs text-zinc-400">仅修改展示名称，不影响已生成内容。</p>
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 light:bg-slate-900/40 p-4">
+          <div className="w-full max-w-md rounded-xl border border-zinc-700 light:border-slate-200 bg-zinc-900 light:bg-white p-4 shadow-2xl">
+            <h3 className="text-sm font-medium text-zinc-100 light:text-slate-900">修改项目名</h3>
+            <p className="mt-1 text-xs text-zinc-400 light:text-slate-600">仅修改展示名称，不影响已生成内容。</p>
             <input
               autoFocus
               value={renameValue}
@@ -903,14 +888,14 @@ export function Home({
                   setRenameDialog(null);
                 }
               }}
-              className="mt-3 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+              className="mt-3 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20 light:border-slate-200 light:bg-slate-50 light:text-slate-900"
               placeholder="输入新的项目名"
             />
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setRenameDialog(null)}
-                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-800"
+                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-800 light:border-slate-200 light:text-slate-700 light:hover:bg-slate-100"
               >
                 取消
               </button>
@@ -934,17 +919,17 @@ export function Home({
         </div>
       ) : null}
       {deleteDialog ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-xl border border-red-500/25 bg-zinc-900 p-4 shadow-2xl">
-            <h3 className="text-sm font-medium text-red-200">确认删除项目</h3>
-            <p className="mt-2 text-sm text-zinc-300">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 light:bg-slate-900/40 p-4">
+          <div className="w-full max-w-md rounded-xl border border-red-500/25 bg-zinc-900 light:border-red-300/50 light:bg-white p-4 shadow-2xl">
+            <h3 className="text-sm font-medium text-red-200 light:text-red-700">确认删除项目</h3>
+            <p className="mt-2 text-sm text-zinc-300 light:text-slate-700">
               确认删除项目「{deleteDialog.name}」？此操作不可恢复。
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setDeleteDialog(null)}
-                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-800"
+                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-800 light:border-slate-200 light:text-slate-700 light:hover:bg-slate-100"
               >
                 取消
               </button>

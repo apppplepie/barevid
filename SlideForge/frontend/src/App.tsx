@@ -2021,7 +2021,7 @@ export default function App() {
         {projectsError ? (
           <div
             role="alert"
-            className="pointer-events-auto fixed left-1/2 top-16 z-[100] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-lg border border-red-500/40 bg-red-950/90 px-3 py-2 text-sm text-red-200 shadow-xl backdrop-blur-md"
+            className="pointer-events-auto fixed left-1/2 top-16 z-[100] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-lg border border-red-500/40 bg-red-950/90 px-3 py-2 text-sm text-red-200 shadow-xl backdrop-blur-md light:border-red-400/50 light:bg-red-50 light:text-red-800"
           >
             {projectsError}
           </div>
@@ -2132,8 +2132,8 @@ export default function App() {
               role="status"
               className={
                 editorFlashTone === 'error'
-                  ? 'pointer-events-auto flex items-center justify-between gap-3 rounded-lg border border-rose-500/35 bg-rose-950/90 px-3 py-2.5 text-sm text-rose-100 shadow-xl backdrop-blur-md'
-                  : 'pointer-events-auto flex items-center justify-between gap-3 rounded-lg border border-emerald-500/35 bg-emerald-950/90 px-3 py-2.5 text-sm text-emerald-100 shadow-xl backdrop-blur-md'
+                  ? 'pointer-events-auto flex items-center justify-between gap-3 rounded-lg border border-rose-500/35 bg-rose-950/90 px-3 py-2.5 text-sm text-rose-100 shadow-xl backdrop-blur-md light:border-rose-400/40 light:bg-rose-50 light:text-rose-900'
+                  : 'pointer-events-auto flex items-center justify-between gap-3 rounded-lg border border-emerald-500/35 bg-emerald-950/90 px-3 py-2.5 text-sm text-emerald-100 shadow-xl backdrop-blur-md light:border-emerald-400/40 light:bg-emerald-50 light:text-emerald-900'
               }
             >
               <span className="min-w-0 flex-1 leading-snug">{editorFlashMessage}</span>
@@ -2144,8 +2144,8 @@ export default function App() {
                   rel="noopener noreferrer"
                   className={
                     editorFlashTone === 'error'
-                      ? 'shrink-0 rounded-md border border-rose-300/35 px-2 py-1 text-xs text-rose-100 transition-colors hover:bg-rose-900/40'
-                      : 'shrink-0 rounded-md border border-emerald-300/35 px-2 py-1 text-xs text-emerald-50 transition-colors hover:bg-emerald-900/45'
+                      ? 'shrink-0 rounded-md border border-rose-300/35 px-2 py-1 text-xs text-rose-100 transition-colors hover:bg-rose-900/40 light:border-rose-300/60 light:text-rose-800 light:hover:bg-rose-100'
+                      : 'shrink-0 rounded-md border border-emerald-300/35 px-2 py-1 text-xs text-emerald-50 transition-colors hover:bg-emerald-900/45 light:border-emerald-300/60 light:text-emerald-800 light:hover:bg-emerald-100'
                   }
                 >
                   下载链接
@@ -2159,8 +2159,8 @@ export default function App() {
                 }}
                 className={
                   editorFlashTone === 'error'
-                    ? 'shrink-0 rounded-md p-1 text-rose-300/90 transition-colors hover:bg-rose-900/45 hover:text-rose-50'
-                    : 'shrink-0 rounded-md p-1 text-emerald-300/90 transition-colors hover:bg-emerald-900/50 hover:text-emerald-100'
+                    ? 'shrink-0 rounded-md p-1 text-rose-300/90 transition-colors hover:bg-rose-900/45 hover:text-rose-50 light:text-rose-600 light:hover:bg-rose-100 light:hover:text-rose-900'
+                    : 'shrink-0 rounded-md p-1 text-emerald-300/90 transition-colors hover:bg-emerald-900/50 hover:text-emerald-100 light:text-emerald-600 light:hover:bg-emerald-100 light:hover:text-emerald-900'
                 }
                 aria-label="关闭提示"
               >
@@ -2171,7 +2171,7 @@ export default function App() {
           {timelineError ? (
             <div
               role="alert"
-              className="pointer-events-auto rounded-lg border border-amber-500/40 bg-amber-950/90 px-3 py-2 text-sm text-amber-100 shadow-xl backdrop-blur-md"
+              className="pointer-events-auto rounded-lg border border-amber-500/40 bg-amber-950/90 px-3 py-2 text-sm text-amber-100 shadow-xl backdrop-blur-md light:border-amber-400/50 light:bg-amber-50 light:text-amber-950"
             >
               时间轴加载失败：{timelineError}
             </div>
