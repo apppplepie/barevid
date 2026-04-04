@@ -54,36 +54,101 @@ function shouldUseServerWorkflow(w: ServerWorkflow | null | undefined): boolean 
   );
 }
 
+export type DeriveWorkflowOptions = {
+  pipelineAutoAdvance?: boolean;
+};
+
 /** 根据后端 `compute_project_pipeline` + `projects.status` + `deck_status` 推导 UI 步骤态 */
 export function deriveWorkflowSteps(
   pipeline: Partial<ServerPipeline> | undefined,
   projectStatus: string | undefined,
   deckStatus: string | undefined,
   serverWorkflow?: ServerWorkflow | null,
+  options?: DeriveWorkflowOptions,
 ): WorkflowStep[] {
+  const auto = options?.pipelineAutoAdvance !== false;
+
   if (shouldUseServerWorkflow(serverWorkflow)) {
     const w = serverWorkflow;
-    const outline = mapServerStepStatus(w.textStatus);
-    const audio = mapServerStepStatus(w.audioStatus);
+    let outline = mapServerStepStatus(w.textStatus);
+    let audio = mapServerStepStatus(w.audioStatus);
     const exportRaw = w.exportStatus ?? w.exportWorkflowStatus ?? null;
-    const exportStep = mapServerStepStatus(exportRaw);
+    let exportStep = mapServerStepStatus(exportRaw);
 
     const hasSplitDeck =
       w.deckMasterStatus != null && w.deckRenderStatus != null;
 
     if (hasSplitDeck) {
-      const master = mapServerStepStatus(w.deckMasterStatus);
-      const render = mapServerStepStatus(w.deckRenderStatus);
+      let master = mapServerStepStatus(w.deckMasterStatus);
+      let render = mapServerStepStatus(w.deckRenderStatus);
+      const pMerged = { ...DEFAULT_PIPELINE, ...pipeline };
+      if (!auto && outline === 'success' && audio === 'pending') {
+        audio = 'waiting';
+      }
+      if (
+        !auto &&
+        outline === 'success' &&
+        master === 'success' &&
+        render === 'pending' &&
+        !pMerged.deck &&
+        (deckStatus || 'idle').toLowerCase() !== 'generating'
+      ) {
+        render = 'waiting';
+      }
+      if (outline !== 'success' || audio !== 'success' || render !== 'success') {
+        if (exportStep !== 'error' && exportStep !== 'running') {
+          exportStep = 'pending';
+        }
+      } else if (pMerged.video) {
+        exportStep = 'success';
+      } else {
+        exportStep = mapServerStepStatus(exportRaw);
+        if (exportStep === 'success') exportStep = 'pending';
+        else if (exportStep !== 'error' && exportStep !== 'running') {
+          exportStep = 'pending';
+        }
+      }
       return [
+        { id: 'deck_master', label: '演示母版', state: master, icon: Palette },
         { id: 'text', label: '文本结构化', state: outline, icon: FileText },
         { id: 'audio', label: '音频生成', state: audio, icon: Mic },
-        { id: 'deck_master', label: '演示母版', state: master, icon: Palette },
         { id: 'deck_render', label: '场景页面', state: render, icon: LayoutTemplate },
         { id: 'export', label: '视频导出', state: exportStep, icon: Clapperboard },
       ];
     }
 
-    const deck = mapServerStepStatus(w.demoStatus);
+    let deck = mapServerStepStatus(w.demoStatus);
+    const dsLegacy = (deckStatus || 'idle').trim().toLowerCase();
+    const pMerged = { ...DEFAULT_PIPELINE, ...pipeline };
+    if (deck === 'running' && dsLegacy !== 'generating') {
+      deck = 'pending';
+    }
+    if (!auto && outline === 'success' && audio === 'pending') {
+      audio = 'waiting';
+    }
+    if (
+      !auto &&
+      outline === 'success' &&
+      audio === 'success' &&
+      deck === 'pending' &&
+      !pMerged.deck &&
+      dsLegacy !== 'generating'
+    ) {
+      deck = 'waiting';
+    }
+    if (outline !== 'success' || audio !== 'success' || deck !== 'success') {
+      if (exportStep !== 'error' && exportStep !== 'running') {
+        exportStep = 'pending';
+      }
+    } else if (pMerged.video) {
+      exportStep = 'success';
+    } else {
+      exportStep = mapServerStepStatus(exportRaw);
+      if (exportStep === 'success') exportStep = 'pending';
+      else if (exportStep !== 'error' && exportStep !== 'running') {
+        exportStep = 'pending';
+      }
+    }
     return [
       { id: 'text', label: '文本结构化', state: outline, icon: FileText },
       { id: 'audio', label: '音频生成', state: audio, icon: Mic },
@@ -146,6 +211,20 @@ export function deriveWorkflowSteps(
     exportStep = 'pending';
   }
 
+  if (!auto && outline === 'success' && audio === 'pending') {
+    audio = 'waiting';
+  }
+  if (
+    !auto &&
+    outline === 'success' &&
+    audio === 'success' &&
+    deck === 'pending' &&
+    !p.deck &&
+    ds !== 'generating'
+  ) {
+    deck = 'waiting';
+  }
+
   return [
     { id: 'text', label: '文本结构化', state: outline, icon: FileText },
     { id: 'audio', label: '音频生成', state: audio, icon: Mic },
@@ -154,20 +233,16 @@ export function deriveWorkflowSteps(
   ];
 }
 
-/** 编辑内局部重生成时仅用于顶栏：在已完成步骤上显示「进行中」，但不阻塞主工作区。 */
+/** 编辑内口播局部重合成 / 文本重跑时仅用于顶栏：在已完成步骤上显示「进行中」。 */
 export function applyEditorPendingToSteps(
   steps: WorkflowStep[],
-  pending: { audio?: boolean; deck?: boolean },
+  pending: { audio?: boolean; text?: boolean },
 ): WorkflowStep[] {
   return steps.map((s) => {
-    if (pending.audio && s.id === 'audio' && s.state === 'success') {
+    if (pending.text && s.id === 'text') {
       return { ...s, state: 'running' as const };
     }
-    if (
-      pending.deck &&
-      (s.id === 'pages' || s.id === 'deck_render') &&
-      s.state === 'success'
-    ) {
+    if (pending.audio && s.id === 'audio' && s.state === 'success') {
       return { ...s, state: 'running' as const };
     }
     return s;

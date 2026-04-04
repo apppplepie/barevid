@@ -2,16 +2,19 @@ import type { ElementType } from 'react';
 import {
   Check,
   AlertTriangle,
+  Clock,
   Loader2,
   Download,
   RotateCw,
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { workflowStepDependenciesSatisfied } from '../utils/workflowStepDependencies';
 
-export type StepState = 'pending' | 'running' | 'success' | 'error';
+export type StepState = 'pending' | 'waiting' | 'running' | 'success' | 'error';
 
 const STEP_STATE_LABEL_ZH: Record<StepState, string> = {
   pending: '待处理',
+  waiting: '等待中',
   running: '进行中',
   success: '已完成',
   error: '失败',
@@ -45,6 +48,9 @@ interface WorkflowProgressBarProps {
   onCancelRunningStep?: (stepId: string) => void;
   /** 正在取消的步骤 id */
   cancellingStepId?: string | null;
+  /** 与 derive 手动闸门一致；用于判断「前置已满足、待用户操作」 */
+  pipelineAutoAdvance?: boolean;
+  manualOutlineConfirmed?: boolean;
 }
 
 export function WorkflowProgressBar({
@@ -57,7 +63,11 @@ export function WorkflowProgressBar({
   retryingStepId = null,
   onCancelRunningStep,
   cancellingStepId = null,
+  pipelineAutoAdvance = true,
+  manualOutlineConfirmed = true,
 }: WorkflowProgressBarProps) {
+  const manualBlocked =
+    pipelineAutoAdvance === false && !manualOutlineConfirmed;
   const exportIdx = steps.findIndex((s) => s.id === 'export');
   const exportStep = exportIdx >= 0 ? steps[exportIdx] : null;
 
@@ -70,138 +80,219 @@ export function WorkflowProgressBar({
       <div className="min-w-0 flex-1 overflow-x-auto overflow-y-visible py-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="ml-auto flex w-max items-center gap-1 sm:gap-1.5">
           {steps.map((step, index) => {
-        const isSuccess = step.state === 'success';
-        const isRunning = step.state === 'running';
-        const isError = step.state === 'error';
-        const Icon = step.icon;
-        const prevDone =
-          index === 0 ? true : steps[index - 1]!.state === 'success';
-        const segLit = prevDone && (isSuccess || isRunning || isError);
-        const canCancelRunning =
-          isRunning &&
-          Boolean(onCancelRunningStep) &&
-          (step.id === 'pages' || step.id === 'deck_render');
+            const isSuccess = step.state === 'success';
+            const isRunning = step.state === 'running';
+            const isError = step.state === 'error';
+            const isWaiting = step.state === 'waiting';
+            const Icon = step.icon;
+            const prevDone =
+              index === 0 ? true : steps[index - 1]!.state === 'success';
+            const segLit =
+              prevDone &&
+              (isSuccess || isRunning || isError || isWaiting);
+            const canCancelRunning = isRunning && Boolean(onCancelRunningStep);
+            const isPending =
+              !isSuccess && !isRunning && !isError;
+            const canStartFromGraph =
+              Boolean(onRetryStep) &&
+              step.id !== 'export' &&
+              isPending &&
+              workflowStepDependenciesSatisfied(step.id, steps, manualBlocked);
 
-        return (
-          <div key={step.id} className="flex items-center">
-            {index > 0 ? (
-              <div
-                className={`mx-0.5 h-px w-4 shrink-0 rounded-full sm:mx-1 sm:w-5 ${segLit ? 'bg-zinc-500/50 light:bg-slate-400/60' : 'bg-zinc-800 light:bg-slate-200'}`}
-                aria-hidden
-              />
-            ) : null}
-            <div className="flex min-w-0 items-center gap-1 sm:gap-1.5">
-              <div
-                role="listitem"
-                className="flex min-w-0 items-center gap-1.5 rounded-full px-1.5 py-0.5 sm:gap-2 sm:px-2 sm:py-1"
-                title={`${step.label} · ${stepStateLabelZh(step.state)}`}
-              >
-                <div
-                  className={[
-                    'relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors duration-300 sm:h-7 sm:w-7',
-                    isSuccess && 'border-emerald-500/35 bg-emerald-500/10 text-emerald-300',
-                    isRunning && 'border-sky-500/40 bg-sky-500/10 text-sky-200',
-                    isError && 'border-red-500/35 bg-red-500/10 text-red-300',
-                    !isSuccess &&
-                      !isRunning &&
-                      !isError &&
-                      'border-zinc-700/80 light:border-slate-300 bg-zinc-900/80 light:bg-slate-100 text-sf-muted',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                >
-                  {isRunning ? (
-                    <>
-                      <motion.span
-                        className="absolute inset-0 rounded-full border border-sky-400/25"
-                        animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0, 0.5] }}
-                        transition={{
-                          duration: 1.8,
-                          repeat: Infinity,
-                          ease: 'easeInOut',
-                        }}
-                      />
-                      {canCancelRunning ? (
+            return (
+              <div key={step.id} className="flex items-center">
+                {index > 0 ? (
+                  <div
+                    className={`mx-0.5 h-px w-4 shrink-0 rounded-full sm:mx-1 sm:w-5 ${segLit ? 'bg-zinc-500/50 light:bg-slate-400/60' : 'bg-zinc-800 light:bg-slate-200'}`}
+                    aria-hidden
+                  />
+                ) : null}
+                <div className="flex min-w-0 items-center gap-1 sm:gap-1.5">
+                  <div
+                    role="listitem"
+                    className="flex min-w-0 items-center gap-1.5 rounded-full px-1.5 py-0.5 sm:gap-2 sm:px-2 sm:py-1"
+                    title={`${step.label} · ${stepStateLabelZh(step.state)}`}
+                  >
+                    <div
+                      className={[
+                        'relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors duration-300 sm:h-7 sm:w-7',
+                        isSuccess && 'border-emerald-500/35 bg-emerald-500/10 text-emerald-300',
+                        isRunning && 'border-sky-500/40 bg-sky-500/10 text-sky-200',
+                        isError && 'border-red-500/35 bg-red-500/10 text-red-300',
+                        (isWaiting || canStartFromGraph) &&
+                          'border-cyan-500/35 bg-cyan-500/10 text-cyan-200 light:border-cyan-600/40 light:bg-cyan-100/80 light:text-cyan-900',
+                        !isSuccess &&
+                          !isRunning &&
+                          !isError &&
+                          !isWaiting &&
+                          !canStartFromGraph &&
+                          'border-zinc-700/80 light:border-slate-300 bg-zinc-900/80 light:bg-slate-100 text-sf-muted',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      {isRunning ? (
+                        <>
+                          <motion.span
+                            className="absolute inset-0 rounded-full border border-sky-400/25"
+                            animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0, 0.5] }}
+                            transition={{
+                              duration: 1.8,
+                              repeat: Infinity,
+                              ease: 'easeInOut',
+                            }}
+                          />
+                          {canCancelRunning ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (cancellingStepId === step.id) return;
+                                onCancelRunningStep?.(step.id);
+                              }}
+                              disabled={cancellingStepId === step.id}
+                              title={`${step.label} 进行中，点击取消`}
+                              className="relative flex h-full w-full items-center justify-center rounded-full outline-none transition-colors hover:bg-sky-500/20 focus-visible:ring-2 focus-visible:ring-sky-400/50 disabled:opacity-50"
+                            >
+                              <Loader2
+                                className="h-3 w-3 animate-spin opacity-90 sm:h-3.5 sm:w-3.5"
+                                aria-hidden
+                              />
+                            </button>
+                          ) : (
+                            <Loader2
+                              className="relative h-3 w-3 animate-spin opacity-90 sm:h-3.5 sm:w-3.5"
+                              aria-hidden
+                            />
+                          )}
+                        </>
+                      ) : isSuccess ? (
+                        <Check
+                          className="h-3 w-3 stroke-[2.5] sm:h-3.5 sm:w-3.5"
+                          strokeLinecap="round"
+                          aria-hidden
+                        />
+                      ) : isError ? (
+                        onRetryStep ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (retryingStepId === step.id) return;
+                              onRetryStep(step.id);
+                            }}
+                            disabled={retryingStepId === step.id}
+                            title={`${step.label} 失败，点击重试`}
+                            className="flex h-full w-full items-center justify-center rounded-full outline-none transition-colors hover:bg-red-500/20 focus-visible:ring-2 focus-visible:ring-red-400/50 disabled:opacity-50"
+                          >
+                            {retryingStepId === step.id ? (
+                              <Loader2
+                                className="h-3 w-3 animate-spin sm:h-3.5 sm:w-3.5"
+                                aria-hidden
+                              />
+                            ) : (
+                              <RotateCw
+                                className="h-3 w-3 sm:h-3.5 sm:w-3.5"
+                                aria-hidden
+                              />
+                            )}
+                          </button>
+                        ) : (
+                          <AlertTriangle className="h-3 w-3 sm:h-3.5 sm:w-3.5" aria-hidden />
+                        )
+                      ) : canStartFromGraph ? (
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (cancellingStepId === step.id) return;
-                            onCancelRunningStep?.(step.id);
+                            if (retryingStepId === step.id) return;
+                            onRetryStep?.(step.id);
                           }}
-                          disabled={cancellingStepId === step.id}
-                          title={`${step.label} 进行中，点击取消`}
-                          className="relative flex h-full w-full items-center justify-center rounded-full outline-none transition-colors hover:bg-sky-500/20 focus-visible:ring-2 focus-visible:ring-sky-400/50 disabled:opacity-50"
+                          disabled={retryingStepId === step.id}
+                          title={`等待操作，点击开始：${step.label}`}
+                          className="flex h-full w-full items-center justify-center rounded-full outline-none transition-colors hover:bg-cyan-500/20 focus-visible:ring-2 focus-visible:ring-cyan-400/50 disabled:opacity-50"
                         >
-                          <Loader2
-                            className="h-3 w-3 animate-spin opacity-90 sm:h-3.5 sm:w-3.5"
-                            aria-hidden
-                          />
+                          {retryingStepId === step.id ? (
+                            <Loader2
+                              className="h-3 w-3 animate-spin sm:h-3.5 sm:w-3.5"
+                              aria-hidden
+                            />
+                          ) : (
+                            <Clock
+                              className="h-3 w-3 opacity-90 sm:h-3.5 sm:w-3.5"
+                              strokeWidth={2}
+                              aria-hidden
+                            />
+                          )}
                         </button>
-                      ) : (
-                        <Loader2
-                          className="relative h-3 w-3 animate-spin opacity-90 sm:h-3.5 sm:w-3.5"
+                      ) : isWaiting &&
+                        Boolean(onRetryStep) &&
+                        step.id !== 'export' &&
+                        (step.id === 'audio' ||
+                          workflowStepDependenciesSatisfied(
+                            step.id,
+                            steps,
+                            manualBlocked,
+                          )) ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (retryingStepId === step.id) return;
+                            onRetryStep?.(step.id);
+                          }}
+                          disabled={retryingStepId === step.id}
+                          title={`等待操作，点击打开：${step.label}`}
+                          className="flex h-full w-full items-center justify-center rounded-full outline-none transition-colors hover:bg-cyan-500/20 focus-visible:ring-2 focus-visible:ring-cyan-400/50 disabled:opacity-50"
+                        >
+                          {retryingStepId === step.id ? (
+                            <Loader2
+                              className="h-3 w-3 animate-spin sm:h-3.5 sm:h-3.5"
+                              aria-hidden
+                            />
+                          ) : (
+                            <Clock
+                              className="h-3 w-3 opacity-90 sm:h-3.5 sm:w-3.5"
+                              strokeWidth={2}
+                              aria-hidden
+                            />
+                          )}
+                        </button>
+                      ) : isWaiting ? (
+                        <Clock
+                          className="h-3 w-3 opacity-90 sm:h-3.5 sm:w-3.5"
+                          strokeWidth={2}
                           aria-hidden
                         />
+                      ) : (
+                        <Icon className="h-3 w-3 opacity-70 sm:h-3.5 sm:w-3.5" aria-hidden />
                       )}
-                    </>
-                  ) : isSuccess ? (
-                    <Check
-                      className="h-3 w-3 stroke-[2.5] sm:h-3.5 sm:w-3.5"
-                      strokeLinecap="round"
-                      aria-hidden
-                    />
-                  ) : isError ? (
-                    onRetryStep ? (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (retryingStepId === step.id) return;
-                          onRetryStep(step.id);
-                        }}
-                        disabled={retryingStepId === step.id}
-                        title={`${step.label} 失败，点击重试`}
-                        className="flex h-full w-full items-center justify-center rounded-full outline-none transition-colors hover:bg-red-500/20 focus-visible:ring-2 focus-visible:ring-red-400/50 disabled:opacity-50"
-                      >
-                        {retryingStepId === step.id ? (
-                          <Loader2
-                            className="h-3 w-3 animate-spin sm:h-3.5 sm:w-3.5"
-                            aria-hidden
-                          />
-                        ) : (
-                          <RotateCw
-                            className="h-3 w-3 sm:h-3.5 sm:w-3.5"
-                            aria-hidden
-                          />
-                        )}
-                      </button>
-                    ) : (
-                      <AlertTriangle className="h-3 w-3 sm:h-3.5 sm:w-3.5" aria-hidden />
-                    )
-                  ) : (
-                    <Icon className="h-3 w-3 opacity-70 sm:h-3.5 sm:w-3.5" aria-hidden />
-                  )}
+                    </div>
+                    <span
+                      className={[
+                        'inline max-w-[2.25rem] truncate text-[9px] font-medium tracking-wide sm:max-w-[5.5rem] sm:text-[11px]',
+                        isSuccess && 'text-zinc-200 light:text-slate-700',
+                        isRunning && 'text-zinc-100 light:text-slate-800',
+                        isError && 'text-red-200/90 light:text-red-600',
+                        (isWaiting || canStartFromGraph) &&
+                          'text-cyan-200/95 light:text-cyan-800',
+                        !isSuccess &&
+                          !isRunning &&
+                          !isError &&
+                          !isWaiting &&
+                          !canStartFromGraph &&
+                          'text-sf-muted',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      {step.label}
+                    </span>
+                  </div>
                 </div>
-                <span
-                  className={[
-                    'inline max-w-[2.25rem] truncate text-[9px] font-medium tracking-wide sm:max-w-[5.5rem] sm:text-[11px]',
-                    isSuccess && 'text-zinc-200 light:text-slate-700',
-                    isRunning && 'text-zinc-100 light:text-slate-800',
-                    isError && 'text-red-200/90 light:text-red-600',
-                    !isSuccess && !isRunning && !isError && 'text-sf-muted',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                >
-                  {step.label}
-                </span>
               </div>
-
-            </div>
-          </div>
-        );
-      })}
+            );
+          })}
         </div>
       </div>
 

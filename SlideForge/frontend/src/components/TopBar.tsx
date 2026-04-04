@@ -1,9 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
-import { Sparkles, ArrowLeft, ChevronDown, LogOut, Sun, Moon } from 'lucide-react';
+import { useState, useRef, useEffect, type ReactNode } from 'react';
+import { Sparkles, ArrowLeft, ChevronDown, LogOut, GitBranch, Info } from 'lucide-react';
 import { WorkflowProgressBar, WorkflowStep } from './WorkflowProgressBar';
 import { APP_BRAND } from '../brand';
 import { AuthDialog } from './AuthDialog';
-import { useTheme } from '../ThemeContext';
 
 interface TopBarProps {
   projectName?: string;
@@ -18,10 +17,15 @@ interface TopBarProps {
   retryingWorkflowStepId?: string | null;
   onCancelRunningWorkflowStep?: (stepId: string) => void;
   cancellingRunningWorkflowStepId?: string | null;
+  pipelineAutoAdvance?: boolean;
+  manualOutlineConfirmed?: boolean;
   username?: string | null;
   onLogin?: () => void;
   onLogout?: () => void;
-  onToggleTheme?: () => void;
+  // onToggleTheme?: () => void; // 暂不需要浅色切换入口
+  onOpenWorkflowPanel?: () => void;
+  onOpenProjectDetails?: () => void;
+  editorTopBarExtras?: ReactNode;
 }
 
 export function TopBar({
@@ -36,15 +40,18 @@ export function TopBar({
   retryingWorkflowStepId = null,
   onCancelRunningWorkflowStep,
   cancellingRunningWorkflowStepId = null,
+  pipelineAutoAdvance = true,
+  manualOutlineConfirmed = true,
   username: controlledUsername,
   onLogin,
   onLogout,
-  onToggleTheme,
+  onOpenWorkflowPanel,
+  onOpenProjectDetails,
+  editorTopBarExtras,
 }: TopBarProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { theme } = useTheme();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -97,6 +104,29 @@ export function TopBar({
           <span className="truncate text-sm font-medium leading-tight text-zinc-100 light:text-slate-900">{projectName || APP_BRAND}</span>
           {projectName && <span className="text-[10px] leading-tight text-sf-muted"> </span>}
         </div>
+        {projectName && onOpenProjectDetails ? (
+          <button
+            type="button"
+            onClick={onOpenProjectDetails}
+            className="shrink-0 rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 light:hover:bg-slate-100 hover:text-zinc-100 light:hover:text-slate-800"
+            title="项目详情"
+            aria-label="项目详情"
+          >
+            <Info className="h-4 w-4" />
+          </button>
+        ) : null}
+        {projectName && onOpenWorkflowPanel ? (
+          <button
+            type="button"
+            onClick={onOpenWorkflowPanel}
+            className="shrink-0 rounded-md p-1.5 text-violet-400/90 transition-colors hover:bg-violet-500/15 hover:text-violet-200 light:text-violet-700 light:hover:bg-violet-100/95"
+            title="工作流面板"
+            aria-label="工作流面板"
+          >
+            <GitBranch className="h-4 w-4" />
+          </button>
+        ) : null}
+        {editorTopBarExtras}
       </div>
 
       <div
@@ -117,10 +147,12 @@ export function TopBar({
             retryingStepId={retryingWorkflowStepId}
             onCancelRunningStep={onCancelRunningWorkflowStep}
             cancellingStepId={cancellingRunningWorkflowStepId}
+            pipelineAutoAdvance={pipelineAutoAdvance}
+            manualOutlineConfirmed={manualOutlineConfirmed}
           />
         ) : null}
 
-        {/* Theme toggle */}
+        {/* 浅色/深色切换按钮暂时不用，恢复时取消注释并接回 onToggleTheme
         <button
           type="button"
           onClick={onToggleTheme}
@@ -130,6 +162,7 @@ export function TopBar({
         >
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
+        */}
 
         {/* 仅首页（工程管理）显示登录/用户；进入具体工程编辑页不占用顶栏 */}
         {!projectName ? (

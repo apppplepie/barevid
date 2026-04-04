@@ -58,6 +58,10 @@ class ProjectCreate(BaseModel):
         default=None,
         description="目标口播总时长（秒），送入结构化以约束全文 script 体量；省略表示不限制",
     )
+    pipeline_auto_advance: bool = Field(
+        default=True,
+        description="为 False 时创建后不自动排队跑流水线，需在工程内手动点步骤开始",
+    )
 
 
 class RegisterRequest(BaseModel):
@@ -109,6 +113,18 @@ class ResynthesizeStepAudioRequest(BaseModel):
 class ProjectPatch(BaseModel):
     name: str | None = Field(default=None, description="项目名称")
     is_shared: bool | None = Field(default=None, description="是否共享给所有用户可编辑")
+    input_prompt: str | None = Field(
+        default=None,
+        description="项目原始素材/口播稿（手动流水线编辑后保存）",
+    )
+
+
+class WorkflowStepActionBody(BaseModel):
+    """工作流面板：取消运行中步骤 / 回退已完成步骤。"""
+
+    step: str = Field(
+        description="text | audio | deck_master | deck_render | pages | export",
+    )
 
 
 class DeckStylePatch(BaseModel):

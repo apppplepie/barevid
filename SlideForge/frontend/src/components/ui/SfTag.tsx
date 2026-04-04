@@ -36,7 +36,7 @@ export function projectPipelineTagTone(project: ProjectPipelineTagInput): SfTagT
   if (st === 'failed') return 'red';
   if (pl?.video) return 'emerald';
   if (pl?.audio && pl?.deck) return 'blue';
-  if (st === 'queued') return 'cyan';
+  if (st === 'queued' || st === 'pending_text') return 'cyan';
   if (st === 'structuring' || st === 'synthesizing') return 'amber';
   return 'neutral';
 }

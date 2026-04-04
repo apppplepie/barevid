@@ -255,6 +255,7 @@ async def _migrate_sqlite(conn) -> None:
         "ALTER TABLE projects ADD COLUMN demo_result_url TEXT",
         "ALTER TABLE projects ADD COLUMN export_file_url TEXT",
         "ALTER TABLE projects ADD COLUMN target_narration_seconds INTEGER",
+        "ALTER TABLE projects ADD COLUMN pipeline_auto_advance INTEGER NOT NULL DEFAULT 1",
     ]
 
     _create_project_styles = """
@@ -647,6 +648,20 @@ def _migrate_mysql_add_project_target_narration_seconds_sync(sync_conn) -> None:
     )
 
 
+def _migrate_mysql_add_project_pipeline_auto_advance_sync(sync_conn) -> None:
+    insp = inspect(sync_conn)
+    if not insp.has_table("projects"):
+        return
+    cols = {c["name"] for c in insp.get_columns("projects")}
+    if "pipeline_auto_advance" in cols:
+        return
+    sync_conn.execute(
+        text(
+            "ALTER TABLE projects ADD COLUMN pipeline_auto_advance TINYINT(1) NOT NULL DEFAULT 1"
+        )
+    )
+
+
 def _migrate_mysql_text_columns_sync(sync_conn) -> None:
     """MySQL 历史库早期由 create_all 建表，很多长文本字段被落成 VARCHAR(255)。"""
     insp = inspect(sync_conn)
@@ -693,6 +708,7 @@ async def init_db() -> None:
         elif DATABASE_URL.startswith("mysql"):
             await conn.run_sync(_migrate_mysql_text_columns_sync)
             await conn.run_sync(_migrate_mysql_add_project_target_narration_seconds_sync)
+            await conn.run_sync(_migrate_mysql_add_project_pipeline_auto_advance_sync)
 
     from app.services.workflow_engine import backfill_workflow_for_all_projects
     from app.services.workflow_state import backfill_legacy_workflow_columns

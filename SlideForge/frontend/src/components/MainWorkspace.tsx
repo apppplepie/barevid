@@ -81,7 +81,7 @@ export function MainWorkspace({
     steps?.filter((s) => TIMELINE_GATE_STEP_IDS.has(s.id)) ?? [];
   const activeGateStep =
     gateSteps.find((s) => s.state === 'running' || s.state === 'error') ||
-    gateSteps.find((s) => s.state === 'pending');
+    gateSteps.find((s) => s.state === 'pending' || s.state === 'waiting');
 
   const activeVideoClip = findClipAtTime(clips, 'video', currentTime);
   const activeAudioClip = findClipAtTime(clips, 'audio', currentTime);

@@ -37,6 +37,8 @@ class Project(SQLModel, table=True):
     style_id: Optional[int] = Field(default=None, foreign_key="project_styles.id")
     # 目标口播总时长（秒），结构化时写入 AI 约束；NULL 表示不限制（旧项目）
     target_narration_seconds: Optional[int] = Field(default=None)
+    # False：创建后不自动跑 queued 流水线，由用户在工程内手动触发各步
+    pipeline_auto_advance: bool = Field(default=True)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 

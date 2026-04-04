@@ -15,12 +15,8 @@ export function DetailPanel({
   currentTime = 0,
   totalDurationMs = 100000,
   projectId,
-  onAudioResynthStart,
-  onAudioResynthEnd,
   onAudioResynthSuccess,
   onDeckPageRegenSubmitted,
-  onDeckPageRegenExportInvalidate,
-  onDeckPageRegenExportRevert,
   deckRegenerating,
   deckRegeneratingPageNodeId,
   onNotify,
@@ -35,12 +31,8 @@ export function DetailPanel({
   currentTime?: number;
   totalDurationMs?: number;
   projectId?: number | null;
-  onAudioResynthStart?: () => void;
-  onAudioResynthEnd?: () => void;
   onAudioResynthSuccess?: () => void;
   onDeckPageRegenSubmitted?: (pageNodeId: number) => void;
-  onDeckPageRegenExportInvalidate?: (projectId: number) => void;
-  onDeckPageRegenExportRevert?: (projectId: number) => void;
   deckRegenerating?: boolean;
   deckRegeneratingPageNodeId?: number | null;
   onNotify?: (message: string) => void;
@@ -76,8 +68,6 @@ export function DetailPanel({
               currentTime={currentTime}
               totalDurationMs={totalDurationMs}
               projectId={projectId}
-              onAudioResynthStart={onAudioResynthStart}
-              onAudioResynthEnd={onAudioResynthEnd}
               onAudioResynthSuccess={onAudioResynthSuccess}
               onNotify={onNotify}
               playback={playback}
@@ -92,8 +82,6 @@ export function DetailPanel({
               totalDurationMs={totalDurationMs}
               projectId={projectId}
               onDeckPageRegenSubmitted={onDeckPageRegenSubmitted}
-              onDeckPageRegenExportInvalidate={onDeckPageRegenExportInvalidate}
-              onDeckPageRegenExportRevert={onDeckPageRegenExportRevert}
               deckRegenerating={deckRegenerating}
               deckRegeneratingPageNodeId={deckRegeneratingPageNodeId}
               onNotify={onNotify}
@@ -110,8 +98,6 @@ function AudioDetails({
   currentTime,
   totalDurationMs,
   projectId,
-  onAudioResynthStart,
-  onAudioResynthEnd,
   onAudioResynthSuccess,
   onNotify,
   playback,
@@ -120,8 +106,6 @@ function AudioDetails({
   currentTime: number;
   totalDurationMs: number;
   projectId?: number | null;
-  onAudioResynthStart?: () => void;
-  onAudioResynthEnd?: () => void;
   onAudioResynthSuccess?: () => void;
   onNotify?: (message: string) => void;
   playback?: {
@@ -196,7 +180,6 @@ function AudioDetails({
     }
 
     setResynthBusy(true);
-    onAudioResynthStart?.();
     try {
       const resp = await apiFetch<{
         reused_existing?: boolean;
@@ -214,18 +197,9 @@ function AudioDetails({
     } catch (e) {
       onNotify?.(e instanceof Error ? e.message : String(e));
     } finally {
-      onAudioResynthEnd?.();
       setResynthBusy(false);
     }
-  }, [
-    projectId,
-    clip.id,
-    playback?.steps,
-    onAudioResynthStart,
-    onAudioResynthEnd,
-    onAudioResynthSuccess,
-    onNotify,
-  ]);
+  }, [projectId, clip.id, playback?.steps, onAudioResynthSuccess, onNotify]);
 
   return (
     <motion.div 
@@ -323,8 +297,6 @@ function PageDetails({
   totalDurationMs,
   projectId,
   onDeckPageRegenSubmitted,
-  onDeckPageRegenExportInvalidate,
-  onDeckPageRegenExportRevert,
   deckRegenerating = false,
   deckRegeneratingPageNodeId = null,
   onNotify,
@@ -338,8 +310,6 @@ function PageDetails({
   totalDurationMs: number;
   projectId?: number | null;
   onDeckPageRegenSubmitted?: (pageNodeId: number) => void;
-  onDeckPageRegenExportInvalidate?: (projectId: number) => void;
-  onDeckPageRegenExportRevert?: (projectId: number) => void;
   deckRegenerating?: boolean;
   deckRegeneratingPageNodeId?: number | null;
   onNotify?: (message: string) => void;
@@ -396,7 +366,6 @@ function PageDetails({
       return;
     }
     setPageGenBusy(true);
-    onDeckPageRegenExportInvalidate?.(projectId);
     try {
       await apiFetch(
         `/api/projects/${projectId}/outline-nodes/${currentPageNodeId}/generate-deck-page`,
@@ -404,7 +373,6 @@ function PageDetails({
       );
       onDeckPageRegenSubmitted?.(currentPageNodeId);
     } catch (e) {
-      onDeckPageRegenExportRevert?.(projectId);
       onNotify?.(e instanceof Error ? e.message : String(e));
     } finally {
       setPageGenBusy(false);
@@ -415,8 +383,6 @@ function PageDetails({
     clip.pageId,
     currentPageNodeId,
     onDeckPageRegenSubmitted,
-    onDeckPageRegenExportInvalidate,
-    onDeckPageRegenExportRevert,
     onNotify,
   ]);
 

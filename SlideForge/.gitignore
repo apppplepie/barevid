@@ -1,6 +1,7 @@
 .env
 .sql
 .venv/
+.samplefrontend/
 venv/
 __pycache__/
 *.py[cod]

@@ -1,0 +1,217 @@
+:root {
+  /* dark defaults */
+  --sf-bg-base: rgb(9 9 11);
+  --sf-bg-panel: rgb(24 24 27 / 0.84);
+  --sf-bg-card: rgb(39 39 42 / 0.7);
+  --sf-bg-elevated: rgb(9 9 11 / 0.94);
+  --sf-border-base: rgb(63 63 70 / 0.85);
+  --sf-text-primary: rgb(244 244 245);
+  --sf-text-secondary: rgb(161 161 170);
+  --sf-text-muted: rgb(113 113 122);
+  --sf-accent-bg: rgb(99 102 241 / 0.2);
+  --sf-accent-border: rgb(129 140 248 / 0.5);
+  --sf-accent-text: rgb(224 231 255);
+  --sf-chip-neutral-border: rgb(113 113 122 / 0.55);
+  --sf-chip-neutral-bg: rgb(39 39 42 / 0.62);
+  --sf-chip-neutral-text: rgb(228 228 231);
+  --sf-chip-neutral-hover-border: rgb(161 161 170 / 0.62);
+  --sf-chip-neutral-hover-bg: rgb(63 63 70 / 0.68);
+  --sf-chip-neutral-hover-text: rgb(244 244 245);
+  --sf-chip-danger-border: rgb(248 113 113 / 0.5);
+  --sf-chip-danger-bg: rgb(127 29 29 / 0.5);
+  --sf-chip-danger-text: rgb(254 202 202);
+  --sf-chip-success-border: rgb(52 211 153 / 0.45);
+  --sf-chip-success-bg: rgb(20 83 45 / 0.5);
+  --sf-chip-success-text: rgb(187 247 208);
+  --sf-chip-ready-border: rgb(96 165 250 / 0.45);
+  --sf-chip-ready-bg: rgb(30 58 138 / 0.45);
+  --sf-chip-ready-text: rgb(191 219 254);
+  --sf-chip-info-border: rgb(34 211 238 / 0.45);
+  --sf-chip-info-bg: rgb(8 47 73 / 0.52);
+  --sf-chip-info-text: rgb(186 230 253);
+  --sf-chip-warning-border: rgb(251 191 36 / 0.5);
+  --sf-chip-warning-bg: rgb(120 53 15 / 0.48);
+  --sf-chip-warning-text: rgb(254 240 138);
+  --sf-chip-violet-border: rgb(167 139 250 / 0.45);
+  --sf-chip-violet-bg: rgb(76 29 149 / 0.45);
+  --sf-chip-violet-text: rgb(221 214 254);
+  --sf-topbar-step-label: rgb(228 228 231);
+  --sf-topbar-step-label-error: rgb(252 165 165);
+  --sf-topbar-step-label-waiting: rgb(165 243 252);
+  --sf-topbar-export-border: rgb(129 140 248 / 0.45);
+  --sf-topbar-export-bg: rgb(49 46 129 / 0.35);
+  --sf-topbar-export-text: rgb(224 231 255);
+  /* 导出 bumper 中间帧背景（暗色为径向渐变） */
+  --sf-bumper-mid-bg: radial-gradient(ellipse at center, #1a2744 0%, #05070a 65%);
+  --sf-bumper-mid-fg: #e2e8f0;
+}
+
+html[data-theme='light'] {
+  --sf-bg-base: rgb(255 255 255);
+  --sf-bg-panel: rgb(255 255 255);
+  --sf-bg-card: rgb(255 255 255);
+  --sf-bg-elevated: rgb(255 255 255);
+  --sf-border-base: rgb(226 232 240);
+  --sf-text-primary: rgb(15 23 42);
+  --sf-text-secondary: rgb(51 65 85);
+  --sf-text-muted: rgb(100 116 139);
+  --sf-accent-bg: rgb(238 242 255);
+  --sf-accent-border: rgb(199 210 254);
+  --sf-accent-text: rgb(67 56 202);
+  --sf-chip-neutral-border: rgb(226 232 240);
+  --sf-chip-neutral-bg: rgb(248 250 252);
+  --sf-chip-neutral-text: rgb(71 85 105);
+  --sf-chip-neutral-hover-border: rgb(203 213 225);
+  --sf-chip-neutral-hover-bg: rgb(241 245 249);
+  --sf-chip-neutral-hover-text: rgb(30 41 59);
+  --sf-chip-danger-border: rgb(254 202 202);
+  --sf-chip-danger-bg: rgb(254 242 242);
+  --sf-chip-danger-text: rgb(185 28 28);
+  --sf-chip-success-border: rgb(167 243 208);
+  --sf-chip-success-bg: rgb(236 253 245);
+  --sf-chip-success-text: rgb(4 120 87);
+  --sf-chip-ready-border: rgb(191 219 254);
+  --sf-chip-ready-bg: rgb(239 246 255);
+  --sf-chip-ready-text: rgb(29 78 216);
+  --sf-chip-info-border: rgb(186 230 253);
+  --sf-chip-info-bg: rgb(240 249 255);
+  --sf-chip-info-text: rgb(3 105 161);
+  --sf-chip-warning-border: rgb(253 230 138);
+  --sf-chip-warning-bg: rgb(255 251 235);
+  --sf-chip-warning-text: rgb(180 83 9);
+  --sf-chip-violet-border: rgb(221 214 254);
+  --sf-chip-violet-bg: rgb(245 243 255);
+  --sf-chip-violet-text: rgb(109 40 217);
+  --sf-topbar-step-label: rgb(24 24 27);
+  --sf-topbar-step-label-error: rgb(220 38 38);
+  --sf-topbar-step-label-waiting: rgb(8 145 178);
+  --sf-topbar-export-border: rgb(199 210 254);
+  --sf-topbar-export-bg: rgb(238 242 255);
+  --sf-topbar-export-text: rgb(67 56 202);
+  --sf-bumper-mid-bg: rgb(241 245 249);
+  --sf-bumper-mid-fg: rgb(15 23 42);
+}
+
+.sf-bg-base {
+  background-color: var(--sf-bg-base) !important;
+}
+
+.sf-bg-panel {
+  background-color: var(--sf-bg-panel) !important;
+}
+
+.sf-bg-card {
+  background-color: var(--sf-bg-card) !important;
+}
+
+.sf-bg-elevated {
+  background-color: var(--sf-bg-elevated) !important;
+}
+
+.sf-border-base {
+  border-color: var(--sf-border-base) !important;
+}
+
+.sf-text-primary {
+  color: var(--sf-text-primary) !important;
+}
+
+.sf-text-secondary {
+  color: var(--sf-text-secondary) !important;
+}
+
+.sf-text-muted {
+  color: var(--sf-text-muted) !important;
+}
+
+.sf-chip-neutral {
+  border-color: var(--sf-chip-neutral-border);
+  background-color: var(--sf-chip-neutral-bg);
+  color: var(--sf-chip-neutral-text);
+}
+
+.sf-chip-neutral:hover {
+  border-color: var(--sf-chip-neutral-hover-border);
+  background-color: var(--sf-chip-neutral-hover-bg);
+  color: var(--sf-chip-neutral-hover-text);
+}
+
+.sf-pipeline-chip.sf-pipeline-failed {
+  border-color: var(--sf-chip-danger-border);
+  background-color: var(--sf-chip-danger-bg);
+  color: var(--sf-chip-danger-text);
+}
+
+.sf-pipeline-chip.sf-pipeline-video {
+  border-color: var(--sf-chip-success-border);
+  background-color: var(--sf-chip-success-bg);
+  color: var(--sf-chip-success-text);
+}
+
+.sf-pipeline-chip.sf-pipeline-ready {
+  border-color: var(--sf-chip-ready-border);
+  background-color: var(--sf-chip-ready-bg);
+  color: var(--sf-chip-ready-text);
+}
+
+.sf-pipeline-chip.sf-pipeline-queue {
+  border-color: var(--sf-chip-info-border);
+  background-color: var(--sf-chip-info-bg);
+  color: var(--sf-chip-info-text);
+}
+
+.sf-pipeline-chip.sf-pipeline-busy,
+.sf-chip-locked {
+  border-color: var(--sf-chip-warning-border);
+  background-color: var(--sf-chip-warning-bg);
+  color: var(--sf-chip-warning-text);
+}
+
+.sf-deck-master-badge.sf-deck-master-reused {
+  border-color: var(--sf-chip-violet-border);
+  background-color: var(--sf-chip-violet-bg);
+  color: var(--sf-chip-violet-text);
+}
+
+.sf-topbar-progress .sf-topbar-step-dot.sf-topbar-step-dot-success {
+  border-color: var(--sf-chip-success-border);
+  background-color: var(--sf-chip-success-bg);
+  color: var(--sf-chip-success-text);
+}
+
+.sf-topbar-progress .sf-topbar-step-dot.sf-topbar-step-dot-running,
+.sf-topbar-progress .sf-topbar-step-dot.sf-topbar-step-dot-waiting {
+  border-color: var(--sf-chip-info-border);
+  background-color: var(--sf-chip-info-bg);
+  color: var(--sf-chip-info-text);
+}
+
+.sf-topbar-progress .sf-topbar-step-dot.sf-topbar-step-dot-error {
+  border-color: var(--sf-chip-danger-border);
+  background-color: var(--sf-chip-danger-bg);
+  color: var(--sf-chip-danger-text);
+}
+
+.sf-topbar-progress .sf-topbar-step-dot.sf-topbar-step-dot-pending {
+  border-color: var(--sf-chip-neutral-border);
+  background-color: var(--sf-chip-neutral-bg);
+  color: var(--sf-chip-neutral-text);
+}
+
+.sf-topbar-progress .sf-topbar-step-label {
+  color: var(--sf-topbar-step-label);
+}
+
+.sf-topbar-progress .sf-topbar-step-label.sf-topbar-step-label-error {
+  color: var(--sf-topbar-step-label-error);
+}
+
+.sf-topbar-progress .sf-topbar-step-label.sf-topbar-step-label-waiting {
+  color: var(--sf-topbar-step-label-waiting);
+}
+
+.sf-topbar-progress .sf-topbar-export-btn {
+  border-color: var(--sf-topbar-export-border);
+  background-color: var(--sf-topbar-export-bg);
+  color: var(--sf-topbar-export-text);
+}

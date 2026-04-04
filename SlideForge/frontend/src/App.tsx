@@ -1,24 +1,33 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { X } from 'lucide-react';
-import { useTheme } from './ThemeContext';
+// import { useTheme } from './ThemeContext'; // 顶栏主题按钮暂藏，恢复时取消注释
 import { ExportVideoChoiceDialog } from './components/ExportVideoChoiceDialog';
 import {
   ExportVideoStatusDialog,
   type VideoExportJobInfo,
 } from './components/ExportVideoStatusDialog';
-import { CancelDeckDialog } from './components/CancelDeckDialog';
 import { TopBar } from './components/TopBar';
 import { DetailPanel } from './components/DetailPanel';
 import { MainWorkspace } from './components/MainWorkspace';
 import { Timeline } from './components/Timeline';
-import { AIAssistantPanel } from './components/AIAssistantPanel';
+import { EditorRightSidebar } from './components/EditorRightSidebar';
 import { Home, Project, type CreateProjectInput } from './components/Home';
 import { ClipData, PageData } from './types';
+import { type ServerWorkflow } from './utils/workflowFromPipeline';
+import { buildWorkflowStepsForProject } from './utils/workflowProject';
+import { useEditorWorkflowModel } from './hooks/useEditorWorkflowModel';
+import { WorkflowPanel } from './components/WorkflowPanel';
 import {
-  applyEditorPendingToSteps,
-  deriveWorkflowSteps,
-  type ServerWorkflow,
-} from './utils/workflowFromPipeline';
+  CancelRunningPipelineStepDialog,
+  ReopenSuccessPipelineStepDialog,
+} from './components/WorkflowPipelineConfirmDialogs';
+import {
+  ManualDeckMasterDialog,
+  ManualDeckPagesDialog,
+  ManualOutlineConfirmDialog,
+  ManualTextPrepDialog,
+} from './components/ManualWorkflowDialogs';
+import { ProjectDetailsModal } from './components/ProjectDetailsModal';
 import { ApiError, apiFetch, apiUrl, getAuthBearerToken, getStoredAuthToken, setStoredAuthToken } from './api';
 import {
   buildTimelineFromPlayManifest,
@@ -32,6 +41,12 @@ function parsePageNodeIdFromPageId(pageId?: string | null): number {
   const pm = /^page-(\d+)$/.exec((pageId || '').trim());
   const n = pm ? Number(pm[1]) : NaN;
   return Number.isFinite(n) ? n : NaN;
+}
+
+function parseStepNodeIdFromClipId(clipId?: string | null): number | null {
+  const m = /^step-(\d+)$/.exec((clipId || '').trim());
+  const n = m ? Number(m[1]) : NaN;
+  return Number.isFinite(n) ? n : null;
 }
 
 /** 列表接口里母版源 id（兼容 JSON 数字/字符串） */
@@ -92,6 +107,7 @@ type ProjectListItem = {
   pipeline?: { outline?: boolean; audio?: boolean; deck?: boolean; video?: boolean };
   workflow?: ServerWorkflow | null;
   video_export_job?: unknown;
+  pipeline_auto_advance?: boolean;
 };
 
 type ProjectDetailApi = {
@@ -106,6 +122,8 @@ type ProjectDetailApi = {
     deck_page_size?: string | null;
     deck_style_preset?: string | null;
     input_prompt?: string | null;
+    deck_style_user_hint?: string | null;
+    deck_style_prompt_text?: string | null;
   };
 };
 
@@ -134,7 +152,29 @@ function mergeProjectFromDetailApi(p: Project, data: ProjectDetailApi): Project 
       ] ||
       p.style ||
       '极光玻璃',
-    workflowSteps: deriveWorkflowSteps(pl, data.project.status, ds, wf),
+    workflowSteps: buildWorkflowStepsForProject({
+      ...p,
+      pipeline: pl,
+      serverStatus: data.project.status,
+      deckStatus: ds,
+      serverWorkflow: wf,
+    }),
+    inputPrompt:
+      data.project.input_prompt != null
+        ? String(data.project.input_prompt)
+        : p.inputPrompt,
+    deckStyleUserHint:
+      data.project.deck_style_user_hint != null
+        ? String(data.project.deck_style_user_hint)
+        : p.deckStyleUserHint,
+    deckStylePromptText:
+      data.project.deck_style_prompt_text != null
+        ? String(data.project.deck_style_prompt_text)
+        : p.deckStylePromptText,
+    deckStylePreset: (() => {
+      const raw = (data.project.deck_style_preset || p.deckStylePreset || 'aurora_glass').trim();
+      return raw || 'aurora_glass';
+    })(),
   };
 }
 
@@ -177,9 +217,10 @@ const LS_CLIP = 'neoncast_selectedClipId';
 const LS_CLIP_PROJECT = 'neoncast_selectedClipProjectId';
 const LS_CLIP_MODE = 'neoncast_selectedClipMode';
 const LS_AI_DRAFT_MAP = 'neoncast_ai_draft_map_v1';
-/** 配音/单页演示重生成后需重新导出：刷新后仍从 sessionStorage 恢复顶栏导出为待处理 */
+const LS_NARRATION_DRAFT_MAP = 'neoncast_narration_draft_map_v1';
+/** 配音按草稿重合成后需重新导出：刷新后仍从 sessionStorage 恢复顶栏导出为待处理 */
 const LS_EXPORT_STALE_PREFIX = 'neoncast_export_stale_';
-/** 单页演示重生成提交后按项目保留 pending，避免切回主页后丢失提交态 */
+/** 单页演示重生成提交后按项目保留节点 id，避免切回主页后丢失轮询恢复 */
 const LS_DECK_REGEN_PENDING_PREFIX = 'neoncast_deck_regen_pending_';
 
 type ClipSelectionMode = 'video' | 'audio' | 'none';
@@ -189,6 +230,12 @@ type DeckDraftEntry = {
   pageNodeId: number;
   draftMainTitle: string;
   draftHtml: string;
+};
+
+type NarrationDraftEntry = {
+  projectId: number;
+  stepNodeId: number;
+  draftText: string;
 };
 
 function readProjectFromUrl(): string | null {
@@ -220,7 +267,7 @@ function readInitialRoute(): { view: 'home' | 'editor'; projectId: string | null
 }
 
 export default function App() {
-  const { toggleTheme } = useTheme();
+  // const { toggleTheme } = useTheme(); // 顶栏主题按钮暂藏
   const initialRoute = readInitialRoute();
   const [username, setUsername] = useState<string | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
@@ -246,13 +293,11 @@ export default function App() {
   const suppressManifestApplyRef = useRef(false);
   const deckWatchTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const manifestPidHydratedRef = useRef<string | null>(null);
-  const [headerDeckRegenPending, setHeaderDeckRegenPending] = useState(false);
-  const [headerDeckRegenPendingPageNodeId, setHeaderDeckRegenPendingPageNodeId] = useState<
-    number | null
-  >(null);
-  const [headerAudioRegenPending, setHeaderAudioRegenPending] = useState(false);
-  /** 内容重生成后成片已过时：顶栏导出步显示待处理，直至再次导出成功 */
-  const [headerExportStaleAfterRegen, setHeaderExportStaleAfterRegen] = useState(false);
+  /** 单页演示重生成：仅用于侧栏页内 busy 与恢复轮询，不参与顶栏工作流步骤推导 */
+  const [deckRegenWatchActive, setDeckRegenWatchActive] = useState(false);
+  const [deckRegenWatchPageNodeId, setDeckRegenWatchPageNodeId] = useState<number | null>(
+    null,
+  );
   /** 重试后短时强制轮询，覆盖后端状态回写延迟 */
   const [retryPollBoostUntil, setRetryPollBoostUntil] = useState<number | null>(null);
   /** URL project 参数仅在登录恢复后消费一次，避免“回主页又跳回工程” */
@@ -261,15 +306,27 @@ export default function App() {
   const suppressNextUrlProjectHydrateRef = useRef(false);
 
   const [sidebarWidth, setSidebarWidth] = useState(320);
+  /** 时间轴工具栏：收起左侧 DetailPanel，中间主区域变宽 */
+  const [leftDetailCollapsed, setLeftDetailCollapsed] = useState(false);
   /** 时间轴区域默认更高一些，分隔条相对更靠上 */
   const [timelineHeight, setTimelineHeight] = useState(200);
   const [selectedClipId, setSelectedClipId] = useState<string>('');
   const [selectionMode, setSelectionMode] = useState<ClipSelectionMode>('none');
-  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [editorRightSidebarOpen, setEditorRightSidebarOpen] = useState(false);
+  const [editorRightSidebarModule, setEditorRightSidebarModule] = useState<
+    'deck' | 'narration'
+  >('deck');
   const [aiPanelClipId, setAiPanelClipId] = useState<string | null>(null);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [deckDraftMap, setDeckDraftMap] = useState<Record<string, DeckDraftEntry>>({});
+  const [narrationPanelClipId, setNarrationPanelClipId] = useState<string | null>(null);
+  const [narrationPanelError, setNarrationPanelError] = useState<string | null>(null);
+  const [narrationResynthBusy, setNarrationResynthBusy] = useState(false);
+  const [narrationApplyBusy, setNarrationApplyBusy] = useState(false);
+  const [narrationDraftMap, setNarrationDraftMap] = useState<
+    Record<string, NarrationDraftEntry>
+  >({});
 
   useEffect(() => {
     if (!sessionReady) return;
@@ -349,11 +406,50 @@ export default function App() {
   >(null);
   const [cancellingRunningWorkflowStepId, setCancellingRunningWorkflowStepId] =
     useState<string | null>(null);
-  const [cancelDeckDialogOpen, setCancelDeckDialogOpen] = useState(false);
-  const [cancelDeckTargetStepId, setCancelDeckTargetStepId] = useState<
+  const [editorDataVersion, setEditorDataVersion] = useState(0);
+
+  const currentProject = useMemo(
+    () =>
+      currentProjectId ? projects.find((p) => p.id === currentProjectId) : undefined,
+    [projects, currentProjectId],
+  );
+  const [headerTextKickoffPending, setHeaderTextKickoffPending] = useState(false);
+  /** 口播助理「按草稿重新合成」进行中，顶栏导出步可标为待处理 */
+  const [headerAudioRegenPending, setHeaderAudioRegenPending] = useState(false);
+  const [workflowPanelOpen, setWorkflowPanelOpen] = useState(false);
+  const [projectDetailsOpen, setProjectDetailsOpen] = useState(false);
+  const [reopeningWorkflowStepId, setReopeningWorkflowStepId] = useState<
     string | null
   >(null);
-  const [editorDataVersion, setEditorDataVersion] = useState(0);
+
+  const workflowModel = useEditorWorkflowModel({
+    currentView,
+    currentProject,
+    headerTextStructureKickoffPending: headerTextKickoffPending,
+    headerAudioRegenPending,
+    headerDeckRegenPending: deckRegenWatchActive,
+    headerExportStaleAfterRegen: false,
+    exportFailed,
+    exportSubmitting,
+  });
+
+  const {
+    activeManualDialog,
+    closeManualDialog,
+    closeConfirmDialog,
+    confirmDialog,
+    displaySteps: displayWorkflowSteps,
+    openConfirmDialog,
+    openManualDialogForStep,
+  } = workflowModel;
+  const editorTimelineUnlocked = workflowModel.timelineUnlocked;
+
+  useEffect(() => {
+    const t = displayWorkflowSteps.find((s) => s.id === 'text');
+    if (t?.state === 'running' || t?.state === 'success') {
+      setHeaderTextKickoffPending(false);
+    }
+  }, [displayWorkflowSteps]);
 
   const isDraggingSidebar = useRef(false);
   const isDraggingTimeline = useRef(false);
@@ -399,6 +495,7 @@ export default function App() {
       firstAudioClip ??
       EMPTY_CLIP;
   const aiPanelClip = clips.find((c) => c.id === aiPanelClipId) ?? null;
+  const narrationPanelClip = clips.find((c) => c.id === narrationPanelClipId) ?? null;
   const aiPanelPageId = aiPanelClip?.type === 'video' ? aiPanelClip.pageId || '' : '';
   const aiPanelProjectIdNum = Number(currentProjectId);
   const aiDraftKey =
@@ -431,6 +528,29 @@ export default function App() {
     [workspacePages, deckDraftMap, aiPanelProjectIdNum],
   );
 
+  const narrationKeyForPanel = useMemo(() => {
+    const pid = Number(currentProjectId);
+    const sid = narrationPanelClip
+      ? parseStepNodeIdFromClipId(narrationPanelClip.id)
+      : null;
+    if (!Number.isFinite(pid) || sid == null) return '';
+    return `${pid}:${sid}`;
+  }, [currentProjectId, narrationPanelClip]);
+
+  const narrationBaselineForPanel = useMemo(() => {
+    const c = narrationPanelClip;
+    if (!c) return '';
+    return (
+      playSteps.find((s) => s.clip_id === c.id)?.narration_text ??
+      c.content ??
+      ''
+    );
+  }, [narrationPanelClip, playSteps]);
+
+  const narrationDraftTextForPanel = narrationKeyForPanel
+    ? narrationDraftMap[narrationKeyForPanel]?.draftText ?? narrationBaselineForPanel
+    : '';
+
   const parseServerIso = (iso: string) => {
     const raw = (iso || '').trim();
     if (!raw) return new Date(NaN);
@@ -462,8 +582,8 @@ export default function App() {
       deckWatchTimerRef.current = null;
     }
     suppressManifestApplyRef.current = false;
-    setHeaderDeckRegenPending(false);
-    setHeaderDeckRegenPendingPageNodeId(null);
+    setDeckRegenWatchActive(false);
+    setDeckRegenWatchPageNodeId(null);
   }, []);
 
   const persistDeckRegenPending = useCallback((pid: number, pageNodeId: number | null) => {
@@ -484,8 +604,8 @@ export default function App() {
       if (!Number.isFinite(pid) || !Number.isFinite(pageNodeId)) return;
       clearDeckWatch();
       suppressManifestApplyRef.current = true;
-      setHeaderDeckRegenPending(true);
-      setHeaderDeckRegenPendingPageNodeId(pageNodeId);
+      setDeckRegenWatchActive(true);
+      setDeckRegenWatchPageNodeId(pageNodeId);
       deckWatchTimerRef.current = window.setInterval(() => {
         void (async () => {
           try {
@@ -499,16 +619,9 @@ export default function App() {
                 deckWatchTimerRef.current = null;
               }
               suppressManifestApplyRef.current = false;
-              setHeaderDeckRegenPending(false);
-              setHeaderDeckRegenPendingPageNodeId(null);
+              setDeckRegenWatchActive(false);
+              setDeckRegenWatchPageNodeId(null);
               persistDeckRegenPending(pid, null);
-              if (st === 'ready') {
-                try {
-                  sessionStorage.setItem(`${LS_EXPORT_STALE_PREFIX}${String(pid)}`, '1');
-                } catch {
-                  /* ignore */
-                }
-              }
               reloadEditorWithMessage(
                 st === 'ready'
                   ? '演示页面已更新。'
@@ -527,23 +640,8 @@ export default function App() {
   );
 
   const onAudioResynthSuccess = useCallback(() => {
-    if (currentProjectId) {
-      try {
-        sessionStorage.setItem(`${LS_EXPORT_STALE_PREFIX}${currentProjectId}`, '1');
-      } catch {
-        /* ignore */
-      }
-    }
     reloadEditorWithMessage('音频已更新。');
-  }, [currentProjectId, reloadEditorWithMessage]);
-
-  const onAudioResynthStart = useCallback(() => {
-    setHeaderAudioRegenPending(true);
-  }, []);
-
-  const onAudioResynthEnd = useCallback(() => {
-    setHeaderAudioRegenPending(false);
-  }, []);
+  }, [reloadEditorWithMessage]);
 
   const onDeckPageRegenSubmitted = useCallback(
     (pageNodeId: number) => {
@@ -554,63 +652,6 @@ export default function App() {
     },
     [currentProjectId, persistDeckRegenPending, startDeckRegenWatch],
   );
-
-  /** 单页「重新生成」按下后：成片与导出步立刻视为过期（与配音重合成套） */
-  const onDeckPageRegenExportInvalidate = useCallback((pid: number) => {
-    if (!Number.isFinite(pid)) return;
-    try {
-      sessionStorage.setItem(`${LS_EXPORT_STALE_PREFIX}${String(pid)}`, '1');
-    } catch {
-      /* ignore */
-    }
-    setHeaderExportStaleAfterRegen(true);
-    setEditorFlashDownloadUrl(null);
-    setExportChoiceOpen(false);
-    setExportStatusOpen(false);
-    setProjects((prev) =>
-      prev.map((p) => {
-        if (p.id !== String(pid)) return p;
-        const pl = {
-          ...(p.pipeline ?? { outline: false, audio: false, deck: false, video: false }),
-          video: false,
-        };
-        const sw = {
-          ...(p.serverWorkflow ?? {}),
-          exportStatus: 'not_started',
-          exportWorkflowStatus: 'not_exported',
-        };
-        return {
-          ...p,
-          pipeline: pl,
-          serverWorkflow: sw,
-          videoExportJob: null,
-          workflowSteps: deriveWorkflowSteps(
-            pl,
-            p.serverStatus ?? 'ready',
-            p.deckStatus ?? 'idle',
-            sw,
-          ),
-        };
-      }),
-    );
-  }, []);
-
-  const onDeckPageRegenExportRevert = useCallback((pid: number) => {
-    if (!Number.isFinite(pid)) return;
-    try {
-      sessionStorage.removeItem(`${LS_EXPORT_STALE_PREFIX}${String(pid)}`);
-    } catch {
-      /* ignore */
-    }
-    setHeaderExportStaleAfterRegen(false);
-    void apiFetch<ProjectDetailApi>(`/api/projects/${pid}`)
-      .then((data) => {
-        setProjects((prev) =>
-          prev.map((p) => (p.id === String(pid) ? mergeProjectFromDetailApi(p, data) : p)),
-        );
-      })
-      .catch(() => {});
-  }, []);
 
   const fetchProjects = useCallback(
     async (uid: number, uname: string | null) => {
@@ -643,12 +684,12 @@ export default function App() {
           deckStatus,
           pipeline,
           serverWorkflow: wf,
-          workflowSteps: deriveWorkflowSteps(
+          workflowSteps: buildWorkflowStepsForProject({
             pipeline,
-            item.status,
+            serverStatus: item.status,
             deckStatus,
-            wf,
-          ),
+            serverWorkflow: wf,
+          }),
           author,
           isShared: item.is_shared,
           ownerUserId: item.owner_user_id,
@@ -656,6 +697,7 @@ export default function App() {
             item.deck_master_source_project_id,
           ),
           videoExportJob: mapVideoExportJob(item.video_export_job),
+          pipelineAutoAdvance: item.pipeline_auto_advance !== false,
         };
       });
       setProjects(mapped);
@@ -797,9 +839,163 @@ export default function App() {
     setSelectedClipId(clip.id);
     setSelectionMode('video');
     setAiPanelClipId(clip.id);
-    setAiPanelOpen(true);
+    setEditorRightSidebarModule('deck');
+    setEditorRightSidebarOpen(true);
     setAiError(null);
   }, [currentProjectId, workspacePages]);
+
+  const handleOpenNarrationPanelForAudioClip = useCallback(
+    (clip: ClipData) => {
+      if (clip.type !== 'audio') return;
+      const st = playSteps.find((s) => s.clip_id === clip.id);
+      if (st?.kind === 'pause') {
+        setEditorFlashDownloadUrl(null);
+        setEditorFlashMessage('停顿段不支持在口播助理中编辑。');
+        return;
+      }
+      const pid = Number(currentProjectId);
+      const stepNodeId = parseStepNodeIdFromClipId(clip.id);
+      if (!Number.isFinite(pid) || stepNodeId == null) {
+        setEditorFlashDownloadUrl(null);
+        setEditorFlashMessage('无法解析该音频片段节点。');
+        return;
+      }
+      setSelectedClipId(clip.id);
+      setSelectionMode('audio');
+      setNarrationPanelClipId(clip.id);
+      setEditorRightSidebarModule('narration');
+      setEditorRightSidebarOpen(true);
+      setNarrationPanelError(null);
+      const baseline = (
+        playSteps.find((s) => s.clip_id === clip.id)?.narration_text ??
+        clip.content ??
+        ''
+      ).trim();
+      const key = `${pid}:${stepNodeId}`;
+      setNarrationDraftMap((prev) => {
+        if (prev[key]) return prev;
+        return {
+          ...prev,
+          [key]: { projectId: pid, stepNodeId, draftText: baseline },
+        };
+      });
+    },
+    [currentProjectId, playSteps],
+  );
+
+  const handleNarrationDraftChange = useCallback(
+    (next: string) => {
+      const c = narrationPanelClip;
+      if (!c || c.type !== 'audio') return;
+      const pid = Number(currentProjectId);
+      const sid = parseStepNodeIdFromClipId(c.id);
+      if (!Number.isFinite(pid) || sid == null) return;
+      const key = `${pid}:${sid}`;
+      setNarrationDraftMap((prev) => ({
+        ...prev,
+        [key]: { projectId: pid, stepNodeId: sid, draftText: next },
+      }));
+    },
+    [narrationPanelClip, currentProjectId],
+  );
+
+  const handleDiscardNarrationDraft = useCallback(() => {
+    const c = narrationPanelClip;
+    if (!c || c.type !== 'audio') return;
+    const pid = Number(currentProjectId);
+    const sid = parseStepNodeIdFromClipId(c.id);
+    if (!Number.isFinite(pid) || sid == null) return;
+    const key = `${pid}:${sid}`;
+    setNarrationDraftMap((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setNarrationPanelError(null);
+  }, [narrationPanelClip, currentProjectId]);
+
+  const handleResynthesizeNarrationDraft = useCallback(async () => {
+    const c = narrationPanelClip;
+    if (!c || c.type !== 'audio') return;
+    const pid = Number(currentProjectId);
+    const sid = parseStepNodeIdFromClipId(c.id);
+    if (!Number.isFinite(pid) || sid == null) return;
+    const key = `${pid}:${sid}`;
+    const text = (narrationDraftMap[key]?.draftText ?? '').trim();
+    if (!text) {
+      setNarrationPanelError('口播草稿为空，无法合成。');
+      return;
+    }
+    setNarrationResynthBusy(true);
+    setNarrationPanelError(null);
+    setHeaderAudioRegenPending(true);
+    try {
+      const resp = await apiFetch<{ reused_existing?: boolean; message?: string }>(
+        `/api/projects/${pid}/outline-nodes/${sid}/resynthesize-audio`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        },
+      );
+      if (resp?.reused_existing) {
+        setEditorFlashDownloadUrl(null);
+        setEditorFlashMessage(resp.message || '该段音频已就绪。');
+      } else {
+        if (currentProjectId) {
+          try {
+            sessionStorage.setItem(`${LS_EXPORT_STALE_PREFIX}${currentProjectId}`, '1');
+          } catch {
+            /* ignore */
+          }
+        }
+        reloadEditorWithMessage(
+          '已按草稿重新合成音频。请点击「应用」将当前草稿写入库内正文。',
+        );
+      }
+    } catch (e) {
+      setNarrationPanelError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setNarrationResynthBusy(false);
+      setHeaderAudioRegenPending(false);
+    }
+  }, [narrationPanelClip, currentProjectId, narrationDraftMap, reloadEditorWithMessage]);
+
+  const handleApplyNarrationDraft = useCallback(async () => {
+    const c = narrationPanelClip;
+    if (!c || c.type !== 'audio') return;
+    const pid = Number(currentProjectId);
+    const sid = parseStepNodeIdFromClipId(c.id);
+    if (!Number.isFinite(pid) || sid == null) return;
+    const key = `${pid}:${sid}`;
+    const text = narrationDraftMap[key]?.draftText ?? '';
+    const baseline = (
+      playSteps.find((s) => s.clip_id === c.id)?.narration_text ?? c.content ?? ''
+    ).trim();
+    if (text.trim() === baseline) {
+      setNarrationPanelError('草稿与已保存台词一致，无需应用。');
+      return;
+    }
+    setNarrationApplyBusy(true);
+    setNarrationPanelError(null);
+    try {
+      await apiFetch(`/api/projects/${pid}/outline-nodes/${sid}/narration-text`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ narration_text: text }),
+      });
+      setNarrationDraftMap((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      reloadEditorWithMessage('口播正文已保存。');
+    } catch (e) {
+      setNarrationPanelError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setNarrationApplyBusy(false);
+    }
+  }, [narrationPanelClip, currentProjectId, narrationDraftMap, playSteps, reloadEditorWithMessage]);
 
   const handleGenerateAiDraft = useCallback(
     async (instruction: string) => {
@@ -935,42 +1131,12 @@ export default function App() {
   );
   const pollWorkflowRunning =
     pollEditorProject?.workflowSteps?.some((s) => s.state === 'running') ?? false;
-  /** 轮询项目详情：流水线未齐、任一步 running、或顶栏重配进行中 */
+  /** 轮询项目详情：流水线未齐、任一步 running、或重试后短时加强拉取 */
   const shouldPollProjectDetail =
     Boolean(pollEditorProject) &&
     (!pollPipelineSatisfied ||
       pollWorkflowRunning ||
-      headerAudioRegenPending ||
-      headerDeckRegenPending ||
       (retryPollBoostUntil != null && retryPollBoostUntil > Date.now()));
-
-  /** 与顶栏一致：口播重配/演示重生成时把对应步置为 running，主工作台门禁与顶栏同步 */
-  const workspaceWorkflowSteps = useMemo(
-    () =>
-      applyEditorPendingToSteps(pollEditorProject?.workflowSteps ?? [], {
-        audio: headerAudioRegenPending,
-        deck: headerDeckRegenPending,
-      }),
-    [
-      pollEditorProject?.workflowSteps,
-      headerAudioRegenPending,
-      headerDeckRegenPending,
-    ],
-  );
-
-  /** 文本+口播均 success 才解锁时间轴；pending 覆盖见 workspaceWorkflowSteps */
-  const editorTimelineUnlocked = useMemo(() => {
-    const st = workspaceWorkflowSteps;
-    if (st && st.length > 0) {
-      const tex = st.find((s) => s.id === 'text');
-      const aud = st.find((s) => s.id === 'audio');
-      if (tex && aud) {
-        return tex.state === 'success' && aud.state === 'success';
-      }
-    }
-    const plp = pollEditorProject?.pipeline;
-    return Boolean(plp?.outline && plp?.audio);
-  }, [workspaceWorkflowSteps, pollEditorProject?.pipeline]);
 
   /** 流水线三态变化时补拉一次 play-manifest（不定时轮询画面） */
   const manifestReloadKey = useMemo(() => {
@@ -1060,6 +1226,27 @@ export default function App() {
   }, [deckDraftMap]);
 
   useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_NARRATION_DRAFT_MAP);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, NarrationDraftEntry>;
+      if (parsed && typeof parsed === 'object') {
+        setNarrationDraftMap(parsed);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_NARRATION_DRAFT_MAP, JSON.stringify(narrationDraftMap));
+    } catch {
+      /* ignore */
+    }
+  }, [narrationDraftMap]);
+
+  useEffect(() => {
     if (currentView !== 'editor' || !currentProjectId) return;
     if (projects.length === 0) return;
     const exists = projects.some((p) => p.id === currentProjectId);
@@ -1080,7 +1267,6 @@ export default function App() {
 
   useEffect(() => {
     clearDeckWatch();
-    setHeaderAudioRegenPending(false);
     setExportSubmitting(false);
     setExportChoiceOpen(false);
     setExportStatusOpen(false);
@@ -1097,10 +1283,17 @@ export default function App() {
     setPlaySteps([]);
     setSelectedClipId('');
     setSelectionMode('none');
-    setAiPanelOpen(false);
+    setEditorRightSidebarOpen(false);
+    setEditorRightSidebarModule('deck');
     setAiPanelClipId(null);
     setAiGenerating(false);
     setAiError(null);
+    setNarrationPanelClipId(null);
+    setNarrationPanelError(null);
+    setNarrationResynthBusy(false);
+    setNarrationApplyBusy(false);
+    setHeaderAudioRegenPending(false);
+    setLeftDetailCollapsed(false);
   }, [currentProjectId, clearDeckWatch]);
 
   useEffect(() => {
@@ -1117,23 +1310,9 @@ export default function App() {
     }
     const pageNodeId = persistedNodeIdRaw ? Number(persistedNodeIdRaw) : NaN;
     if (!Number.isFinite(pageNodeId)) return;
-    if (headerDeckRegenPending) return;
+    if (deckRegenWatchActive) return;
     startDeckRegenWatch(pid, pageNodeId);
-  }, [currentView, currentProjectId, headerDeckRegenPending, startDeckRegenWatch]);
-
-  useEffect(() => {
-    if (currentView !== 'editor' || !currentProjectId) {
-      setHeaderExportStaleAfterRegen(false);
-      return;
-    }
-    try {
-      setHeaderExportStaleAfterRegen(
-        sessionStorage.getItem(`${LS_EXPORT_STALE_PREFIX}${currentProjectId}`) === '1',
-      );
-    } catch {
-      setHeaderExportStaleAfterRegen(false);
-    }
-  }, [currentView, currentProjectId]);
+  }, [currentView, currentProjectId, deckRegenWatchActive, startDeckRegenWatch]);
 
   useEffect(() => {
     if (currentView !== 'editor' || !currentProjectId) return;
@@ -1417,14 +1596,6 @@ export default function App() {
         deck: Boolean(res.pipeline.deck),
         video: Boolean(res.pipeline.video),
       };
-      if (nextPl.video) {
-        try {
-          sessionStorage.removeItem(`${LS_EXPORT_STALE_PREFIX}${String(pid)}`);
-        } catch {
-          /* ignore */
-        }
-        setHeaderExportStaleAfterRegen(false);
-      }
       const queued = (res.action || '').trim().toLowerCase() === 'queued';
       setProjects((prev) =>
         prev.map((p) => {
@@ -1455,12 +1626,11 @@ export default function App() {
             pipeline: nextPl,
             serverWorkflow: sw,
             videoExportJob: nextVideoJob,
-            workflowSteps: deriveWorkflowSteps(
-              nextPl,
-              p.serverStatus ?? 'ready',
-              p.deckStatus ?? 'idle',
-              sw,
-            ),
+            workflowSteps: buildWorkflowStepsForProject({
+              ...p,
+              pipeline: nextPl,
+              serverWorkflow: sw,
+            }),
           };
         }),
       );
@@ -1488,28 +1658,6 @@ export default function App() {
       const pid = Number(currentProjectId);
       if (!Number.isFinite(pid)) return;
       const forceReexport = Boolean(opts?.forceReexport);
-      const pl0 = project?.pipeline ?? {
-        outline: false,
-        audio: false,
-        deck: false,
-        video: false,
-      };
-      setProjects((prev) =>
-        prev.map((p) => {
-          if (p.id !== String(pid)) return p;
-          const sw = { ...(p.serverWorkflow ?? {}), exportWorkflowStatus: 'exporting' as const };
-          return {
-            ...p,
-            serverWorkflow: sw,
-            workflowSteps: deriveWorkflowSteps(
-              pl0,
-              p.serverStatus ?? 'ready',
-              p.deckStatus ?? 'idle',
-              sw,
-            ),
-          };
-        }),
-      );
       setExportSubmitting(true);
       try {
         const res = await apiFetch<{
@@ -1597,6 +1745,14 @@ export default function App() {
       if (!currentProjectId) return;
       const pid = Number(currentProjectId);
       if (!Number.isFinite(pid)) return;
+      const stepState = displayWorkflowSteps.find((s) => s.id === stepId)?.state;
+      if (
+        currentProject?.pipelineAutoAdvance === false &&
+        (stepState === 'waiting' || stepState === 'pending')
+      ) {
+        openManualDialogForStep(stepId);
+        return;
+      }
       setRetryingWorkflowStepId(stepId);
       setEditorFlashDownloadUrl(null);
       try {
@@ -1623,7 +1779,7 @@ export default function App() {
           });
           setEditorFlashMessage('演示页生成已启动。');
         } else if (stepId === 'deck_master') {
-          await apiFetch(`/api/projects/${pid}/generate-deck-style`, {
+          await apiFetch(`/api/projects/${pid}/workflow/deck_master/run`, {
             method: 'POST',
             headers: jsonHeaders,
             body: '{}',
@@ -1643,9 +1799,12 @@ export default function App() {
       }
     },
     [
+      currentProject?.pipelineAutoAdvance,
       currentProjectId,
+      displayWorkflowSteps,
       fetchProjects,
       handleDownloadVideoClick,
+      openManualDialogForStep,
       userId,
       username,
     ],
@@ -1653,37 +1812,33 @@ export default function App() {
 
   const handleCancelRunningWorkflowStep = useCallback(
     (stepId: string) => {
-      if (stepId !== 'pages' && stepId !== 'deck_render') return;
       if (!currentProjectId) return;
-      setCancelDeckTargetStepId(stepId);
-      setCancelDeckDialogOpen(true);
+      openConfirmDialog('cancel', stepId);
     },
-    [currentProjectId],
+    [currentProjectId, openConfirmDialog],
   );
 
-  const handleConfirmCancelRunningWorkflowStep = useCallback(async () => {
-    if (!cancelDeckTargetStepId || !currentProjectId) return;
-    const stepId = cancelDeckTargetStepId;
+  const handleConfirmPipelineCancel = useCallback(async () => {
+    if (confirmDialog.kind !== 'cancel' || !confirmDialog.stepId || !currentProjectId) {
+      return;
+    }
+    const stepId = confirmDialog.stepId;
     const pid = Number(currentProjectId);
     if (!Number.isFinite(pid)) return;
     setCancellingRunningWorkflowStepId(stepId);
     setEditorFlashDownloadUrl(null);
     try {
-      const res = await apiFetch<{
-        cancelled_count: number;
-        cancelled_page_node_ids?: number[];
-      }>(`/api/projects/${pid}/cancel-deck-all`, {
+      await apiFetch(`/api/projects/${pid}/workflow/step/cancel-running`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: '{}',
+        body: JSON.stringify({ step: stepId }),
       });
-      if ((res.cancelled_count || 0) > 0) {
-        setEditorFlashMessage(`已终止 ${res.cancelled_count} 个场景任务，并标记为失败。`);
+      closeConfirmDialog();
+      if (stepId === 'pages' || stepId === 'deck_render') {
         clearDeckWatch();
         persistDeckRegenPending(pid, null);
-      } else {
-        setEditorFlashMessage('当前没有可终止的场景生成任务。');
       }
+      setEditorFlashMessage('已提交取消请求。');
       setRetryPollBoostUntil(Date.now() + 12_000);
       if (userId !== null) {
         await fetchProjects(userId, username);
@@ -1694,18 +1849,57 @@ export default function App() {
       setCancellingRunningWorkflowStepId((cur) =>
         cur === stepId ? null : cur,
       );
-      setCancelDeckDialogOpen(false);
-      setCancelDeckTargetStepId(null);
     }
   }, [
-    cancelDeckTargetStepId,
     clearDeckWatch,
+    closeConfirmDialog,
+    confirmDialog.kind,
+    confirmDialog.stepId,
     currentProjectId,
     fetchProjects,
     persistDeckRegenPending,
     userId,
     username,
   ]);
+
+  const handleReopenSuccessStep = useCallback(
+    async (stepId: string) => {
+      if (!currentProjectId) return;
+      const pid = Number(currentProjectId);
+      if (!Number.isFinite(pid)) return;
+      setReopeningWorkflowStepId(stepId);
+      try {
+        await apiFetch(`/api/projects/${pid}/workflow/step/reopen-success`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ step: stepId }),
+        });
+        setWorkflowPanelOpen(false);
+        closeConfirmDialog();
+        setRetryPollBoostUntil(Date.now() + 15_000);
+        if (userId !== null) {
+          await fetchProjects(userId, username);
+        }
+        setEditorFlashMessage('已回退该步骤，可按新流程继续。');
+      } catch (e) {
+        setEditorFlashMessage(e instanceof Error ? e.message : String(e));
+      } finally {
+        setReopeningWorkflowStepId((cur) => (cur === stepId ? null : cur));
+      }
+    },
+    [
+      closeConfirmDialog,
+      currentProjectId,
+      fetchProjects,
+      userId,
+      username,
+    ],
+  );
+
+  const handleConfirmPipelineReopen = useCallback(async () => {
+    if (confirmDialog.kind !== 'reopen' || !confirmDialog.stepId) return;
+    await handleReopenSuccessStep(confirmDialog.stepId);
+  }, [confirmDialog.kind, confirmDialog.stepId, handleReopenSuccessStep]);
 
   const handleCreateProject = async (newProject: CreateProjectInput) => {
     /** 先落库 queued，后台跑结构化 → 配音 → 演示页；仅素材进 STRUCTURE_SYSTEM */
@@ -1714,12 +1908,14 @@ export default function App() {
     if (!rawText || !trimmedName || userId === null) return;
     setCreateError(null);
     try {
-      const preset = (newProject.style || 'aurora_glass').trim() || 'aurora_glass';
+      const rawPreset = (newProject.style || 'aurora_glass').trim() || 'aurora_glass';
+      const preset = rawPreset === 'none' ? 'aurora_glass' : rawPreset;
       const body: Record<string, unknown> = {
         name: trimmedName,
         raw_text: rawText,
         deck_page_size: newProject.screenSize,
         deck_style_preset: preset,
+        pipeline_auto_advance: newProject.pipelineAutoAdvance !== false,
       };
       if (
         typeof newProject.copyDeckMasterFromProjectId === 'number' &&
@@ -1736,6 +1932,10 @@ export default function App() {
       if (typeof tns === 'number' && Number.isFinite(tns) && tns >= 10 && tns <= 1800) {
         body.target_narration_seconds = Math.round(tns);
       }
+      if (newProject.includeIntro) body.include_intro = true;
+      if (newProject.includeOutro) body.include_outro = true;
+      const ttsVt = (newProject.ttsVoiceType || '').trim();
+      if (ttsVt) body.tts_voice_type = ttsVt;
       const res = await apiFetch<{ project_id: number }>('/api/projects', {
         method: 'POST',
         body: JSON.stringify(body),
@@ -1841,8 +2041,6 @@ export default function App() {
     [applyExportVideoResponse, postExportVideoBody, projects, startBrowserDownload],
   );
 
-  const currentProject = projects.find((p) => p.id === currentProjectId);
-
   /** 有导出任务跟进时，定时拉取该项目详情，保证列表/任务状态与 worker 队列同步（不仅依赖编辑器内轮询） */
   useEffect(() => {
     if (!exportTracking) return;
@@ -1881,12 +2079,6 @@ export default function App() {
         setProjects((prev) =>
           prev.map((p) => (p.id === String(pid) ? mergeProjectFromDetailApi(p, data) : p)),
         );
-        try {
-          sessionStorage.removeItem(`${LS_EXPORT_STALE_PREFIX}${String(pid)}`);
-        } catch {
-          /* ignore */
-        }
-        setHeaderExportStaleAfterRegen(false);
         const rawUrl = job.output_url?.trim();
         if (rawUrl) {
           setEditorFlashDownloadUrl(apiUrl(rawUrl));
@@ -1921,66 +2113,33 @@ export default function App() {
   const editorUiBlocked =
     !editorTimelineUnlocked || (timelineBlocking && clips.length === 0);
 
-  const headerWorkflowSteps = useMemo(() => {
-    let base = applyEditorPendingToSteps(currentProject?.workflowSteps ?? [], {
-      audio: headerAudioRegenPending,
-      deck: headerDeckRegenPending,
-    });
-    if (exportFailed) {
-      base = base.map((s) =>
-        s.id === 'export' && s.state !== 'success' ? { ...s, state: 'error' as const } : s,
-      );
-    }
+  const editorDisplaySteps = useMemo(() => {
+    let base = displayWorkflowSteps;
     if (
-      headerAudioRegenPending ||
-      headerDeckRegenPending ||
-      headerExportStaleAfterRegen
+      exportJobForTracking &&
+      (exportJobForTracking.status === 'queued' ||
+        exportJobForTracking.status === 'running')
     ) {
       base = base.map((s) =>
-        s.id === 'export' ? { ...s, state: 'pending' as const } : s,
+        s.id === 'export' ? { ...s, state: 'running' as const } : s,
       );
     }
-    return base.map((s) => {
-      if (s.id === 'export' && exportSubmitting) {
-        return { ...s, state: 'running' as const };
-      }
-      if (
-        s.id === 'export' &&
-        exportJobForTracking &&
-        (exportJobForTracking.status === 'queued' ||
-          exportJobForTracking.status === 'running')
-      ) {
-        return { ...s, state: 'running' as const };
-      }
-      return s;
-    });
-  }, [
-    currentProject?.workflowSteps,
-    headerAudioRegenPending,
-    headerDeckRegenPending,
-    headerExportStaleAfterRegen,
-    exportFailed,
-    exportSubmitting,
-    exportJobForTracking,
-  ]);
+    return base;
+  }, [displayWorkflowSteps, exportJobForTracking]);
 
   const preExportAllSuccess = useMemo(() => {
-    const s = headerWorkflowSteps;
+    const s = editorDisplaySteps;
     const preExport = s.filter((x) => x.id !== 'export');
     return preExport.length >= 3 && preExport.every((x) => x.state === 'success');
-  }, [headerWorkflowSteps]);
+  }, [editorDisplaySteps]);
 
   const headerExportStepState = useMemo(
-    () => headerWorkflowSteps.find((s) => s.id === 'export')?.state,
-    [headerWorkflowSteps],
+    () => editorDisplaySteps.find((s) => s.id === 'export')?.state,
+    [editorDisplaySteps],
   );
 
   /** 与 TopBar `videoReady` 一致：用于导出按钮禁用逻辑与状态弹窗 */
-  const serverExportVideoReady =
-    Boolean(pl?.video) &&
-    !headerAudioRegenPending &&
-    !headerDeckRegenPending &&
-    !headerExportStaleAfterRegen;
+  const serverExportVideoReady = Boolean(pl?.video);
 
   const headerVideoActionLoading =
     serverPipelineSatisfied &&
@@ -2003,7 +2162,7 @@ export default function App() {
 
   if (!sessionReady) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-zinc-950 light:bg-slate-50 font-sans text-zinc-400 light:text-slate-500">
+      <div className="sf-bg-base flex h-screen w-full items-center justify-center font-sans sf-text-muted">
         正在恢复会话…
       </div>
     );
@@ -2011,12 +2170,12 @@ export default function App() {
 
   if (currentView === 'home') {
     return (
-      <div className="h-screen w-full bg-zinc-950 light:bg-slate-50 text-zinc-100 light:text-slate-900 flex flex-col overflow-hidden font-sans selection:bg-purple-500/30">
+      <div className="sf-bg-base sf-text-primary flex h-screen w-full flex-col overflow-hidden font-sans selection:bg-purple-500/30">
         <TopBar
           username={userId !== null ? username : null}
           onLogin={() => void bootstrap()}
           onLogout={() => void handleLogout()}
-          onToggleTheme={toggleTheme}
+          // onToggleTheme={toggleTheme}
         />
         {projectsError ? (
           <div
@@ -2059,7 +2218,7 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen w-full bg-zinc-950 light:bg-slate-50 text-zinc-100 light:text-slate-900 flex flex-col overflow-hidden font-sans selection:bg-purple-500/30">
+    <div className="sf-bg-base sf-text-primary flex h-screen w-full flex-col overflow-hidden font-sans selection:bg-purple-500/30">
       <TopBar
         username={userId !== null ? username : null}
         onLogin={() => void bootstrap()}
@@ -2071,9 +2230,9 @@ export default function App() {
           setCurrentView('home');
           setCurrentProjectId(null);
         }}
-        steps={headerWorkflowSteps}
+        steps={editorDisplaySteps}
         downloadEnabled={headerVideoMainButtonEnabled}
-        videoReady={serverExportVideoReady}
+        videoReady={workflowModel.videoReady}
         downloadLoading={headerVideoActionLoading}
         onDownloadClick={() => {
           if (headerVideoActionLoading && !serverExportVideoReady) {
@@ -2088,6 +2247,10 @@ export default function App() {
           void handleCancelRunningWorkflowStep(id)
         }
         cancellingRunningWorkflowStepId={cancellingRunningWorkflowStepId}
+        pipelineAutoAdvance={currentProject?.pipelineAutoAdvance !== false}
+        manualOutlineConfirmed={currentProject?.manualOutlineConfirmed !== false}
+        onOpenWorkflowPanel={() => setWorkflowPanelOpen(true)}
+        onOpenProjectDetails={() => setProjectDetailsOpen(true)}
       />
 
       <ExportVideoChoiceDialog
@@ -2107,19 +2270,109 @@ export default function App() {
           currentProject?.videoExportJob ??
           null
         }
-        workflowExporting={
-          (headerExportStepState === 'running' || exportSubmitting) && !serverExportVideoReady
-        }
+        workflowExporting={headerExportStepState === 'running' && !serverExportVideoReady}
       />
-      <CancelDeckDialog
-        open={cancelDeckDialogOpen}
+      <CancelRunningPipelineStepDialog
+        open={confirmDialog.kind === 'cancel'}
         busy={cancellingRunningWorkflowStepId !== null}
+        stepId={confirmDialog.stepId}
         onClose={() => {
           if (cancellingRunningWorkflowStepId) return;
-          setCancelDeckDialogOpen(false);
-          setCancelDeckTargetStepId(null);
+          closeConfirmDialog();
         }}
-        onConfirm={() => void handleConfirmCancelRunningWorkflowStep()}
+        onConfirm={() => void handleConfirmPipelineCancel()}
+      />
+      <ReopenSuccessPipelineStepDialog
+        open={confirmDialog.kind === 'reopen'}
+        busy={reopeningWorkflowStepId !== null}
+        stepId={confirmDialog.stepId}
+        onClose={() => {
+          if (reopeningWorkflowStepId) return;
+          closeConfirmDialog();
+        }}
+        onConfirm={() => void handleConfirmPipelineReopen()}
+      />
+      {workflowPanelOpen ? (
+        <WorkflowPanel
+          steps={editorDisplaySteps}
+          pipelineAutoAdvance={currentProject?.pipelineAutoAdvance !== false}
+          manualOutlineConfirmed={currentProject?.manualOutlineConfirmed !== false}
+          deckMasterSourceProjectId={currentProject?.deckMasterSourceProjectId ?? null}
+          videoReady={workflowModel.videoReady}
+          onRetryStep={(id) => void handleRetryWorkflowStep(id)}
+          retryingStepId={retryingWorkflowStepId}
+          onCancelRunningStep={(id) => void handleCancelRunningWorkflowStep(id)}
+          cancellingStepId={cancellingRunningWorkflowStepId}
+          onCommitReopenSuccessStep={(id) => {
+            void handleReopenSuccessStep(id);
+          }}
+          reopeningStepId={reopeningWorkflowStepId}
+          onClose={() => setWorkflowPanelOpen(false)}
+        />
+      ) : null}
+      <ManualTextPrepDialog
+        open={activeManualDialog === 'text'}
+        projectId={currentProjectId != null ? Number(currentProjectId) : 0}
+        initialRaw={(currentProject?.inputPrompt ?? '').trim()}
+        initialMode={
+          currentProject?.textStructureMode === 'verbatim_split'
+            ? 'verbatim_split'
+            : 'polish'
+        }
+        onClose={closeManualDialog}
+        onQueued={() => {
+          setHeaderTextKickoffPending(true);
+          setRetryPollBoostUntil(Date.now() + 20_000);
+        }}
+        onConfirmHandoff={() => setWorkflowPanelOpen(false)}
+      />
+      <ManualOutlineConfirmDialog
+        open={activeManualDialog === 'outline'}
+        projectId={currentProjectId != null ? Number(currentProjectId) : 0}
+        onClose={closeManualDialog}
+        onConfirmed={() => {
+          if (userId !== null) void fetchProjects(userId, username);
+        }}
+        onAudioChainComplete={() => {
+          if (userId !== null) void fetchProjects(userId, username);
+        }}
+        onNextStepError={(msg) => setEditorFlashMessage(msg)}
+        onConfirmHandoff={() => setWorkflowPanelOpen(false)}
+      />
+      <ManualDeckMasterDialog
+        open={activeManualDialog === 'deck_master'}
+        projectId={currentProjectId != null ? Number(currentProjectId) : 0}
+        initialHint={(currentProject?.deckStyleUserHint ?? '').trim()}
+        initialDeckStylePreset={(currentProject?.deckStylePreset ?? 'aurora_glass').trim() || 'aurora_glass'}
+        initialDeckMasterSourceProjectId={currentProject?.deckMasterSourceProjectId ?? null}
+        onClose={closeManualDialog}
+        onDone={() => {
+          if (userId !== null) void fetchProjects(userId, username);
+        }}
+        onProceedToDeckPages={() => {
+          /* 由 hook 在下一步打开 deck_pages；此处仅刷新列表 */
+          if (userId !== null) void fetchProjects(userId, username);
+        }}
+      />
+      <ManualDeckPagesDialog
+        open={activeManualDialog === 'deck_pages'}
+        projectId={currentProjectId != null ? Number(currentProjectId) : 0}
+        initialDeckStylePromptText={currentProject?.deckStylePromptText ?? null}
+        onClose={closeManualDialog}
+        onDone={() => {
+          if (userId !== null) void fetchProjects(userId, username);
+        }}
+        onConfirmHandoff={() => setWorkflowPanelOpen(false)}
+        onGenerationStarted={() => setRetryPollBoostUntil(Date.now() + 20_000)}
+      />
+      <ProjectDetailsModal
+        open={projectDetailsOpen}
+        onClose={() => setProjectDetailsOpen(false)}
+        projectId={
+          currentProjectId != null && Number.isFinite(Number(currentProjectId))
+            ? Number(currentProjectId)
+            : null
+        }
       />
 
       {(editorFlashMessage || timelineError) ? (
@@ -2180,47 +2433,47 @@ export default function App() {
       ) : null}
 
       <div className="ai-panel-host relative flex min-h-0 flex-1 overflow-hidden">
-        <DetailPanel
-          width={sidebarWidth}
-          clip={detailPanelClip}
-          surface={detailPanelSurface}
-          onSeek={handleSeek}
-          isGenerating={editorUiBlocked}
-          currentTime={currentTime}
-          totalDurationMs={timelineTotalMs}
-          projectId={
-            currentProjectId != null && Number.isFinite(Number(currentProjectId))
-              ? Number(currentProjectId)
-              : null
-          }
-          onAudioResynthStart={onAudioResynthStart}
-          onAudioResynthEnd={onAudioResynthEnd}
-          onAudioResynthSuccess={onAudioResynthSuccess}
-          onDeckPageRegenSubmitted={onDeckPageRegenSubmitted}
-          onDeckPageRegenExportInvalidate={onDeckPageRegenExportInvalidate}
-          onDeckPageRegenExportRevert={onDeckPageRegenExportRevert}
-          deckRegenerating={headerDeckRegenPending}
-          deckRegeneratingPageNodeId={headerDeckRegenPendingPageNodeId}
-          onNotify={(message) => {
-            setEditorFlashDownloadUrl(null);
-            setEditorFlashMessage(message);
-          }}
-          playback={{
-            steps: playSteps,
-            currentStepIndex: currentStep,
-            globalMs,
-            totalMs: timelineTotalMs,
-            isPlaying,
-          }}
-        />
+        {!leftDetailCollapsed ? (
+          <>
+            <DetailPanel
+              width={sidebarWidth}
+              clip={detailPanelClip}
+              surface={detailPanelSurface}
+              onSeek={handleSeek}
+              isGenerating={editorUiBlocked}
+              currentTime={currentTime}
+              totalDurationMs={timelineTotalMs}
+              projectId={
+                currentProjectId != null && Number.isFinite(Number(currentProjectId))
+                  ? Number(currentProjectId)
+                  : null
+              }
+              onAudioResynthSuccess={onAudioResynthSuccess}
+              onDeckPageRegenSubmitted={onDeckPageRegenSubmitted}
+              deckRegenerating={deckRegenWatchActive}
+              deckRegeneratingPageNodeId={deckRegenWatchPageNodeId}
+              onNotify={(message) => {
+                setEditorFlashDownloadUrl(null);
+                setEditorFlashMessage(message);
+              }}
+              playback={{
+                steps: playSteps,
+                currentStepIndex: currentStep,
+                globalMs,
+                totalMs: timelineTotalMs,
+                isPlaying,
+              }}
+            />
 
-        <div
-          className="w-1.5 hover:bg-purple-500 bg-zinc-800 light:bg-slate-200 cursor-col-resize shrink-0 z-20 transition-colors"
-          onMouseDown={handleSidebarMouseDown}
-        />
+            <div
+              className="w-1.5 cursor-col-resize shrink-0 z-20 bg-[var(--sf-splitter-track)] transition-colors hover:bg-purple-500"
+              onMouseDown={handleSidebarMouseDown}
+            />
+          </>
+        ) : null}
 
         <MainWorkspace
-          steps={workspaceWorkflowSteps}
+          steps={editorDisplaySteps}
           timelineUnlocked={editorTimelineUnlocked}
           currentTime={currentTime}
           clips={clips}
@@ -2238,30 +2491,45 @@ export default function App() {
           totalDurationMs={timelineTotalMs}
           showSubtitles={previewSubtitlesVisible}
         />
-        <AIAssistantPanel
-          isOpen={aiPanelOpen}
-          onClose={() => setAiPanelOpen(false)}
-          clip={aiPanelClip}
+        <EditorRightSidebar
+          isOpen={editorRightSidebarOpen}
+          onClose={() => setEditorRightSidebarOpen(false)}
+          activeModule={editorRightSidebarModule}
           defaultOpenWidthRatio={0.4}
           maxWidthRatio={0.6}
-          leftSafeOffsetPx={sidebarWidth + 6}
-          contextHtmlText={aiContextHtmlText}
-          draftHtmlText={aiDraft?.draftHtml || null}
-          isGenerating={aiGenerating}
-          errorText={aiError}
-          onGenerate={handleGenerateAiDraft}
-          onApplyChanges={() => void handleApplyAiDraft()}
-          onDiscardDraft={handleDiscardAiDraft}
-          onDraftChange={handleEditAiDraft}
+          leftSafeOffsetPx={leftDetailCollapsed ? 12 : sidebarWidth + 6}
+          deck={{
+            clip: aiPanelClip,
+            contextHtmlText: aiContextHtmlText,
+            draftHtmlText: aiDraft?.draftHtml || null,
+            isGenerating: aiGenerating,
+            errorText: aiError,
+            onGenerate: handleGenerateAiDraft,
+            onApplyChanges: () => void handleApplyAiDraft(),
+            onDiscardDraft: handleDiscardAiDraft,
+            onDraftChange: handleEditAiDraft,
+          }}
+          narration={{
+            clip: narrationPanelClip,
+            baselineText: narrationBaselineForPanel,
+            draftText: narrationDraftTextForPanel,
+            isResynthesizing: narrationResynthBusy,
+            isApplying: narrationApplyBusy,
+            errorText: narrationPanelError,
+            onDraftChange: handleNarrationDraftChange,
+            onResynthesize: () => void handleResynthesizeNarrationDraft(),
+            onApply: () => void handleApplyNarrationDraft(),
+            onDiscard: handleDiscardNarrationDraft,
+          }}
         />
       </div>
 
       <div
-        className="h-1.5 hover:bg-purple-500 bg-zinc-800 light:bg-slate-200 cursor-row-resize shrink-0 z-20 transition-colors relative"
+        className="relative z-20 h-1.5 shrink-0 cursor-row-resize bg-[var(--sf-splitter-track)] transition-colors hover:bg-purple-500"
         onMouseDown={handleTimelineMouseDown}
       >
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-8 h-0.5 bg-zinc-600 light:bg-slate-300 rounded-full" />
+          <div className="h-0.5 w-8 rounded-full bg-[var(--sf-splitter-handle)]" />
         </div>
       </div>
 
@@ -2277,9 +2545,12 @@ export default function App() {
         isGenerating={editorUiBlocked}
         onClipChange={handleClipChange}
         onVideoClipDoubleClick={handleOpenAiPanelForVideoClip}
+        onAudioClipDoubleClick={handleOpenNarrationPanelForAudioClip}
         totalDurationMs={timelineTotalMs}
         subtitlesVisible={previewSubtitlesVisible}
         onSubtitlesVisibleChange={setPreviewSubtitlesVisible}
+        leftDetailCollapsed={leftDetailCollapsed}
+        onLeftDetailCollapsedChange={setLeftDetailCollapsed}
       />
 
       <audio

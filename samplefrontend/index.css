@@ -1,0 +1,688 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+@import "./styles/theme-layout.css";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+/*
+  通过覆盖 Tailwind v4 的 zinc 调色变量，实现全局亮色主题：
+  现有大量 bg-zinc/text-zinc 类无需逐个改写。
+*/
+html[data-theme='light'] {
+  color-scheme: light;
+  --color-zinc-50: #0f172a;
+  --color-zinc-100: #1e293b;
+  --color-zinc-200: #334155;
+  --color-zinc-300: #475569;
+  --color-zinc-400: #64748b;
+  --color-zinc-500: #94a3b8;
+  --color-zinc-600: #cbd5e1;
+  --color-zinc-700: #e2e8f0;
+  --color-zinc-800: #f1f5f9;
+  --color-zinc-900: #f8fafc;
+  --color-zinc-950: #ffffff;
+}
+
+/*
+  亮色模式下中性半透明标签（非成功/失败语义）单独提亮与加对比，
+  避免在浅底上出现“发灰、发脏”的观感。
+*/
+html[data-theme='light'] .sf-chip-neutral {
+  border-color: var(--sf-chip-neutral-border) !important;
+  background-color: var(--sf-chip-neutral-bg) !important;
+  color: var(--sf-chip-neutral-text) !important;
+}
+
+html[data-theme='light'] .sf-chip-neutral:hover {
+  border-color: var(--sf-chip-neutral-hover-border) !important;
+  background-color: var(--sf-chip-neutral-hover-bg) !important;
+  color: var(--sf-chip-neutral-hover-text) !important;
+}
+
+/* 首页「最近项目 / 云共享」等卡片上的状态标签：亮色下浅色底 + 黑字（无灰底） */
+html[data-theme='light'] .sf-pipeline-chip.sf-pipeline-failed {
+  border-color: var(--sf-chip-danger-border) !important;
+  background-color: var(--sf-chip-danger-bg) !important;
+  color: var(--sf-chip-danger-text) !important;
+}
+
+html[data-theme='light'] .sf-pipeline-chip.sf-pipeline-video {
+  border-color: var(--sf-chip-success-border) !important;
+  background-color: var(--sf-chip-success-bg) !important;
+  color: var(--sf-chip-success-text) !important;
+}
+
+html[data-theme='light'] .sf-pipeline-chip.sf-pipeline-ready {
+  border-color: var(--sf-chip-ready-border) !important;
+  background-color: var(--sf-chip-ready-bg) !important;
+  color: var(--sf-chip-ready-text) !important;
+}
+
+html[data-theme='light'] .sf-pipeline-chip.sf-pipeline-queue {
+  border-color: var(--sf-chip-info-border) !important;
+  background-color: var(--sf-chip-info-bg) !important;
+  color: var(--sf-chip-info-text) !important;
+}
+
+html[data-theme='light'] .sf-pipeline-chip.sf-pipeline-busy {
+  border-color: var(--sf-chip-warning-border) !important;
+  background-color: var(--sf-chip-warning-bg) !important;
+  color: var(--sf-chip-warning-text) !important;
+}
+
+html[data-theme='light'] .sf-chip-locked {
+  border-color: var(--sf-chip-warning-border) !important;
+  background-color: var(--sf-chip-warning-bg) !important;
+  color: var(--sf-chip-warning-text) !important;
+}
+
+html[data-theme='light'] .sf-deck-master-badge.sf-deck-master-reused {
+  border-color: var(--sf-chip-violet-border) !important;
+  background-color: var(--sf-chip-violet-bg) !important;
+  color: var(--sf-chip-violet-text) !important;
+}
+
+/* 编辑器 TopBar 流程标签：亮色下避免灰蒙，统一浅彩底 + 深字 */
+html[data-theme='light'] .sf-topbar-progress .sf-topbar-step-dot.sf-topbar-step-dot-success {
+  border-color: var(--sf-chip-success-border) !important;
+  background-color: var(--sf-chip-success-bg) !important;
+  color: var(--sf-chip-success-text) !important;
+}
+
+html[data-theme='light'] .sf-topbar-progress .sf-topbar-step-dot.sf-topbar-step-dot-running {
+  border-color: var(--sf-chip-info-border) !important;
+  background-color: var(--sf-chip-info-bg) !important;
+  color: var(--sf-chip-info-text) !important;
+}
+
+html[data-theme='light'] .sf-topbar-progress .sf-topbar-step-dot.sf-topbar-step-dot-error {
+  border-color: var(--sf-chip-danger-border) !important;
+  background-color: var(--sf-chip-danger-bg) !important;
+  color: var(--sf-chip-danger-text) !important;
+}
+
+html[data-theme='light'] .sf-topbar-progress .sf-topbar-step-dot.sf-topbar-step-dot-waiting {
+  border-color: var(--sf-chip-info-border) !important;
+  background-color: var(--sf-chip-info-bg) !important;
+  color: var(--sf-chip-info-text) !important;
+}
+
+html[data-theme='light'] .sf-topbar-progress .sf-topbar-step-dot.sf-topbar-step-dot-pending {
+  border-color: var(--sf-chip-ready-border) !important;
+  background-color: var(--sf-chip-ready-bg) !important;
+  color: var(--sf-chip-ready-text) !important;
+}
+
+html[data-theme='light'] .sf-topbar-progress .sf-topbar-step-label {
+  color: var(--sf-topbar-step-label) !important;
+}
+
+html[data-theme='light'] .sf-topbar-progress .sf-topbar-step-label.sf-topbar-step-label-error {
+  color: var(--sf-topbar-step-label-error) !important;
+}
+
+html[data-theme='light'] .sf-topbar-progress .sf-topbar-step-label.sf-topbar-step-label-waiting {
+  color: var(--sf-topbar-step-label-waiting) !important;
+}
+
+html[data-theme='light'] .sf-topbar-progress .sf-topbar-export-btn {
+  border-color: var(--sf-topbar-export-border) !important;
+  background-color: var(--sf-topbar-export-bg) !important;
+  color: var(--sf-topbar-export-text) !important;
+}
+
+/* MainWorkspace：亮色下去灰化 */
+html[data-theme='light'] .sf-main-workspace .sf-main-preview-shell {
+  border-color: rgb(191 219 254 / 0.85) !important;
+  background-color: rgb(248 250 252) !important;
+}
+
+html[data-theme='light'] .sf-main-workspace.sf-main-gate-screen {
+  background-color: rgb(248 250 252) !important;
+}
+
+html[data-theme='light'] .sf-main-workspace .sf-main-gate-title {
+  color: rgb(2 6 23) !important;
+}
+
+html[data-theme='light'] .sf-main-workspace .sf-main-gate-desc {
+  color: rgb(71 85 105) !important;
+}
+
+html[data-theme='light'] .sf-main-workspace .sf-main-gate-waiting {
+  border-color: rgb(56 189 248 / 0.55) !important;
+  background-color: rgb(224 242 254 / 0.95) !important;
+  color: rgb(3 105 161) !important;
+}
+
+html[data-theme='light'] .sf-main-workspace .sf-main-preview-overlay {
+  background: rgb(248 250 252) !important;
+  background-image: none !important;
+  opacity: 1 !important;
+}
+
+html[data-theme='light'] .sf-main-workspace .sf-main-audio-chip {
+  border-color: rgb(59 130 246 / 0.5) !important;
+  background-color: rgb(219 234 254 / 0.96) !important;
+  color: rgb(0 0 0) !important;
+}
+
+html[data-theme='light'] .sf-main-workspace .sf-main-subtitle-chip {
+  background-color: rgb(239 246 255 / 0.92) !important;
+  color: rgb(0 0 0) !important;
+}
+
+html[data-theme='light'] .sf-main-workspace .sf-main-empty-state {
+  color: rgb(71 85 105) !important;
+}
+
+html[data-theme='light'] .sf-main-workspace .sf-main-empty-icon {
+  color: rgb(148 163 184) !important;
+}
+
+html[data-theme='light'] .sf-main-workspace .sf-main-preview-control {
+  border-color: rgb(148 163 184 / 0.55) !important;
+  background-color: rgb(241 245 249 / 0.95) !important;
+  color: rgb(15 23 42) !important;
+}
+
+html[data-theme='light'] .sf-main-workspace .sf-main-preview-control:hover {
+  border-color: rgb(100 116 139 / 0.65) !important;
+  background-color: rgb(226 232 240 / 0.95) !important;
+  color: rgb(2 6 23) !important;
+}
+
+html[data-theme='light'] .sf-main-workspace .sf-main-fullscreen-bar {
+  border-top-color: rgb(203 213 225 / 0.9) !important;
+  background-color: rgb(248 250 252 / 0.94) !important;
+}
+
+html[data-theme='light'] .sf-main-workspace .sf-main-progress-track {
+  background-color: rgb(191 219 254) !important;
+}
+
+html[data-theme='light'] .sf-main-workspace .sf-main-progress-fill {
+  background-color: rgb(79 70 229) !important;
+}
+
+/* WorkflowPanel：亮色主题整体适配 */
+html[data-theme='light'] .sf-workflow-panel {
+  background-color: rgb(241 245 249) !important;
+}
+
+html[data-theme='light'] .sf-workflow-panel .sf-workflow-canvas-glow {
+  display: none !important;
+}
+
+html[data-theme='light'] .sf-workflow-panel .sf-workflow-canvas-dots {
+  opacity: 0 !important;
+}
+
+html[data-theme='light'] .sf-workflow-panel [role='dialog'] {
+  border-color: rgb(203 213 225 / 0.9) !important;
+  background-color: rgb(255 255 255 / 0.98) !important;
+  box-shadow: 0 24px 90px rgba(15, 23, 42, 0.18) !important;
+  ring-color: transparent !important;
+}
+
+html[data-theme='light'] .sf-workflow-panel .sf-workflow-canvas {
+  background-color: rgb(248 250 252) !important;
+}
+
+/* 未激活的依赖连线：深色画布用浅描边，浅色画布用深描边（避免白线贴在浅底上看不见） */
+.sf-workflow-panel svg .sf-workflow-edge-base {
+  stroke: rgba(255, 255, 255, 0.14);
+}
+
+html[data-theme='light'] .sf-workflow-panel svg .sf-workflow-edge-base {
+  stroke: rgba(51, 65, 85, 0.4);
+}
+
+html[data-theme='light'] .sf-workflow-panel [data-workflow-node-card] {
+  border-color: rgb(203 213 225 / 0.8) !important;
+  background-color: rgb(255 255 255 / 0.92) !important;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.09) !important;
+}
+
+html[data-theme='light'] .sf-workflow-panel [data-workflow-node-card] .text-zinc-50 {
+  color: rgb(2 6 23) !important;
+}
+
+html[data-theme='light'] .sf-workflow-panel [data-workflow-node-card] .text-zinc-500,
+html[data-theme='light'] .sf-workflow-panel [data-workflow-node-card] .text-zinc-400 {
+  color: rgb(71 85 105) !important;
+}
+
+html[data-theme='light'] .sf-workflow-panel .border-zinc-800\/90,
+html[data-theme='light'] .sf-workflow-panel .border-zinc-700\/80 {
+  border-color: rgb(203 213 225 / 0.9) !important;
+}
+
+/* Home：亮色模式使用用户自定义主题变量 */
+html[data-theme='light'] .sf-home-root {
+  background-color: var(--sf-bg-base) !important;
+  color: var(--sf-text-primary) !important;
+}
+
+html[data-theme='light'] .sf-home-root [class*='text-zinc-200'],
+html[data-theme='light'] .sf-home-root [class*='text-zinc-100'] {
+  color: var(--sf-text-primary) !important;
+}
+
+html[data-theme='light'] .sf-home-root [class*='text-zinc-300'],
+html[data-theme='light'] .sf-home-root [class*='text-zinc-400'] {
+  color: var(--sf-text-secondary) !important;
+}
+
+html[data-theme='light'] .sf-home-root [class*='text-zinc-500'],
+html[data-theme='light'] .sf-home-root [class*='text-zinc-600'] {
+  color: var(--sf-text-muted) !important;
+}
+
+html[data-theme='light'] .sf-home-root [class*='border-zinc-800'],
+html[data-theme='light'] .sf-home-root [class*='border-zinc-700'],
+html[data-theme='light'] .sf-home-root [class*='border-zinc-600'] {
+  border-color: var(--sf-border-base) !important;
+}
+
+html[data-theme='light'] .sf-home-root [class*='bg-zinc-950/'],
+html[data-theme='light'] .sf-home-root [class*='bg-zinc-900/'],
+html[data-theme='light'] .sf-home-root [class*='bg-zinc-800/'] {
+  background-color: var(--sf-bg-card) !important;
+}
+
+/* 创建主按钮：避免 [class*='text-zinc-500'] 误匹配 Tailwind 的 disabled:text-zinc-500，保证字色为白 */
+html[data-theme='light'] .sf-home-root .sf-home-create-submit {
+  color: rgb(255 255 255) !important;
+}
+
+html[data-theme='light'] .sf-home-root .sf-home-create-submit:disabled {
+  color: rgb(228 228 231) !important;
+}
+
+/*
+  底部编辑器时间轴（浅色）：保留全局反转后的浅底，只把 zinc 文字从「浅灰」拉成可读深色；
+  时间码芯片与首页一致用 sf-chip-neutral 变量。
+*/
+html[data-theme='light'] .sf-editor-timeline {
+  color: var(--sf-text-primary);
+}
+
+html[data-theme='light'] .sf-editor-timeline .sf-text-primary {
+  color: var(--sf-text-primary) !important;
+}
+
+html[data-theme='light'] .sf-editor-timeline [class*='text-zinc-100'],
+html[data-theme='light'] .sf-editor-timeline [class*='text-zinc-200'] {
+  color: var(--sf-text-primary) !important;
+}
+
+html[data-theme='light'] .sf-editor-timeline [class*='text-zinc-300'],
+html[data-theme='light'] .sf-editor-timeline [class*='text-zinc-400'] {
+  color: var(--sf-text-secondary) !important;
+}
+
+html[data-theme='light'] .sf-editor-timeline [class*='text-zinc-500'] {
+  color: var(--sf-text-muted) !important;
+}
+
+html[data-theme='light'] .sf-editor-timeline .sf-chip-neutral {
+  border-color: var(--sf-chip-neutral-border) !important;
+  background-color: var(--sf-chip-neutral-bg) !important;
+  color: var(--sf-chip-neutral-text) !important;
+}
+
+html[data-theme='light'] .sf-editor-timeline .sf-chip-neutral:hover {
+  border-color: var(--sf-chip-neutral-hover-border) !important;
+  background-color: var(--sf-chip-neutral-hover-bg) !important;
+  color: var(--sf-chip-neutral-hover-text) !important;
+}
+
+/* 轨道片段标签原为浅色系字，浅底上改深一点保持可读 */
+html[data-theme='light'] .sf-editor-timeline .text-blue-200 {
+  color: rgb(29 78 216) !important;
+}
+
+html[data-theme='light'] .sf-editor-timeline .text-purple-200 {
+  color: rgb(109 40 217) !important;
+}
+
+html[data-theme='light'] .sf-editor-timeline .text-purple-300 {
+  color: rgb(91 33 182) !important;
+}
+
+html[data-theme='light'] .sf-editor-timeline .text-violet-100 {
+  color: rgb(91 33 182) !important;
+}
+
+html[data-theme='light'] .sf-editor-timeline .text-emerald-200 {
+  color: rgb(4 120 87) !important;
+}
+
+html[data-theme='light'] .sf-editor-timeline .text-orange-200 {
+  color: rgb(194 65 12) !important;
+}
+
+/* AI Assistant Panel: 补齐亮色主题中的语义色适配（避免残留深色块） */
+.sf-ai-instruction-input::placeholder {
+  color: rgb(113 113 122);
+}
+
+.sf-ai-discard-btn:hover {
+  background-color: rgb(39 39 42 / 0.7);
+}
+
+html[data-theme='light'] .sf-ai-assistant-panel .sf-ai-baseline-card {
+  border-color: rgb(147 197 253 / 0.75) !important;
+  background-color: rgb(239 246 255) !important;
+}
+
+html[data-theme='light'] .sf-ai-assistant-panel .sf-ai-baseline-label {
+  color: rgb(29 78 216) !important;
+}
+
+html[data-theme='light'] .sf-ai-assistant-panel .sf-ai-draft-card {
+  border-color: rgb(110 231 183 / 0.85) !important;
+  background-color: rgb(236 253 245) !important;
+}
+
+html[data-theme='light'] .sf-ai-assistant-panel .sf-ai-draft-label {
+  color: rgb(5 150 105) !important;
+}
+
+html[data-theme='light'] .sf-ai-assistant-panel .sf-ai-format-btn {
+  border-color: rgb(110 231 183 / 0.9) !important;
+  background-color: rgb(236 253 245) !important;
+  color: rgb(6 95 70) !important;
+}
+
+html[data-theme='light'] .sf-ai-assistant-panel .sf-ai-format-btn:hover {
+  background-color: rgb(209 250 229) !important;
+}
+
+html[data-theme='light'] .sf-ai-assistant-panel .sf-ai-error-box {
+  border-color: rgb(254 202 202) !important;
+  background-color: rgb(254 242 242) !important;
+  color: rgb(185 28 28) !important;
+}
+
+html[data-theme='light'] .sf-ai-assistant-panel .sf-ai-instruction-input::placeholder {
+  color: rgb(100 116 139);
+}
+
+html[data-theme='light'] .sf-ai-assistant-panel .sf-ai-discard-btn:hover {
+  background-color: rgb(241 245 249);
+}
+
+/* ---------- 全局：弹窗遮罩（避免浅色下仍用半透明黑） ---------- */
+.sf-modal-backdrop {
+  background-color: rgb(0 0 0 / 0.55);
+}
+
+.sf-modal-backdrop-medium {
+  background-color: rgb(0 0 0 / 0.6);
+}
+
+.sf-modal-backdrop-dense {
+  background-color: rgb(0 0 0 / 0.7);
+}
+
+html[data-theme='light'] .sf-modal-backdrop {
+  background-color: rgb(15 23 42 / 0.38) !important;
+}
+
+html[data-theme='light'] .sf-modal-backdrop-medium {
+  background-color: rgb(15 23 42 / 0.44) !important;
+}
+
+html[data-theme='light'] .sf-modal-backdrop-dense {
+  background-color: rgb(15 23 42 / 0.52) !important;
+}
+
+/* 代码块 / 日志区：浅色底 */
+.sf-code-block {
+  border-color: rgb(63 63 70 / 0.65);
+  background-color: rgb(0 0 0 / 0.2);
+}
+
+html[data-theme='light'] .sf-code-block {
+  border-color: rgb(226 232 240) !important;
+  background-color: rgb(248 250 252) !important;
+  color: rgb(51 65 85) !important;
+}
+
+/* 应用根壳：编辑器 / 首页外层 */
+html[data-theme='light'] .sf-app-shell {
+  background-color: var(--sf-bg-base) !important;
+  color: var(--sf-text-primary) !important;
+}
+
+/* 浅色下修正「为深色设计的 hover:text-white / group-hover:text-white」 */
+html[data-theme='light'] .sf-theme .hover\:text-white:hover {
+  color: var(--sf-text-primary) !important;
+}
+
+html[data-theme='light'] .sf-theme .group:hover .group-hover\:text-white {
+  color: var(--sf-text-primary) !important;
+}
+
+html[data-theme='light'] .sf-theme .hover\:bg-white\/5:hover {
+  background-color: rgb(15 23 42 / 0.06) !important;
+}
+
+html[data-theme='light'] .sf-theme .hover\:bg-white\/10:hover {
+  background-color: rgb(15 23 42 / 0.09) !important;
+}
+
+/* 工作流画布节点：暗色用半透明黑压暗，浅色用浅灰 */
+.sf-workflow-node-dim {
+  background-color: rgb(0 0 0 / 0.25);
+}
+
+html[data-theme='light'] .sf-workflow-node-dim {
+  background-color: rgb(15 23 42 / 0.06) !important;
+}
+
+html[data-theme='light'] .sf-workflow-panel .sf-workflow-revert-corner {
+  background-color: rgb(254 202 202 / 0.72) !important;
+}
+
+html[data-theme='light'] .sf-detail-amber-hint {
+  border-color: rgb(253 230 138 / 0.85) !important;
+  background-color: rgb(255 251 235) !important;
+  color: rgb(180 83 9) !important;
+}
+
+/* PageRenderer：占位页 / 概览类假页（浅色：纯色底，无渐变） */
+html[data-theme='light'] .sf-deck-state-placeholder {
+  background: rgb(248 250 252) !important;
+  background-image: none !important;
+}
+
+html[data-theme='light'] .sf-deck-faux-page {
+  background: rgb(248 250 252) !important;
+  background-image: none !important;
+}
+
+/* Home：创建项目表单（浅色：去渐变与装饰光晕） */
+html[data-theme='light'] .sf-home-create-form {
+  background: var(--sf-bg-card) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+html[data-theme='light'] .sf-home-create-form-glow {
+  display: none !important;
+}
+
+/* 工作流弹窗顶栏 */
+html[data-theme='light'] .sf-workflow-dialog-header {
+  background: var(--sf-bg-card) !important;
+  background-image: none !important;
+}
+
+/* TopBar 未进入工程时的 Logo 方块 */
+html[data-theme='light'] .sf-topbar-logo-mark {
+  background: rgb(139 92 246) !important;
+  background-image: none !important;
+  box-shadow: 0 0 0 1px rgb(139 92 246 / 0.35) !important;
+}
+
+/* 悬浮工作流演示卡片 */
+html[data-theme='light'] .sf-floating-workflow-task-bg {
+  display: none !important;
+}
+
+html[data-theme='light'] .sf-floating-workflow-progress-fill {
+  background: rgb(124 58 237) !important;
+  background-image: none !important;
+}
+
+/* PageRenderer 信号页柱状图（浅色实心） */
+html[data-theme='light'] .sf-signals-chart-bar {
+  background: rgb(192 132 252) !important;
+  background-image: none !important;
+}
+
+html[data-theme='light'] .sf-floating-workflow-shell {
+  background-color: var(--sf-bg-card) !important;
+  backdrop-filter: none !important;
+}
+
+html[data-theme='light'] .sf-deck-state-error-detail {
+  border-color: var(--sf-chip-danger-border) !important;
+  background-color: var(--sf-chip-danger-bg) !important;
+  color: var(--sf-chip-danger-text) !important;
+}
+
+/* 口播助理面板（与 AI Deck 草稿对称） */
+html[data-theme='light'] .sf-narration-assistant-panel .sf-narration-baseline-card {
+  border-color: rgb(196 181 253 / 0.85) !important;
+  background-color: rgb(245 243 255) !important;
+}
+
+html[data-theme='light'] .sf-narration-assistant-panel .sf-narration-baseline-label {
+  color: rgb(109 40 217) !important;
+}
+
+html[data-theme='light'] .sf-narration-assistant-panel .sf-narration-draft-card {
+  border-color: rgb(192 132 252 / 0.75) !important;
+  background-color: rgb(250 245 255) !important;
+}
+
+html[data-theme='light'] .sf-narration-assistant-panel .sf-narration-draft-label {
+  color: rgb(126 34 206) !important;
+}
+
+html[data-theme='light'] .sf-narration-assistant-panel .sf-narration-error-box {
+  border-color: rgb(254 202 202) !important;
+  background-color: rgb(254 242 242) !important;
+  color: rgb(185 28 28) !important;
+}
+
+html[data-theme='light'] .sf-narration-assistant-panel .sf-narration-discard-btn:hover {
+  background-color: rgb(241 245 249);
+}
+
+/* App 内轻提示条（顶栏错误 / 编辑器 toast） */
+html[data-theme='light'] .sf-toast-error-block {
+  border-color: rgb(254 202 202) !important;
+  background-color: rgb(254 242 242 / 0.96) !important;
+  color: rgb(185 28 28) !important;
+}
+
+html[data-theme='light'] .sf-toast-editor-success {
+  border-color: rgb(167 243 208) !important;
+  background-color: rgb(236 253 245 / 0.96) !important;
+  color: rgb(4 120 87) !important;
+}
+
+html[data-theme='light'] .sf-toast-editor-error {
+  border-color: rgb(254 202 202) !important;
+  background-color: rgb(254 242 242 / 0.96) !important;
+  color: rgb(185 28 28) !important;
+}
+
+html[data-theme='light'] .sf-toast-timeline-warn {
+  border-color: rgb(253 230 138) !important;
+  background-color: rgb(255 251 235 / 0.96) !important;
+  color: rgb(180 83 9) !important;
+}
+
+/* 主预览字幕条：暗色半透明黑底（亮色由下方规则覆盖） */
+.sf-main-subtitle-chip {
+  background-color: rgb(0 0 0 / 0.15);
+}
+
+html[data-theme='light'] .sf-main-workspace .sf-scrollbar-visible,
+html[data-theme='light'] .sf-theme .sf-scrollbar-visible {
+  scrollbar-color: rgb(148 163 184) rgb(241 245 249);
+}
+
+html[data-theme='light'] .sf-theme .sf-scrollbar-visible::-webkit-scrollbar-thumb {
+  background-color: rgb(148 163 184);
+}
+
+html[data-theme='light'] .sf-theme .sf-scrollbar-visible::-webkit-scrollbar-track {
+  background-color: rgb(241 245 249);
+}
+
+html,
+body {
+  height: 100%;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+}
+
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+/*
+  全局隐藏滚动条后，可滚动区域若无其它提示，用户会误以为内容已到底。
+  在需要「看得见还能滚」的容器上添加此类（优先级高于上面的 * 规则）。
+*/
+.sf-scrollbar-visible {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(82 82 91) rgb(39 39 42);
+  -ms-overflow-style: auto;
+}
+
+.sf-scrollbar-visible::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.sf-scrollbar-visible::-webkit-scrollbar-thumb {
+  background-color: rgb(63 63 70);
+  border-radius: 9999px;
+}
+
+.sf-scrollbar-visible::-webkit-scrollbar-track {
+  background-color: rgb(24 24 27 / 0.6);
+}
+
+@keyframes sf-flow-dash {
+  to {
+    stroke-dashoffset: -8;
+  }
+}
+
+.animate-flow {
+  animation: sf-flow-dash 1s linear infinite;
+}

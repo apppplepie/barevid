@@ -443,6 +443,39 @@ async def run_resynthesize_single_step_audio(
     }
 
 
+async def _run_deck_master_entry_parallel(project_id: int) -> None:
+    """与文本结构化并行：生成风格母版并同步 workflow（DAG 入口 deck_master）。"""
+    from app.services.deck import ensure_style_base, sync_demo_workflow_from_deck
+
+    try:
+        await ensure_style_base(project_id)
+        async with async_session_maker() as session:
+            await wf_engine.notify_deck_master_success_if_pending(session, project_id)
+            await sync_demo_workflow_from_deck(session, project_id)
+            await session.commit()
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        logger.exception("project %s deck_master entry failed", project_id)
+        detail = _clip_pipeline_err(e)
+        try:
+            async with async_session_maker() as session:
+                project = await session.get(Project, project_id)
+                if project:
+                    await wf_engine.set_step(
+                        session,
+                        project,
+                        wf_engine.STEP_DECK_MASTER,
+                        wf_engine.STEP_FAILED,
+                        error_message=detail,
+                    )
+                    await session.commit()
+        except Exception:
+            logger.exception(
+                "project %s failed to persist deck_master failure", project_id
+            )
+
+
 async def _run_audio_and_deck_parallel(project_id: int) -> None:
     """文本已成功：配音与演示页并行。"""
     from app.services.deck import (
@@ -539,10 +572,14 @@ async def run_text_rebuild_job(project_id: int) -> None:
         await session.commit()
 
     structured: StructuredPodcast | None = None
+    deck_master_task = asyncio.create_task(
+        _run_deck_master_entry_parallel(project_id)
+    )
     try:
         async with async_session_maker() as session:
             project = await session.get(Project, project_id)
             if project is None or project.status != "structuring":
+                await deck_master_task
                 return
             raw = (project.input_prompt or "").strip()
             if not raw:
@@ -555,6 +592,7 @@ async def run_text_rebuild_job(project_id: int) -> None:
         async with async_session_maker() as session:
             project = await session.get(Project, project_id)
             if project is None or project.status != "structuring":
+                await deck_master_task
                 return
             assert structured is not None
             await _persist_structured_outline(
@@ -568,14 +606,17 @@ async def run_text_rebuild_job(project_id: int) -> None:
                 p.status = "failed"
                 session.add(p)
                 await session.commit()
+        await deck_master_task
         return
 
+    await deck_master_task
     await _run_audio_and_deck_parallel(project_id)
 
 
 async def run_queued_project_pipeline_job(project_id: int) -> None:
     """
-    后台：queued → structuring → 结构化入库 → draft →（配音 ∥ 演示页）并行。
+    后台：queued → structuring；结构化阶段与 deck_master（风格母版）并行；
+    入库 draft 后（配音 ∥ 演示页）并行。
     与 POST /api/projects 配对；若项目已被删或状态不是 queued 则直接返回。
     """
     async with async_session_maker() as session:
@@ -597,10 +638,14 @@ async def run_queued_project_pipeline_job(project_id: int) -> None:
         await session.commit()
 
     structured: StructuredPodcast | None = None
+    deck_master_task = asyncio.create_task(
+        _run_deck_master_entry_parallel(project_id)
+    )
     try:
         async with async_session_maker() as session:
             project = await session.get(Project, project_id)
             if project is None or project.status != "structuring":
+                await deck_master_task
                 return
             raw = (project.input_prompt or "").strip()
             if not raw:
@@ -613,6 +658,7 @@ async def run_queued_project_pipeline_job(project_id: int) -> None:
         async with async_session_maker() as session:
             project = await session.get(Project, project_id)
             if project is None or project.status != "structuring":
+                await deck_master_task
                 return
             assert structured is not None
             await _persist_structured_outline(
@@ -626,8 +672,10 @@ async def run_queued_project_pipeline_job(project_id: int) -> None:
                 p.status = "failed"
                 session.add(p)
                 await session.commit()
+        await deck_master_task
         return
 
+    await deck_master_task
     await _run_audio_and_deck_parallel(project_id)
 
 

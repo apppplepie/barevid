@@ -72,6 +72,7 @@ from app.schemas import (
     ProjectCloneRequest,
     ProjectCreate,
     ProjectPatch,
+    WorkflowStepActionBody,
     RegisterRequest,
     ResynthesizeStepAudioRequest,
     SynthesizeAudioResponse,
@@ -120,6 +121,10 @@ from app.services.video_export_jobs import (
     find_active_video_export_job,
     get_latest_video_export_job,
     video_export_job_public_dict,
+)
+from app.services.workflow_controls import (
+    cancel_running_workflow_step,
+    reopen_success_workflow_step,
 )
 from app.services.project_clone import clone_project_deep
 from app.services.project_meta import (
@@ -395,6 +400,9 @@ async def list_projects(
                     if st and st.origin_project_id is not None
                     else deck_master_source_project_id_from_description(p.description)
                 ),
+                "pipeline_auto_advance": bool(
+                    getattr(p, "pipeline_auto_advance", True)
+                ),
             }
         )
     return {"items": items}
@@ -468,6 +476,7 @@ async def create_project(
         else None
     )
     default_w, default_h = _EXPORT_SIZE_BY_PAGE.get(page_size, _EXPORT_SIZE_BY_PAGE[_DEFAULT_PAGE_SIZE])
+    auto_run = bool(body.pipeline_auto_advance)
     project = Project(
         owner_user_id=int(me.id),
         user_id=int(me.id),
@@ -480,6 +489,7 @@ async def create_project(
         deck_width=default_w,
         deck_height=default_h,
         target_narration_seconds=target_sec,
+        pipeline_auto_advance=auto_run,
         created_at=now,
         updated_at=now,
     )
@@ -514,7 +524,8 @@ async def create_project(
 
     await _wf.ensure_workflow_for_project(session, project, align_from_project=False)
     await session.commit()
-    background_tasks.add_task(run_queued_project_pipeline_job, project.id)
+    if auto_run:
+        background_tasks.add_task(run_queued_project_pipeline_job, project.id)
     return {"project_id": project.id}
 
 
@@ -571,9 +582,10 @@ async def patch_project(
     session: AsyncSession = Depends(get_session),
     me: User = Depends(get_current_user),
 ) -> dict:
-    if body.name is None and body.is_shared is None:
+    if body.name is None and body.is_shared is None and body.input_prompt is None:
         raise HTTPException(
-            status_code=400, detail="请提供要修改的字段（name 或 is_shared）"
+            status_code=400,
+            detail="请提供要修改的字段（name / is_shared / input_prompt）",
         )
     project = await _get_accessible_project(session, project_id, int(me.id))
     if not _can_manage_project(project, int(me.id)):
@@ -585,10 +597,65 @@ async def patch_project(
         project.name = name
     if body.is_shared is not None:
         project.is_shared = bool(body.is_shared)
+    if body.input_prompt is not None:
+        project.input_prompt = body.input_prompt.strip()
     project.updated_at = utc_now()
     session.add(project)
     await session.commit()
     return {"ok": True, "name": project.name, "is_shared": bool(project.is_shared)}
+
+
+def _normalize_workflow_step_key(step: str) -> str:
+    s = (step or "").strip().lower()
+    if s == "pages":
+        return "deck_render"
+    return s
+
+
+@app.post("/api/projects/{project_id}/workflow/step/cancel-running")
+async def workflow_step_cancel_running(
+    project_id: int,
+    body: WorkflowStepActionBody,
+    session: AsyncSession = Depends(get_session),
+    me: User = Depends(get_current_user),
+) -> dict:
+    project = await _get_accessible_project(session, project_id, int(me.id))
+    if not _can_manage_project(project, int(me.id)):
+        raise HTTPException(status_code=403, detail="无权限修改该项目")
+    if project.id is None:
+        raise HTTPException(status_code=400, detail="项目无效")
+    key = _normalize_workflow_step_key(body.step)
+    try:
+        await cancel_running_workflow_step(session, project, key)
+        await session.commit()
+    except ValueError as e:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    await session.refresh(project)
+    return {"ok": True}
+
+
+@app.post("/api/projects/{project_id}/workflow/step/reopen-success")
+async def workflow_step_reopen_success(
+    project_id: int,
+    body: WorkflowStepActionBody,
+    session: AsyncSession = Depends(get_session),
+    me: User = Depends(get_current_user),
+) -> dict:
+    project = await _get_accessible_project(session, project_id, int(me.id))
+    if not _can_manage_project(project, int(me.id)):
+        raise HTTPException(status_code=403, detail="无权限修改该项目")
+    if project.id is None:
+        raise HTTPException(status_code=400, detail="项目无效")
+    key = _normalize_workflow_step_key(body.step)
+    try:
+        await reopen_success_workflow_step(session, project, key)
+        await session.commit()
+    except ValueError as e:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    await session.refresh(project)
+    return {"ok": True}
 
 
 @app.delete("/api/projects/{project_id}")
@@ -971,6 +1038,36 @@ async def workflow_run_text(
     return {"ok": True, "queued": True}
 
 
+@app.post("/api/projects/{project_id}/workflow/deck_master/run")
+async def workflow_run_deck_master(
+    project_id: int,
+    session: AsyncSession = Depends(get_session),
+    me: User = Depends(get_current_user),
+) -> dict:
+    """生成/刷新演示风格母版，并同步 workflow_step_runs.deck_master。"""
+    project = await _get_accessible_project(session, project_id, int(me.id))
+    if not _can_manage_project(project, int(me.id)):
+        raise HTTPException(status_code=403, detail="无权限修改该项目")
+    try:
+        await ensure_style_base(project_id)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    await session.refresh(project)
+    async with async_session_maker() as wf_session:
+        await notify_deck_master_success_if_pending(wf_session, project_id)
+        await sync_demo_workflow_from_deck(wf_session, project_id)
+        await wf_session.commit()
+    row = await get_project_style(session, project)
+    ready, theme, ver = deck_style_ready_from_storage(project, row)
+    return {
+        "ok": True,
+        "deck_style_ready": ready,
+        "deck_style_version": ver or 1,
+        "deck_style_theme_name": theme,
+        "deck_style_prompt_text": (row.style_prompt_text or "") if row else "",
+    }
+
+
 @app.post(
     "/api/projects/{project_id}/workflow/audio/run",
     response_model=SynthesizeAudioResponse,
@@ -1012,6 +1109,9 @@ async def workflow_run_demo(
     pl = await compute_project_pipeline(session, project)
     if not pl.get("outline"):
         raise HTTPException(status_code=409, detail="请先完成文本结构化")
+    wf = await workflow_public_dict_async(session, project)
+    if (wf.get("deckMasterStatus") or "").strip().lower() != "success":
+        raise HTTPException(status_code=409, detail="请先完成演示母版")
     if (await compute_project_deck_status(session, project_id)) == "generating":
         raise HTTPException(status_code=409, detail="演示生成中")
     timeline = await load_deck_timeline(session, project_id)

@@ -1,5 +1,6 @@
 """
-带依赖的项目工作流：text → (audio ∥ deck_master) → deck_render → export。
+项目工作流 DAG（入口可并行）：text、deck_master 无依赖；
+audio ← text；deck_render ← text + deck_master；export ← text + audio + deck_render。
 步骤真相源在 workflow_* 表。
 """
 
@@ -35,9 +36,9 @@ EXPORT_FAILED = "export_failed"
 
 WORKFLOW_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     STEP_TEXT: (),
+    STEP_DECK_MASTER: (),
     STEP_AUDIO: (STEP_TEXT,),
-    STEP_DECK_MASTER: (STEP_TEXT,),
-    STEP_DECK_RENDER: (STEP_DECK_MASTER,),
+    STEP_DECK_RENDER: (STEP_TEXT, STEP_DECK_MASTER),
 }
 
 EXPORT_DEPENDS_ON = (STEP_TEXT, STEP_AUDIO, STEP_DECK_RENDER)
@@ -73,7 +74,7 @@ def _compute_overall(
         return "partial"
     if any(st[k] == STEP_RUNNING for k in STEP_KEYS):
         return "running"
-    if st[STEP_TEXT] == STEP_SUCCESS:
+    if st[STEP_TEXT] == STEP_SUCCESS or st[STEP_DECK_MASTER] == STEP_SUCCESS:
         return "running"
     return "pending"
 
@@ -292,10 +293,9 @@ async def notify_deck_master_success_if_pending(
 async def after_text_success_parallel_ready(
     session: AsyncSession, project: Project
 ) -> None:
-    """文本成功：配音与母版待启动，实际执行时再进入 running。"""
+    """文本成功：拉齐依赖 text 的下游为 pending；不修改 deck_master（与 text 并行入口）。"""
     await set_step(session, project, STEP_TEXT, STEP_SUCCESS)
     await set_step(session, project, STEP_AUDIO, STEP_PENDING)
-    await set_step(session, project, STEP_DECK_MASTER, STEP_PENDING)
     await set_step(session, project, STEP_DECK_RENDER, STEP_PENDING)
 
 
@@ -310,7 +310,7 @@ async def reset_downstream_for_text_retry(
         return
     steps = await _load_steps_map(session, int(run.id))
     now = utc_now()
-    for key in (STEP_AUDIO, STEP_DECK_MASTER, STEP_DECK_RENDER):
+    for key in (STEP_AUDIO, STEP_DECK_RENDER):
         if key in steps:
             row = steps[key]
             row.status = STEP_PENDING
@@ -354,6 +354,8 @@ async def on_deck_pages_aggregate(
     if run is None:
         return
     steps = await _load_steps_map(session, int(run.id))
+    if steps.get(STEP_TEXT) and steps[STEP_TEXT].status != STEP_SUCCESS:
+        return
     if steps.get(STEP_DECK_MASTER) and steps[STEP_DECK_MASTER].status != STEP_SUCCESS:
         return
     if any_failed:

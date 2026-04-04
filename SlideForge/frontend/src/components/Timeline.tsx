@@ -1,5 +1,14 @@
 import React, { Fragment, useRef, type ReactNode, type RefObject } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Mic, Video, Captions } from 'lucide-react';
+import {
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Mic,
+  Video,
+  Captions,
+  LayoutPanelLeft,
+} from 'lucide-react';
 import { ClipData, ClipNode } from '../types';
 
 interface TimelineProps {
@@ -14,10 +23,14 @@ interface TimelineProps {
   isGenerating?: boolean;
   onClipChange: (id: string, updates: Partial<ClipData>) => void;
   onVideoClipDoubleClick?: (clip: ClipData) => void;
+  onAudioClipDoubleClick?: (clip: ClipData) => void;
   totalDurationMs?: number;
   /** 预览区是否叠加口播字幕 */
   subtitlesVisible?: boolean;
   onSubtitlesVisibleChange?: (visible: boolean) => void;
+  /** false = 左侧详情栏展开；true = 收起 */
+  leftDetailCollapsed?: boolean;
+  onLeftDetailCollapsedChange?: (collapsed: boolean) => void;
 }
 
 export function Timeline({
@@ -32,9 +45,12 @@ export function Timeline({
   isGenerating,
   onClipChange,
   onVideoClipDoubleClick,
+  onAudioClipDoubleClick,
   totalDurationMs = 100000,
   subtitlesVisible = false,
   onSubtitlesVisibleChange,
+  leftDetailCollapsed = false,
+  onLeftDetailCollapsedChange,
 }: TimelineProps) {
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -134,6 +150,20 @@ export function Timeline({
           >
             <Captions className="h-4 w-4" />
           </button>
+          <button
+            type="button"
+            aria-pressed={!leftDetailCollapsed}
+            title={leftDetailCollapsed ? '显示左侧详情栏' : '隐藏左侧详情栏'}
+            onClick={() => onLeftDetailCollapsedChange?.(!leftDetailCollapsed)}
+            className={[
+              'shrink-0 rounded-md p-2 transition-colors',
+              !leftDetailCollapsed
+                ? 'border border-zinc-600/50 bg-zinc-800/80 text-zinc-200 hover:bg-zinc-800 light:border-slate-300 light:bg-slate-100 light:text-slate-800'
+                : 'border border-transparent text-zinc-400 light:text-slate-500 hover:bg-zinc-800 light:hover:bg-slate-100 hover:text-white light:hover:text-slate-900',
+            ].join(' ')}
+          >
+            <LayoutPanelLeft className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
@@ -197,6 +227,7 @@ export function Timeline({
                     onSelectClip(clip.id);
                     onSeek(clip.start);
                   }}
+                  onDoubleClick={() => onAudioClipDoubleClick?.(clip)}
                   onChange={(updates) => onClipChange(clip.id, updates)}
                   timelineRef={timelineRef}
                   isResizable={!clip.locked}
