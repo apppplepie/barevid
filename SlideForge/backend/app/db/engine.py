@@ -310,7 +310,9 @@ async def _migrate_sqlite(conn) -> None:
         output_snapshot TEXT,
         error_message TEXT,
         started_at DATETIME,
+        ready_at DATETIME,
         finished_at DATETIME,
+        cancelled_at DATETIME,
         updated_at DATETIME NOT NULL,
         FOREIGN KEY(workflow_run_id) REFERENCES workflow_runs(id),
         UNIQUE (workflow_run_id, step_key)
@@ -677,6 +679,8 @@ def _migrate_mysql_text_columns_sync(sync_conn) -> None:
         "ALTER TABLE workflow_step_runs MODIFY COLUMN input_snapshot TEXT NULL",
         "ALTER TABLE workflow_step_runs MODIFY COLUMN output_snapshot TEXT NULL",
         "ALTER TABLE workflow_step_runs MODIFY COLUMN error_message TEXT NULL",
+        "ALTER TABLE workflow_step_runs ADD COLUMN ready_at DATETIME NULL DEFAULT NULL",
+        "ALTER TABLE workflow_step_runs ADD COLUMN cancelled_at DATETIME NULL DEFAULT NULL",
         "ALTER TABLE workflow_export_runs MODIFY COLUMN output_file_url TEXT NULL",
         "ALTER TABLE workflow_export_runs MODIFY COLUMN error_message TEXT NULL",
         "ALTER TABLE workflow_artifacts MODIFY COLUMN file_url TEXT NULL",

@@ -1110,7 +1110,7 @@ async def workflow_run_demo(
     if not pl.get("outline"):
         raise HTTPException(status_code=409, detail="请先完成文本结构化")
     wf = await workflow_public_dict_async(session, project)
-    if (wf.get("deckMasterStatus") or "").strip().lower() != "success":
+    if (wf.get("deckMasterStatus") or "").strip().lower() != "succeeded":
         raise HTTPException(status_code=409, detail="请先完成演示母版")
     if (await compute_project_deck_status(session, project_id)) == "generating":
         raise HTTPException(status_code=409, detail="演示生成中")

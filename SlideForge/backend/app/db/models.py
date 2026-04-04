@@ -92,7 +92,7 @@ class WorkflowRun(SQLModel, table=True):
     owner_user_id: int = Field(foreign_key="users.id", index=True)
     overall_status: str = Field(
         default="pending",
-        description="pending | running | success | failed | partial",
+        description="pending | running | success | failed | partial | cancelled",
     )
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
@@ -112,8 +112,10 @@ class WorkflowStepRun(SQLModel, table=True):
     step_key: str = Field(index=True, description="text | audio | deck_master | deck_render")
     status: str = Field(
         default="pending",
-        description="pending | running | success | failed",
+        description="pending | ready | running | succeeded | failed | cancelled",
     )
+    ready_at: Optional[datetime] = Field(default=None)
+    cancelled_at: Optional[datetime] = Field(default=None)
     attempt_no: int = Field(default=0, ge=0)
     input_snapshot: Optional[str] = Field(default=None, sa_column=Column(Text))
     output_snapshot: Optional[str] = Field(default=None, sa_column=Column(Text))
