@@ -46,6 +46,16 @@ WORKFLOW_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     STEP_DECK_RENDER: (STEP_TEXT, STEP_DECK_MASTER),
 }
 
+# 某步被取消时，需要同步标为「已取消」的下游步骤（DAG 出边）
+STEP_DOWNSTREAM: dict[str, tuple[str, ...]] = {
+    STEP_TEXT: (STEP_AUDIO, STEP_DECK_RENDER),
+    STEP_DECK_MASTER: (STEP_DECK_RENDER,),
+    STEP_AUDIO: (),
+    STEP_DECK_RENDER: (),
+}
+
+_STEP_NON_TERMINAL = {STEP_PENDING, STEP_READY, STEP_RUNNING}
+
 EXPORT_DEPENDS_ON = (STEP_TEXT, STEP_AUDIO, STEP_DECK_RENDER)
 
 
@@ -232,6 +242,29 @@ async def set_step(
         await apply_overall_only(session, run)
 
 
+async def cascade_cancel_dependent_steps(
+    session: AsyncSession,
+    project: Project,
+    cancelled_step_key: str,
+    *,
+    error_message: str = "依赖上游已取消",
+) -> None:
+    """用户取消某步后，将其 DAG 下游中尚未结束的步骤标为 cancelled。"""
+    downstream = STEP_DOWNSTREAM.get(cancelled_step_key)
+    if not downstream or project.id is None:
+        return
+    run = await _get_run(session, int(project.id))
+    if run is None or run.id is None:
+        return
+    steps = await _load_steps_map(session, int(run.id))
+    msg = _clip(error_message) or "依赖上游已取消"
+    for key in downstream:
+        row = steps.get(key)
+        if row is None or row.status not in _STEP_NON_TERMINAL:
+            continue
+        await set_step(session, project, key, STEP_CANCELLED, error_message=msg)
+
+
 async def set_export_status(
     session: AsyncSession,
     project: Project,
@@ -378,6 +411,7 @@ async def on_deck_pages_aggregate(
     any_failed: bool,
     *,
     failed_message: str | None = None,
+    deck_user_cancelled: bool = False,
 ) -> None:
     """根据所有 page 的 deck 聚合结果更新 deck_render。"""
     project = await session.get(Project, project_id)
@@ -401,6 +435,16 @@ async def on_deck_pages_aggregate(
         )
     elif deck_done:
         await set_step(session, project, STEP_DECK_RENDER, STEP_SUCCEEDED)
+    elif deck_user_cancelled:
+        st = steps.get(STEP_DECK_RENDER)
+        if st and st.status in (STEP_PENDING, STEP_READY, STEP_RUNNING):
+            await set_step(
+                session,
+                project,
+                STEP_DECK_RENDER,
+                STEP_CANCELLED,
+                error_message=failed_message or "用户取消场景生成",
+            )
     else:
         st = steps.get(STEP_DECK_RENDER)
         if st and st.status in (STEP_PENDING, STEP_READY):

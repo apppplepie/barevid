@@ -30,10 +30,21 @@ async def _export_row(session: AsyncSession, workflow_run_id: int) -> WorkflowEx
     return r.first()
 
 
+async def _invalidate_export_after_pipeline_step_cancel(
+    session: AsyncSession, project: Project, wid: int
+) -> None:
+    """取消核心步骤后导出结果不再可信，回到未导出。"""
+    ex = await _export_row(session, wid)
+    if ex is None or ex.status == wf.EXPORT_NOT_EXPORTED:
+        return
+    await reset_export_only(session, project)
+    await wf.set_export_status(session, project, wf.EXPORT_NOT_EXPORTED)
+
+
 async def cancel_running_workflow_step(
     session: AsyncSession, project: Project, step_key: str
 ) -> None:
-    """将当前「运行中」的步骤标为失败；export 标为 export_failed。"""
+    """将当前「运行中」的步骤标为 cancelled，并级联取消 DAG 下游；导出回到未导出。"""
     run = await wf.ensure_workflow_for_project(session, project, align_from_project=False)
     if run is None or run.id is None:
         return
@@ -54,14 +65,24 @@ async def cancel_running_workflow_step(
     if row.status != wf.STEP_RUNNING:
         raise ValueError("该步骤当前不在运行中，无法取消")
 
-    if step_key == wf.STEP_DECK_RENDER and project.id is not None:
+    pid = int(project.id) if project.id is not None else None
+    if pid is not None and step_key in (wf.STEP_TEXT, wf.STEP_DECK_RENDER):
         await cancel_generating_deck_pages(
-            session, int(project.id), reason="用户取消场景生成"
+            session,
+            pid,
+            user_cancelled=True,
+            reason=(
+                "用户取消场景生成"
+                if step_key == wf.STEP_DECK_RENDER
+                else "用户取消文本步骤，已停止场景生成"
+            ),
         )
 
     await wf.set_step(
         session, project, step_key, wf.STEP_CANCELLED, error_message="用户取消"
     )
+    await wf.cascade_cancel_dependent_steps(session, project, step_key)
+    await _invalidate_export_after_pipeline_step_cancel(session, project, wid)
 
 
 async def reopen_success_workflow_step(

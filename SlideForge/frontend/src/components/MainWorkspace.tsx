@@ -80,7 +80,12 @@ export function MainWorkspace({
   const gateSteps =
     steps?.filter((s) => TIMELINE_GATE_STEP_IDS.has(s.id)) ?? [];
   const activeGateStep =
-    gateSteps.find((s) => s.state === 'running' || s.state === 'error') ||
+    gateSteps.find(
+      (s) =>
+        s.state === 'running' ||
+        s.state === 'error' ||
+        s.state === 'cancelled',
+    ) ||
     gateSteps.find((s) => s.state === 'pending' || s.state === 'waiting');
 
   const activeVideoClip = findClipAtTime(clips, 'video', currentTime);
@@ -213,12 +218,19 @@ export function MainWorkspace({
 
   if (showInitialPipelineGate) {
     const isError = activeGateStep.state === 'error';
+    const isCancelled = activeGateStep.state === 'cancelled';
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center bg-zinc-950 light:bg-slate-50 relative">
         <div className="flex flex-col items-center gap-4">
           {isError ? (
             <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
               <AlertTriangle className="w-6 h-6 text-red-500" />
+            </div>
+          ) : isCancelled ? (
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10">
+              <span className="text-lg font-semibold text-amber-600" aria-hidden>
+                —
+              </span>
             </div>
           ) : (
             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -227,12 +239,16 @@ export function MainWorkspace({
             <h3 className="text-lg font-medium text-zinc-200 light:text-slate-800">
               {isError
                 ? `${activeGateStep.label} 出错`
-                : `正在处理：${activeGateStep.label}…`}
+                : isCancelled
+                  ? `${activeGateStep.label} 已取消`
+                  : `正在处理：${activeGateStep.label}…`}
             </h3>
             <p className="text-sm text-zinc-500 light:text-slate-500 mt-1">
               {isError
                 ? '可在顶部进度条该步骤上点击重试。'
-                : '可能需要一点时间。'}
+                : isCancelled
+                  ? '可在顶部进度条该步骤上点击重新开始。'
+                  : '可能需要一点时间。'}
             </p>
           </div>
         </div>

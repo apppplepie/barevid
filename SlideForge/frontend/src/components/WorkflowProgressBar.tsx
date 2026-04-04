@@ -2,6 +2,7 @@ import type { ElementType } from 'react';
 import {
   Check,
   AlertTriangle,
+  Ban,
   Clock,
   Loader2,
   Download,
@@ -10,7 +11,7 @@ import {
 import { motion } from 'motion/react';
 import { workflowStepDependenciesSatisfied } from '../utils/workflowStepDependencies';
 
-export type StepState = 'pending' | 'waiting' | 'running' | 'success' | 'error';
+export type StepState = 'pending' | 'waiting' | 'running' | 'success' | 'error' | 'cancelled';
 
 const STEP_STATE_LABEL_ZH: Record<StepState, string> = {
   pending: '待处理',
@@ -18,6 +19,7 @@ const STEP_STATE_LABEL_ZH: Record<StepState, string> = {
   running: '进行中',
   success: '已完成',
   error: '失败',
+  cancelled: '已取消',
 };
 
 function stepStateLabelZh(state: StepState): string {
@@ -89,11 +91,12 @@ export function WorkflowProgressBar({
             const isSuccess = step.state === 'success';
             const isRunning = step.state === 'running';
             const isError = step.state === 'error';
+            const isCancelled = step.state === 'cancelled';
             const isWaiting = step.state === 'waiting';
             const Icon = step.icon;
             const canCancelRunning = isRunning && Boolean(onCancelRunningStep);
             const isPending =
-              !isSuccess && !isRunning && !isError;
+              !isSuccess && !isRunning && !isError && !isCancelled;
             const canStartFromGraph =
               Boolean(onRetryStep) &&
               step.id !== 'export' &&
@@ -114,11 +117,14 @@ export function WorkflowProgressBar({
                         isSuccess && 'border-emerald-500/35 bg-emerald-500/10 text-emerald-300',
                         isRunning && 'border-sky-500/40 bg-sky-500/10 text-sky-200',
                         isError && 'border-red-500/35 bg-red-500/10 text-red-300',
+                        isCancelled &&
+                          'border-amber-500/40 bg-amber-500/10 text-amber-200 light:border-amber-600/45 light:bg-amber-100/90 light:text-amber-900',
                         (isWaiting || canStartFromGraph) &&
                           'border-cyan-500/35 bg-cyan-500/10 text-cyan-200 light:border-cyan-600/40 light:bg-cyan-100/80 light:text-cyan-900',
                         !isSuccess &&
                           !isRunning &&
                           !isError &&
+                          !isCancelled &&
                           !isWaiting &&
                           !canStartFromGraph &&
                           'border-zinc-700/80 light:border-slate-300 bg-zinc-900/80 light:bg-slate-100 text-sf-muted',
@@ -223,6 +229,34 @@ export function WorkflowProgressBar({
                         ) : (
                           <AlertTriangle className="h-3 w-3 sm:h-3.5 sm:w-3.5" aria-hidden />
                         )
+                      ) : isCancelled ? (
+                        onRetryStep ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (retryingStepId === step.id) return;
+                              onRetryStep(step.id);
+                            }}
+                            disabled={retryingStepId === step.id}
+                            title={`${step.label} 已取消，点击重新开始`}
+                            className="flex h-full w-full items-center justify-center rounded-full outline-none transition-colors hover:bg-amber-500/20 focus-visible:ring-2 focus-visible:ring-amber-400/50 disabled:opacity-50"
+                          >
+                            {retryingStepId === step.id ? (
+                              <Loader2
+                                className="h-3 w-3 animate-spin sm:h-3.5 sm:w-3.5"
+                                aria-hidden
+                              />
+                            ) : (
+                              <RotateCw
+                                className="h-3 w-3 sm:h-3.5 sm:w-3.5"
+                                aria-hidden
+                              />
+                            )}
+                          </button>
+                        ) : (
+                          <Ban className="h-3 w-3 sm:h-3.5 sm:w-3.5 opacity-90" aria-hidden />
+                        )
                       ) : canStartFromGraph ? (
                         <button
                           type="button"
@@ -297,11 +331,13 @@ export function WorkflowProgressBar({
                         isSuccess && 'text-zinc-200 light:text-slate-700',
                         isRunning && 'text-zinc-100 light:text-slate-800',
                         isError && 'text-red-200/90 light:text-red-600',
+                        isCancelled && 'text-amber-200/95 light:text-amber-800',
                         (isWaiting || canStartFromGraph) &&
                           'text-cyan-200/95 light:text-cyan-800',
                         !isSuccess &&
                           !isRunning &&
                           !isError &&
+                          !isCancelled &&
                           !isWaiting &&
                           !canStartFromGraph &&
                           'text-sf-muted',

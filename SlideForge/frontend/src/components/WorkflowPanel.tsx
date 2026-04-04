@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Ban,
   CheckCircle2,
   CircleDashed,
   Clock,
@@ -148,6 +149,7 @@ function stateAriaLabel(state: WorkflowStep['state']): string {
   if (state === 'success') return '成功';
   if (state === 'running') return '进行中';
   if (state === 'error') return '失败';
+  if (state === 'cancelled') return '已取消';
   if (state === 'waiting') return '等待中';
   return '待前置';
 }
@@ -195,12 +197,16 @@ function recommendedActionText(
   const exportStep = byId('export');
   const manualBlocked = pipelineAutoAdvance === false && !manualOutlineConfirmed;
   const failed = steps.find((step) => step.state === 'error');
+  const cancelled = steps.find((step) => step.state === 'cancelled');
 
   if (videoReady && exportStep?.state === 'success') {
     return '当前成片已可用，可在顶栏下载或按需重新导出。';
   }
   if (failed) {
     return `建议优先处理失败步骤：${failed.label}。`;
+  }
+  if (cancelled) {
+    return `步骤「${cancelled.label}」已取消，可直接重试继续。`;
   }
   if (manualBlocked && text?.state === 'success') {
     return '演示母版可与文案并行；确认口播分段后再继续音频与场景页面等步骤。';
@@ -283,6 +289,7 @@ function PipelineNodeCard({
   const isWaiting = step.state === 'waiting';
   const isPendingOnly = step.state === 'pending';
   const isError = step.state === 'error';
+  const isCancelled = step.state === 'cancelled';
   const depsOk = dependenciesSatisfied(step, steps);
   const canTryStart =
     (isPendingOnly || isWaiting) && depsOk;
@@ -300,9 +307,13 @@ function PipelineNodeCard({
   /** 仅「前置已齐、待导出」（pending/waiting + 依赖满足）显示「导出视频」；进行中/失败仍保留取消与重试 */
   const showExportActionsFooter =
     step.id === 'export' &&
-    (canTryStart || step.state === 'error' || step.state === 'running');
+    (canTryStart ||
+      step.state === 'error' ||
+      step.state === 'cancelled' ||
+      step.state === 'running');
   const showNonExportActionsFooter =
-    step.id !== 'export' && (isRunning || isError || canTryStart);
+    step.id !== 'export' &&
+    (isRunning || isError || isCancelled || canTryStart);
   const showActionsFooter = showExportActionsFooter || showNonExportActionsFooter;
   const handleCardPointerUp = (e: MouseEvent) => {
     if (locked) return;
@@ -314,7 +325,7 @@ function PipelineNodeCard({
       onRetryStep?.(step.id);
       return;
     }
-    if (isError) {
+    if (isError || isCancelled) {
       onClose?.();
       onRetryStep?.(step.id);
     }
@@ -333,7 +344,9 @@ function PipelineNodeCard({
             ? 'bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.45)]'
             : isError
               ? 'bg-rose-400 shadow-[0_0_10px_rgba(251,113,133,0.5)]'
-              : 'bg-zinc-500 light:bg-slate-400';
+              : isCancelled
+                ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.45)]'
+                : 'bg-zinc-500 light:bg-slate-400';
 
   const shellClass =
     inRevertImpactZone && !isReopening
@@ -346,7 +359,9 @@ function PipelineNodeCard({
             ? 'bg-cyan-950/30 shadow-[0_0_26px_rgba(34,211,238,0.14)] light:border-cyan-200/70 light:bg-cyan-50/85 light:shadow-[0_0_22px_rgba(34,211,238,0.08)]'
             : isError
               ? 'bg-rose-950/32 shadow-[0_0_24px_rgba(244,63,94,0.14)] light:border-rose-200/70 light:bg-rose-50/90 light:shadow-[0_0_22px_rgba(244,63,94,0.08)]'
-              : 'bg-zinc-900/50 hover:bg-zinc-900/65 light:border-slate-200/90 light:bg-slate-100/85 light:hover:bg-slate-200/80';
+              : isCancelled
+                ? 'bg-amber-950/28 shadow-[0_0_24px_rgba(245,158,11,0.12)] light:border-amber-200/70 light:bg-amber-50/90 light:shadow-[0_0_22px_rgba(245,158,11,0.08)]'
+                : 'bg-zinc-900/50 hover:bg-zinc-900/65 light:border-slate-200/90 light:bg-slate-100/85 light:hover:bg-slate-200/80';
 
   const statusIcon = showWaitingVisual ? (
     <Clock className="h-[18px] w-[18px] text-cyan-400" strokeWidth={2} aria-hidden />
@@ -358,13 +373,15 @@ function PipelineNodeCard({
     <CheckCircle2 className="h-[18px] w-[18px] text-emerald-400" strokeWidth={2} aria-hidden />
   ) : isError ? (
     <XCircle className="h-[18px] w-[18px] text-rose-400" strokeWidth={2} aria-hidden />
+  ) : isCancelled ? (
+    <Ban className="h-[18px] w-[18px] text-amber-400" strokeWidth={2} aria-hidden />
   ) : null;
 
   return (
     <div
       data-workflow-node-card
       className={`absolute w-60 max-w-[92vw] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-transparent backdrop-blur-xl transition-all duration-300 group light:border-transparent ${shellClass} ${
-        canTryStart || isError ? 'cursor-pointer' : 'cursor-default'
+        canTryStart || isError || isCancelled ? 'cursor-pointer' : 'cursor-default'
       }`}
       style={{ left: `${layout.x}%`, top: `${layout.y}%` }}
       onMouseUp={handleCardPointerUp}
@@ -404,7 +421,9 @@ function PipelineNodeCard({
                     ? 'bg-cyan-500/15 text-cyan-400'
                     : isError
                       ? 'bg-rose-500/20 text-rose-400'
-                      : 'bg-white/5 text-zinc-400 group-hover:text-zinc-300 light:bg-slate-900/[0.06] light:text-slate-500 light:group-hover:text-slate-700'
+                      : isCancelled
+                        ? 'bg-amber-500/20 text-amber-400'
+                        : 'bg-white/5 text-zinc-400 group-hover:text-zinc-300 light:bg-slate-900/[0.06] light:text-slate-500 light:group-hover:text-slate-700'
           }`}
         >
           <Icon className={`h-[22px] w-[22px] ${isRunning ? 'animate-pulse' : ''}`} />
@@ -438,7 +457,7 @@ function PipelineNodeCard({
                   导出视频
                 </button>
               ) : null}
-              {step.state === 'error' ? (
+              {step.state === 'error' || step.state === 'cancelled' ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -513,7 +532,7 @@ function PipelineNodeCard({
                   取消
                 </button>
               ) : null}
-              {isError ? (
+              {isError || isCancelled ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -528,7 +547,7 @@ function PipelineNodeCard({
                   ) : (
                     <RefreshCcw className="h-3.5 w-3.5" />
                   )}
-                  重试
+                  {isCancelled ? '重新开始' : '重试'}
                 </button>
               ) : null}
             </>

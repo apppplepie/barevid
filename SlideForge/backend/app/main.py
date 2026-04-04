@@ -1388,7 +1388,7 @@ async def cancel_deck_page(
         session,
         project_id,
         node_id,
-        reason="用户手动取消该页生成（已标记失败）",
+        reason="用户手动取消该页场景生成",
     )
     if st == "not_found":
         raise HTTPException(status_code=404, detail="页面节点不存在")
@@ -1411,7 +1411,8 @@ async def cancel_deck_all_pages(
     cancelled_ids = await cancel_generating_deck_pages(
         session,
         project_id,
-        reason="用户手动取消全部页面生成（已标记失败）",
+        reason="用户手动取消全部场景生成",
+        user_cancelled=True,
     )
     await sync_demo_workflow_from_deck(session, project_id)
     await session.commit()

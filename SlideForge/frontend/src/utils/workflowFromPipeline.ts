@@ -33,7 +33,8 @@ function mapServerStepStatus(s: string | null | undefined): StepState {
   const v = (s || 'not_started').trim().toLowerCase();
   if (v === 'running' || v === 'exporting') return 'running';
   if (v === 'succeeded' || v === 'success' || v === 'export_success') return 'success';
-  if (v === 'failed' || v === 'cancelled' || v === 'export_failed') return 'error';
+  if (v === 'cancelled') return 'cancelled';
+  if (v === 'failed' || v === 'export_failed') return 'error';
   if (v === 'ready') return 'waiting';
   if (v === 'pending' || v === 'not_started' || v === 'not_exported') {
     return 'pending';

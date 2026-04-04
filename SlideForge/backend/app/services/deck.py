@@ -9,7 +9,6 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import settings
-from app.db.models import WorkflowRun
 from app.db.engine import async_session_maker
 from app.db.models import (
     KIND_PAGE,
@@ -17,6 +16,8 @@ from app.db.models import (
     OutlineNode,
     Project,
     ProjectStyle,
+    WorkflowRun,
+    WorkflowStepRun,
     utc_now,
 )
 from app.integrations.deepseek import (
@@ -38,6 +39,40 @@ from app.services.workflow_state import (
 
 _style_base_locks: dict[int, asyncio.Lock] = {}
 _DECK_PAGE_SEMAPHORE = asyncio.Semaphore(settings.deck_page_concurrency_limit)
+
+
+async def _project_status_after_user_cancelled_deck(
+    session: AsyncSession, project: Project
+) -> None:
+    """用户取消场景生成后：文本+配音已成功则保持可操作 ready，否则 draft（不标整项目 failed）。"""
+    if project.id is None:
+        project.status = "draft"
+        return
+    run = (
+        await session.exec(
+            select(WorkflowRun).where(WorkflowRun.project_id == int(project.id))
+        )
+    ).first()
+    if run is None or run.id is None:
+        project.status = "draft"
+        return
+    res = await session.exec(
+        select(WorkflowStepRun).where(
+            WorkflowStepRun.workflow_run_id == int(run.id)
+        )
+    )
+    sm = {r.step_key: r for r in res.all()}
+    tr = sm.get(wf_engine.STEP_TEXT)
+    ar = sm.get(wf_engine.STEP_AUDIO)
+    if (
+        tr is not None
+        and tr.status == wf_engine.STEP_SUCCEEDED
+        and ar is not None
+        and ar.status == wf_engine.STEP_SUCCEEDED
+    ):
+        project.status = "ready"
+    else:
+        project.status = "draft"
 _PAGE_SIZE_META: dict[str, dict[str, str]] = {
     "16:9": {"label": "16:9 横屏（1920x1080）", "width": "1920", "height": "1080"},
     "4:3": {"label": "4:3 横屏（1024x768）", "width": "1024", "height": "768"},
@@ -442,6 +477,8 @@ async def compute_project_deck_status(
             return "generating"
         elif any(st == "failed" for st in states):
             return "failed"
+        elif any(st == "cancelled" for st in states):
+            return "cancelled"
         elif all_ready:
             return "ready"
         else:
@@ -460,6 +497,7 @@ async def sync_demo_workflow_from_deck(session: AsyncSession, project_id: int) -
     deck_done = bool(pl.get("deck"))
     ds = await compute_project_deck_status(session, project_id)
     any_failed = ds == "failed"
+    deck_user_cancelled = ds == "cancelled"
     failed_msg: str | None = None
     if any_failed:
         aggregated = await _first_failed_page_deck_error(session, project_id) or ""
@@ -477,10 +515,13 @@ async def sync_demo_workflow_from_deck(session: AsyncSession, project_id: int) -
             deck_done,
             any_failed,
             failed_message=failed_msg,
+            deck_user_cancelled=deck_user_cancelled,
         )
         # projects.status 仅作 UI 辅助：失败则置 failed；成功则置 ready。
         if any_failed:
             project.status = "failed"
+        elif deck_user_cancelled:
+            await _project_status_after_user_cancelled_deck(session, project)
         elif deck_done:
             # 若文本/配音/演示均完成，则置 ready（以 workflow 为准）
             run = await wf._get_run(session, project_id)  # type: ignore[attr-defined]
@@ -691,7 +732,7 @@ async def try_cancel_page_deck_generation(
     project_id: int,
     page_node_id: int,
     *,
-    reason: str = "用户手动取消生成（已标记失败）",
+    reason: str = "用户手动取消该页场景生成",
 ) -> str:
     """返回 ok | not_found | noop。仅 generating 可取消。"""
     node = await session.get(OutlineNode, page_node_id)
@@ -701,23 +742,24 @@ async def try_cancel_page_deck_generation(
     nc = await _get_or_create_page_node_content(session, node)
     if (nc.page_deck_status or "").strip().lower() != "generating":
         return "noop"
-    nc.page_deck_status = "failed"
-    nc.page_deck_error = (reason or "用户手动取消生成（已标记失败）").strip()[:1800]
+    nc.page_deck_status = "cancelled"
+    nc.page_deck_error = (reason or "用户手动取消该页场景生成").strip()[:1800]
     nc.updated_at = now
     session.add(nc)
     project = await session.get(Project, project_id)
     if project is not None:
-        msg = (reason or "用户手动取消生成（已标记失败）").strip()[:1800]
-        project.status = "failed"
+        msg = (reason or "用户手动取消该页场景生成").strip()[:1800]
         project.updated_at = now
         session.add(project)
         await wf_engine.set_step(
             session,
             project,
             wf_engine.STEP_DECK_RENDER,
-            wf_engine.STEP_FAILED,
+            wf_engine.STEP_CANCELLED,
             error_message=msg,
         )
+        await _project_status_after_user_cancelled_deck(session, project)
+        session.add(project)
     return "ok"
 
 
@@ -725,12 +767,22 @@ async def cancel_generating_deck_pages(
     session: AsyncSession,
     project_id: int,
     *,
-    reason: str = "用户手动取消批量生成（已标记失败）",
+    reason: str = "用户手动取消批量场景生成",
+    user_cancelled: bool = False,
 ) -> list[int]:
-    """取消项目下所有 generating 页面，返回已取消的 page node ids。"""
+    """取消项目下所有 generating 页面，返回已取消的 page node ids。
+
+    user_cancelled=True 时页面标为 cancelled、工作流为 cancelled；否则为系统中止/失败路径，标 failed。
+    """
     page_ids = await collect_deck_page_node_ids(session, project_id)
     now = utc_now()
     out: list[int] = []
+    page_terminal = "cancelled" if user_cancelled else "failed"
+    default_reason = (
+        "用户手动取消批量场景生成"
+        if user_cancelled
+        else "用户手动取消批量生成（已标记失败）"
+    )
     for nid in page_ids:
         node = await session.get(OutlineNode, nid)
         if node is None or node.project_id != project_id:
@@ -738,25 +790,36 @@ async def cancel_generating_deck_pages(
         nc = await _get_or_create_page_node_content(session, node)
         if (nc.page_deck_status or "").strip().lower() != "generating":
             continue
-        nc.page_deck_status = "failed"
-        nc.page_deck_error = (reason or "用户手动取消批量生成（已标记失败）").strip()[:1800]
+        nc.page_deck_status = page_terminal
+        nc.page_deck_error = (reason or default_reason).strip()[:1800]
         nc.updated_at = now
         session.add(nc)
         out.append(nid)
     if out:
         project = await session.get(Project, project_id)
         if project is not None:
-            msg = (reason or "用户手动取消批量生成（已标记失败）").strip()[:1800]
-            project.status = "failed"
+            msg = (reason or default_reason).strip()[:1800]
             project.updated_at = now
             session.add(project)
-            await wf_engine.set_step(
-                session,
-                project,
-                wf_engine.STEP_DECK_RENDER,
-                wf_engine.STEP_FAILED,
-                error_message=msg,
-            )
+            if user_cancelled:
+                await wf_engine.set_step(
+                    session,
+                    project,
+                    wf_engine.STEP_DECK_RENDER,
+                    wf_engine.STEP_CANCELLED,
+                    error_message=msg,
+                )
+                await _project_status_after_user_cancelled_deck(session, project)
+            else:
+                project.status = "failed"
+                await wf_engine.set_step(
+                    session,
+                    project,
+                    wf_engine.STEP_DECK_RENDER,
+                    wf_engine.STEP_FAILED,
+                    error_message=msg,
+                )
+            session.add(project)
     return out
 
 

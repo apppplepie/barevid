@@ -248,7 +248,7 @@ class NodeContent(SQLModel, table=True):
     )
     page_deck_status: Optional[str] = Field(
         default=None,
-        description="page 节点：idle / generating / ready / failed",
+        description="page 节点：idle / generating / ready / failed / cancelled",
     )
     page_deck_error: Optional[str] = Field(default=None, sa_column=Column(Text))
     narration_text: str = Field(default="", sa_column=Column(Text, nullable=False))
