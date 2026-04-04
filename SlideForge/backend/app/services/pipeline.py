@@ -37,10 +37,10 @@ from app.services import workflow_engine as wf_engine
 from app.services.workflow_state import (
     STEP_FAILED,
     STEP_RUNNING,
-    STEP_SUCCESS,
+    STEP_SUCCEEDED,
     mark_text_failed,
     mark_text_running,
-    mark_text_success,
+    mark_text_succeeded,
     reset_downstream_after_text_retry,
     reset_export_only,
 )
@@ -94,7 +94,7 @@ async def _mark_deck_pipeline_failed(project_id: int, message: object) -> None:
                 session,
                 project,
                 wf_engine.STEP_DECK_MASTER,
-                wf_engine.STEP_SUCCESS,
+                wf_engine.STEP_SUCCEEDED,
             )
             await wf_engine.set_step(
                 session,
@@ -205,7 +205,7 @@ async def _persist_structured_outline(
     if advance_parallel:
         await wf_engine.after_text_success_parallel_ready(session, project)
     else:
-        await mark_text_success(session, project)
+        await mark_text_succeeded(session, project)
     session.add(project)
     await session.commit()
 
@@ -362,7 +362,7 @@ async def run_synthesize_project_audio(
         project.status = "ready"
         project.updated_at = utc_now()
         await wf_engine.set_step(
-            session, project, wf_engine.STEP_AUDIO, wf_engine.STEP_SUCCESS
+            session, project, wf_engine.STEP_AUDIO, wf_engine.STEP_SUCCEEDED
         )
         session.add(project)
         await session.commit()
@@ -537,7 +537,7 @@ async def _run_audio_and_deck_parallel(project_id: int) -> None:
                                 s2,
                                 p,
                                 wf_engine.STEP_DECK_MASTER,
-                                wf_engine.STEP_SUCCESS,
+                                wf_engine.STEP_SUCCEEDED,
                             )
                         p.updated_at = utc_now()
                         s2.add(p)

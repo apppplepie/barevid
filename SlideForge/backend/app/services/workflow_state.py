@@ -12,12 +12,13 @@ from app.services import workflow_engine as wf
 
 STEP_NOT_STARTED = "not_started"
 STEP_RUNNING = "running"
-STEP_SUCCESS = "success"
+STEP_SUCCEEDED = "succeeded"
 STEP_FAILED = "failed"
+STEP_CANCELLED = "cancelled"
 
 EXPORT_NOT_STARTED = "not_started"
 EXPORT_RUNNING = "running"
-EXPORT_SUCCESS = "success"
+EXPORT_SUCCEEDED = "succeeded"
 EXPORT_FAILED = "failed"
 
 
@@ -71,8 +72,8 @@ async def mark_text_failed(session: AsyncSession, project: Project, err: str) ->
     )
 
 
-async def mark_text_success(session: AsyncSession, project: Project) -> None:
-    await wf.set_step(session, project, wf.STEP_TEXT, wf.STEP_SUCCESS)
+async def mark_text_succeeded(session: AsyncSession, project: Project) -> None:
+    await wf.set_step(session, project, wf.STEP_TEXT, wf.STEP_SUCCEEDED)
 
 
 async def mark_audio_demo_running_after_text(

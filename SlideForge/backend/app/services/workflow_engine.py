@@ -25,9 +25,14 @@ STEP_DECK_RENDER = "deck_render"
 STEP_KEYS = (STEP_TEXT, STEP_AUDIO, STEP_DECK_MASTER, STEP_DECK_RENDER)
 
 STEP_PENDING = "pending"
+STEP_READY = "ready"
 STEP_RUNNING = "running"
-STEP_SUCCESS = "success"
+STEP_SUCCEEDED = "succeeded"
 STEP_FAILED = "failed"
+STEP_CANCELLED = "cancelled"
+
+# 终态集合（用于判断步骤是否已结束）
+_STEP_TERMINAL = {STEP_SUCCEEDED, STEP_FAILED, STEP_CANCELLED}
 
 EXPORT_NOT_EXPORTED = "not_exported"
 EXPORT_EXPORTING = "exporting"
@@ -62,19 +67,21 @@ def _compute_overall(
     steps: dict[str, WorkflowStepRun], export_row: WorkflowExportRun
 ) -> str:
     st = {k: (steps[k].status if k in steps else STEP_PENDING) for k in STEP_KEYS}
-    if st[STEP_TEXT] == STEP_FAILED:
+    if st[STEP_TEXT] in (STEP_FAILED, STEP_CANCELLED):
         return "failed"
-    if all(st[k] == STEP_SUCCESS for k in STEP_KEYS):
+    if all(st[k] == STEP_SUCCEEDED for k in STEP_KEYS):
         if export_row.status == EXPORT_SUCCESS:
             return "success"
         if export_row.status == EXPORT_FAILED:
             return "partial"
         return "running"
-    if any(st[k] == STEP_FAILED for k in STEP_KEYS):
+    if any(st[k] in (STEP_FAILED, STEP_CANCELLED) for k in STEP_KEYS):
         return "partial"
     if any(st[k] == STEP_RUNNING for k in STEP_KEYS):
         return "running"
-    if st[STEP_TEXT] == STEP_SUCCESS or st[STEP_DECK_MASTER] == STEP_SUCCESS:
+    if any(st[k] == STEP_READY for k in STEP_KEYS):
+        return "running"
+    if st[STEP_TEXT] == STEP_SUCCEEDED or st[STEP_DECK_MASTER] == STEP_SUCCEEDED:
         return "running"
     return "pending"
 
@@ -178,7 +185,7 @@ async def apply_overall_only(
         return
     run.overall_status = _compute_overall(steps, ex)
     run.updated_at = utc_now()
-    if run.overall_status in ("success", "failed", "partial"):
+    if run.overall_status in ("success", "failed", "partial", "cancelled"):
         run.finished_at = run.finished_at or utc_now()
     session.add(run)
 
@@ -200,15 +207,20 @@ async def set_step(
         return
     row = steps[step_key]
     now = utc_now()
+    if status == STEP_READY and row.status != STEP_READY:
+        row.ready_at = now
+        row.error_message = None
     if status == STEP_RUNNING and row.status != STEP_RUNNING:
         row.attempt_no = int(row.attempt_no or 0) + 1
         row.started_at = now
         row.error_message = None
-    if status == STEP_SUCCESS:
+    if status == STEP_SUCCEEDED:
         row.error_message = None
-    if status in (STEP_SUCCESS, STEP_FAILED):
+    if status in (STEP_SUCCEEDED, STEP_FAILED, STEP_CANCELLED):
         row.finished_at = now
-    if error_message is not None and status != STEP_SUCCESS:
+    if status == STEP_CANCELLED:
+        row.cancelled_at = now
+    if error_message is not None and status != STEP_SUCCEEDED:
         row.error_message = _clip(error_message)
     if output_snapshot is not None:
         row.output_snapshot = _clip(output_snapshot, 8000)
@@ -276,7 +288,7 @@ async def record_export_artifact(
 async def notify_deck_master_success_if_pending(
     session: AsyncSession, project_id: int
 ) -> None:
-    """单页生成路径在 ensure_style_base 成功后调用，将母版标为 success。"""
+    """单页生成路径在 ensure_style_base 成功后调用，将母版标为 succeeded。"""
     project = await session.get(Project, project_id)
     if project is None:
         return
@@ -285,18 +297,37 @@ async def notify_deck_master_success_if_pending(
         return
     steps = await _load_steps_map(session, int(run.id))
     row = steps.get(STEP_DECK_MASTER)
-    if row is None or row.status == STEP_SUCCESS:
+    if row is None or row.status == STEP_SUCCEEDED:
         return
-    await set_step(session, project, STEP_DECK_MASTER, STEP_SUCCESS)
+    await set_step(session, project, STEP_DECK_MASTER, STEP_SUCCEEDED)
+    # deck_master 成功后：若 text 也已 succeeded，则 deck_render 依赖已满足 → ready
+    text_row = steps.get(STEP_TEXT)
+    dr_row = steps.get(STEP_DECK_RENDER)
+    if (
+        text_row
+        and text_row.status == STEP_SUCCEEDED
+        and dr_row
+        and dr_row.status == STEP_PENDING
+    ):
+        await set_step(session, project, STEP_DECK_RENDER, STEP_READY)
 
 
 async def after_text_success_parallel_ready(
     session: AsyncSession, project: Project
 ) -> None:
-    """文本成功：拉齐依赖 text 的下游为 pending；不修改 deck_master（与 text 并行入口）。"""
-    await set_step(session, project, STEP_TEXT, STEP_SUCCESS)
-    await set_step(session, project, STEP_AUDIO, STEP_PENDING)
-    await set_step(session, project, STEP_DECK_RENDER, STEP_PENDING)
+    """文本成功：audio 依赖已满足 → ready；deck_render 还需 deck_master，按实际判断。"""
+    await set_step(session, project, STEP_TEXT, STEP_SUCCEEDED)
+    # audio 仅依赖 text，text 已 succeeded → ready
+    await set_step(session, project, STEP_AUDIO, STEP_READY)
+    # deck_render 依赖 text + deck_master；若 deck_master 也已 succeeded → ready，否则仍 pending
+    run = await _get_run(session, int(project.id) if project.id else -1)
+    if run and run.id:
+        steps = await _load_steps_map(session, int(run.id))
+        dm = steps.get(STEP_DECK_MASTER)
+        if dm and dm.status == STEP_SUCCEEDED:
+            await set_step(session, project, STEP_DECK_RENDER, STEP_READY)
+        else:
+            await set_step(session, project, STEP_DECK_RENDER, STEP_PENDING)
 
 
 async def reset_downstream_for_text_retry(
@@ -316,7 +347,9 @@ async def reset_downstream_for_text_retry(
             row.status = STEP_PENDING
             row.error_message = None
             row.started_at = None
+            row.ready_at = None
             row.finished_at = None
+            row.cancelled_at = None
             row.updated_at = now
             session.add(row)
     ex = await _get_export_row(session, int(run.id))
@@ -354,9 +387,9 @@ async def on_deck_pages_aggregate(
     if run is None:
         return
     steps = await _load_steps_map(session, int(run.id))
-    if steps.get(STEP_TEXT) and steps[STEP_TEXT].status != STEP_SUCCESS:
+    if steps.get(STEP_TEXT) and steps[STEP_TEXT].status != STEP_SUCCEEDED:
         return
-    if steps.get(STEP_DECK_MASTER) and steps[STEP_DECK_MASTER].status != STEP_SUCCESS:
+    if steps.get(STEP_DECK_MASTER) and steps[STEP_DECK_MASTER].status != STEP_SUCCEEDED:
         return
     if any_failed:
         await set_step(
@@ -367,10 +400,10 @@ async def on_deck_pages_aggregate(
             error_message=failed_message or "部分演示页生成失败",
         )
     elif deck_done:
-        await set_step(session, project, STEP_DECK_RENDER, STEP_SUCCESS)
+        await set_step(session, project, STEP_DECK_RENDER, STEP_SUCCEEDED)
     else:
         st = steps.get(STEP_DECK_RENDER)
-        if st and st.status == STEP_PENDING:
+        if st and st.status in (STEP_PENDING, STEP_READY):
             await set_step(session, project, STEP_DECK_RENDER, STEP_RUNNING)
 
 

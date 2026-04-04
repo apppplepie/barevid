@@ -40,7 +40,7 @@ async def compute_project_pipeline(
     else:
         steps = await wf._load_steps_map(session, int(run.id))  # type: ignore[attr-defined]
         ex = await wf._get_export_row(session, int(run.id))  # type: ignore[attr-defined]
-        audio_done = (steps.get(wf.STEP_AUDIO).status if steps.get(wf.STEP_AUDIO) else wf.STEP_PENDING) == wf.STEP_SUCCESS
+        audio_done = (steps.get(wf.STEP_AUDIO).status if steps.get(wf.STEP_AUDIO) else wf.STEP_PENDING) == wf.STEP_SUCCEEDED
         video_done = bool(ex and ex.status == wf.EXPORT_SUCCESS and (ex.output_file_url or "").strip())
 
     page_ids = await collect_deck_page_node_ids(session, pid)

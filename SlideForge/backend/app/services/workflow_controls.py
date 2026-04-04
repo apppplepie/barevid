@@ -60,7 +60,7 @@ async def cancel_running_workflow_step(
         )
 
     await wf.set_step(
-        session, project, step_key, wf.STEP_FAILED, error_message="用户取消"
+        session, project, step_key, wf.STEP_CANCELLED, error_message="用户取消"
     )
 
 

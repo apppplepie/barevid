@@ -32,7 +32,7 @@ from app.services import workflow_engine as wf_engine
 from app.services.workflow_state import (
     STEP_FAILED,
     STEP_RUNNING,
-    STEP_SUCCESS,
+    STEP_SUCCEEDED,
     reset_export_only,
 )
 
@@ -488,11 +488,11 @@ async def sync_demo_workflow_from_deck(session: AsyncSession, project_id: int) -
                 steps = await wf._load_steps_map(session, int(run.id))  # type: ignore[attr-defined]
                 ok = (
                     (steps.get(wf.STEP_TEXT).status if steps.get(wf.STEP_TEXT) else wf.STEP_PENDING)
-                    == wf.STEP_SUCCESS
+                    == wf.STEP_SUCCEEDED
                     and (steps.get(wf.STEP_AUDIO).status if steps.get(wf.STEP_AUDIO) else wf.STEP_PENDING)
-                    == wf.STEP_SUCCESS
+                    == wf.STEP_SUCCEEDED
                     and (steps.get(wf.STEP_DECK_RENDER).status if steps.get(wf.STEP_DECK_RENDER) else wf.STEP_PENDING)
-                    == wf.STEP_SUCCESS
+                    == wf.STEP_SUCCEEDED
                 )
                 if ok:
                     project.status = "ready"
@@ -959,7 +959,7 @@ async def run_generate_deck_all_job(project_id: int, page_node_ids: list[int]) -
                 session,
                 pr_ok,
                 wf_engine.STEP_DECK_MASTER,
-                wf_engine.STEP_SUCCESS,
+                wf_engine.STEP_SUCCEEDED,
             )
             await wf_engine.set_step(
                 session,
