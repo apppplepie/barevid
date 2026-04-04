@@ -1,29 +1,22 @@
+import asyncio
 import json
 import os
 import re
 import shutil
+import subprocess
+import sys
 import time
 import uuid
 from contextlib import asynccontextmanager
-from urllib.parse import urlparse
 from pathlib import Path
 
 from typing import Annotated
 
-from fastapi import (
-    BackgroundTasks,
-    Depends,
-    FastAPI,
-    File,
-    HTTPException,
-    Header,
-    UploadFile,
-)
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Header, Query
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, or_, text
-from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -32,15 +25,10 @@ from app.auth import (
     delete_session_token,
     get_current_user,
     hash_password,
-    verify_export_worker_key,
     verify_password,
 )
 from app.config import settings
-from app.mediautil import (
-    delete_project_export_files,
-    latest_export_media_url,
-    resolve_slide_audio_url,
-)
+from app.mediautil import latest_export_media_url, resolve_slide_audio_url
 from app.db.engine import async_session_maker, get_session, init_db
 from app.db.models import (
     KIND_PAGE,
@@ -50,7 +38,6 @@ from app.db.models import (
     Project,
     ProjectStyle,
     User,
-    VideoExportJob,
     utc_now,
 )
 from app.integrations.deepseek import (
@@ -58,52 +45,46 @@ from app.integrations.deepseek import (
     list_deck_style_presets,
     resolve_deck_style_preset,
 )
-from app.integrations.doubao_tts_service import resolve_tts_voice_type
 from app.schemas import (
-    AuthResponse,
-    ContextualAIDraftApplyRequest,
-    ContextualAIDraftRequest,
     CopyDeckStyleFromRequest,
     DeckStylePatch,
     DeckStylePromptTextPatch,
     ExportVideoRequest,
     ExportVideoResponse,
     GenerateOutlineResponse,
+    LoginRequest,
     GenerateRequest,
     GenerateResponse,
-    LoginRequest,
     ManualConfirmOutlineRequest,
-    NarrationTextPatch,
     PipelineStages,
+    WorkflowStepControlRequest,
     ProjectCloneRequest,
     ProjectCreate,
     ProjectPatch,
-    WorkflowStepActionBody,
     RegisterRequest,
     ResynthesizeStepAudioRequest,
+    NarrationTextPatch,
     SynthesizeAudioResponse,
-    WorkerVideoExportFailBody,
-    WorkerVideoExportJobPayload,
+    AuthResponse,
+    ContextualAIDraftApplyRequest,
+    ContextualAIDraftRequest,
 )
 from app.services.deck import (
     cancel_generating_deck_pages,
     collect_deck_page_node_ids,
     collect_deck_page_node_ids_needing_generation,
-    compute_project_deck_status,
     deck_style_ready_from_storage,
     ensure_style_base,
     fetch_style_prompt_for_project,
-    get_project_style,
     get_or_create_project_style,
     invalidate_all_page_decks_after_master_change,
-    resolve_project_page_size,
     run_generate_deck_all_job,
     run_generate_deck_page_job,
+    refresh_project_deck_status,
     sync_demo_workflow_from_deck,
     try_cancel_page_deck_generation,
     try_start_page_deck_generation,
 )
-from app.services.manual_outline import apply_manual_outline_confirm
 from app.services.outline import (
     build_play_manifest,
     load_deck_timeline,
@@ -120,40 +101,38 @@ from app.services.pipeline import (
     run_synthesize_project_audio,
     run_text_rebuild_job,
 )
-from app.services.video_export_jobs import (
-    abort_stale_project_export_jobs,
-    claim_next_video_export_job,
-    complete_video_export_job,
-    enqueue_video_export_job,
-    fail_video_export_job,
-    find_active_video_export_job,
-    get_latest_video_export_job,
-    video_export_job_public_dict,
-)
-from app.services.workflow_controls import (
-    cancel_running_workflow_step,
-    reopen_success_workflow_step,
-)
 from app.services.project_clone import clone_project_deep
-# 片头/片尾恢复时：增加 format_project_meta_description 与 include_* / intro_style_id_from_description
+from app.utils.narration_length import (
+    char_range_for_seconds,
+    clamp_narration_seconds,
+    mid_char_estimate,
+)
 from app.services.project_meta import (
     deck_master_source_project_id_from_description,
-    format_deck_master_source_description,
+    format_project_meta_description,
+    include_intro_from_description,
+    include_outro_from_description,
+    intro_style_id_from_description,
     merge_deck_master_source_id,
 )
-from app.utils.narration_length import clamp_narration_seconds, mid_char_estimate
-from app.tts_voice_presets import list_tts_voice_presets
+from app.services.manual_workflow import apply_manual_outline_edits
 from app.services.project_pipeline import compute_project_pipeline
+from app.tts_voice_presets import effective_voice_type, voice_presets_response
 from app.services.workflow_engine import (
-    get_workflow_text_step_status,
     notify_deck_master_success_if_pending,
-    STEP_RUNNING as WF_STEP_RUNNING,
-    STEP_SUCCEEDED as WF_STEP_SUCCEEDED,
+    user_reopen_success_step,
     workflow_public_dict_async,
 )
 from app.services.workflow_state import (
+    STEP_SUCCESS,
+    can_download,
+    can_start_audio_or_demo,
+    can_start_export,
+    manual_demo_requires_audio,
+    manual_outline_blocks_media_steps,
     mark_export_failed,
     mark_export_running,
+    mark_text_failed,
     mark_export_success,
     reset_export_only,
 )
@@ -184,9 +163,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# StaticFiles 要求目录在 import 时存在；否则 uvicorn 启动即报错。
-settings.storage_root.mkdir(parents=True, exist_ok=True)
-
 app.mount(
     "/media",
     StaticFiles(directory=str(settings.storage_root)),
@@ -203,7 +179,7 @@ async def _get_accessible_project(
     if project.owner_user_id != user_id and not project.is_shared:
         raise HTTPException(
             status_code=403,
-            detail="无权访问该项目（需项目所有者或已开启共享）。",
+            detail="无权访问该项目（需项目所有者或已开启共享）；若使用开发令牌 legacy，请与创建项目时登录的账号一致。",
         )
     return project
 
@@ -213,11 +189,104 @@ def _can_manage_project(project: Project, user_id: int) -> bool:
     return project.owner_user_id == user_id
 
 
+async def _require_deck_master_success_for_batch_scene(
+    session: AsyncSession, project: Project
+) -> None:
+    """
+    存在分步工作流且含 deck_master 行时：生成场景页（批量或单页）前须演示母版就绪。
+
+    与 ``workflow_public_dict_async`` 中 ``merge_deck_master_status_with_style_storage`` 对齐：
+    步骤表可能仍为 pending，但 ``project_styles`` 已有有效母版正文时视为可生成场景页，
+    并调用 ``notify_deck_master_success_if_pending`` 将步骤行同步为 success。
+    文案须已 success 由各路由在调用本函数前通过 ``can_start_audio_or_demo`` 校验。
+    """
+    from app.services import workflow_engine as wf
+
+    if project.id is None:
+        return
+    run = await wf._get_run(session, int(project.id))
+    if run is None or run.id is None:
+        return
+    steps = await wf._load_steps_map(session, int(run.id))
+    row = steps.get(wf.STEP_DECK_MASTER)
+    if row is None:
+        return
+    if row.status == wf.STEP_SUCCESS:
+        return
+    if row.status == wf.STEP_RUNNING:
+        raise HTTPException(
+            status_code=409,
+            detail="演示母版生成中，请稍候后再生成场景页",
+        )
+    if row.status == wf.STEP_FAILED:
+        raise HTTPException(
+            status_code=409,
+            detail="请先在「演示母版」步骤完成母版后再生成场景页",
+        )
+    if row.status == wf.STEP_PENDING:
+        st_res = await session.exec(
+            select(ProjectStyle).where(ProjectStyle.project_id == int(project.id))
+        )
+        style_row = st_res.first()
+        ready, _, _ = deck_style_ready_from_storage(project, style_row)
+        if ready:
+            await notify_deck_master_success_if_pending(session, int(project.id))
+            return
+    raise HTTPException(
+        status_code=409,
+        detail="请先在「演示母版」步骤完成母版后再生成场景页",
+    )
+
+
+async def _demo_batch_generation_busy(
+    session: AsyncSession, project: Project
+) -> bool:
+    """是否存在进行中的批量场景页生成（用于拒绝重复启动）。
+
+    分步工作流下「母版已成功、场景页未开始」时 ``project.demo_status`` 为未开始，
+    与真实生成无关；此时 ``deck_status`` 通常不是 ``generating``。不得仅凭 ``demo_status`` 判忙。
+    """
+    from app.services import workflow_engine as wf
+
+    if (project.deck_status or "").strip().lower() == "generating":
+        return True
+    if project.id is None:
+        return (project.demo_status or "").strip().lower() == "running"
+    run = await wf._get_run(session, int(project.id))
+    if run is not None and run.id is not None:
+        return False
+    return (project.demo_status or "").strip().lower() == "running"
+
+
 def _can_delete_project(project: Project, user_id: int) -> bool:
     return project.owner_user_id == user_id
 
 
-_DEFAULT_PAGE_SIZE = "16:9"
+def _merge_page_html_into_deck_json(
+    existing_deck_json: str | None, main_title: str, html: str
+) -> str:
+    try:
+        data = json.loads(existing_deck_json) if existing_deck_json else {"pages_html": []}
+    except json.JSONDecodeError:
+        data = {"pages_html": []}
+    arr = data.get("pages_html")
+    if not isinstance(arr, list):
+        arr = []
+    kept = [
+        x
+        for x in arr
+        if not (
+            isinstance(x, dict)
+            and str(x.get("main_title", "")).strip() == (main_title or "").strip()
+        )
+    ]
+    kept.append({"main_title": (main_title or "").strip(), "html": html})
+    data["pages_html"] = kept
+    return json.dumps(data, ensure_ascii=False)
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
 
 
 _EXPORT_SIZE_BY_PAGE: dict[str, tuple[int, int]] = {
@@ -242,8 +311,7 @@ def _resolve_export_video_size(
     w = int(req_width) if req_width and req_width > 0 else None
     h = int(req_height) if req_height and req_height > 0 else None
     if w is not None and h is not None:
-        h2 = round(w * base_h / float(base_w))
-        return _even_px(w), _even_px(h2)
+        return _even_px(w), _even_px(h)
     if w is not None:
         h2 = round(w * base_h / float(base_w))
         return _even_px(w), _even_px(h2)
@@ -260,14 +328,94 @@ def _safe_export_basename(project_name: str | None) -> str:
     return safe or "project"
 
 
-def _export_media_base_url() -> str:
-    raw = (settings.export_public_base_url or "").strip()
-    if raw:
-        return raw.rstrip("/")
-    p = urlparse((settings.export_api_url or "").strip())
-    if p.scheme and p.netloc:
-        return f"{p.scheme}://{p.netloc}".rstrip("/")
-    return ""
+def _export_subprocess_detail(exc: subprocess.CalledProcessError) -> str:
+    text = (exc.stderr or exc.stdout or "").strip()
+    if "ERR_CONNECTION_REFUSED" in text:
+        return (
+            "录屏无法打开放映页（连接被拒绝）。可任选其一："
+            "① 在 neoncast-ai 目录执行 npm run dev；"
+            "② 另开终端执行 npm run dev:play（专用放映/录屏，默认 5174），并在 backend/.env 设置 "
+            "EXPORT_PLAY_ORIGIN=http://127.0.0.1:5174；"
+            "③ 在导出 JSON 中传 frontend_url；"
+            "④ 设置 EXPORT_FRONTEND_URL。"
+        )
+    if "Traceback (most recent call last):" in text:
+        idx = text.rfind("Traceback (most recent call last):")
+        tail = text[idx:]
+        if len(tail) > 4500:
+            tail = tail[:4500] + "\n…(已截断)"
+        return tail
+    if len(text) > 3500:
+        return text[-3500:]
+    return text or str(exc)
+
+
+def _export_video_sync(
+    project_id: int,
+    project_name: str | None,
+    project_description: str | None,
+    width: int | None,
+    height: int | None,
+    frontend_url: str | None,
+    authorization: str | None,
+) -> Path:
+    script_path = _repo_root() / "scripts" / "export_video.py"
+    if not script_path.is_file():
+        raise RuntimeError(f"export_video.py not found: {script_path}")
+
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    salt = f"{int(time.time() * 1000) % 1000:03d}-{uuid.uuid4().hex[:6]}"
+    output_path = (
+        settings.storage_root
+        / "projects"
+        / str(project_id)
+        / "exports"
+        / f"{ts}-{salt}"
+        / f"{_safe_export_basename(project_name)}.mp4"
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    forced = (settings.export_play_origin or "").strip()
+    resolved_frontend = forced or (frontend_url or "").strip() or settings.export_frontend_url
+    cmd = [
+        sys.executable,
+        str(script_path),
+        "--project-id",
+        str(project_id),
+        "--output",
+        str(output_path),
+        "--frontend-url",
+        resolved_frontend,
+        "--api-url",
+        settings.export_api_url,
+    ]
+    if width:
+        cmd += ["--width", str(width)]
+    if height:
+        cmd += ["--height", str(height)]
+
+    cmd += ["--storage-root", str(settings.storage_root.resolve())]
+
+    env = os.environ.copy()
+    auth = (authorization or "").strip()
+    if auth:
+        env["SLIDEFORGE_EXPORT_AUTHORIZATION"] = auth
+    # 显式写入 0，避免子进程继承 shell 里残留的 SLIDEFORGE_EXPORT_* 导致片头/字幕错位
+    if include_intro_from_description(project_description) and int(
+        settings.export_intro_duration_ms or 0
+    ) > 0:
+        env["SLIDEFORGE_EXPORT_INTRO_MS"] = str(int(settings.export_intro_duration_ms))
+    else:
+        env["SLIDEFORGE_EXPORT_INTRO_MS"] = "0"
+    if include_outro_from_description(project_description) and int(
+        settings.export_outro_duration_ms or 0
+    ) > 0:
+        env["SLIDEFORGE_EXPORT_OUTRO_MS"] = str(int(settings.export_outro_duration_ms))
+    else:
+        env["SLIDEFORGE_EXPORT_OUTRO_MS"] = "0"
+
+    subprocess.run(cmd, check=True, capture_output=True, text=True, env=env)
+    return output_path
 
 
 @app.get("/api/health")
@@ -350,19 +498,27 @@ async def deck_style_presets() -> dict:
     return {"items": list_deck_style_presets()}
 
 
-@app.get("/api/tts/voice-presets")
-async def tts_voice_presets() -> dict:
-    return {"presets": list_tts_voice_presets()}
-
-
 @app.get("/api/narration-length-estimate")
-async def narration_length_estimate(seconds: int) -> dict:
-    """按目标口播秒数估算中位汉字量（与结构化篇幅提示同一换算）。"""
+async def narration_length_estimate(
+    seconds: int = Query(..., ge=1, le=3600, description="目标口播秒数（10～3600 内有效）"),
+) -> dict:
+    """按自然中文口播粗算全稿 script 字数区间，与结构化提示一致。"""
     s = clamp_narration_seconds(seconds)
+    lo, hi = char_range_for_seconds(s)
     return {
         "seconds": s,
+        "min_chars": lo,
+        "max_chars": hi,
         "mid_chars": mid_char_estimate(s),
     }
+
+
+@app.get("/api/tts/voice-presets")
+async def get_tts_voice_presets(
+    _me: User = Depends(get_current_user),
+) -> dict:
+    """豆包语音合成常用音色列表与当前服务器默认 voice_type（需登录）。"""
+    return voice_presets_response()
 
 
 @app.get("/api/projects")
@@ -385,23 +541,22 @@ async def list_projects(
         for u in ures.all():
             if u.id is not None:
                 username_by_uid[int(u.id)] = (u.username or "").strip().lower()
+    pids = [int(x.id) for x in projects if x.id is not None]
+    style_by_pid: dict[int, ProjectStyle] = {}
+    if pids:
+        st_res = await session.exec(
+            select(ProjectStyle).where(ProjectStyle.project_id.in_(pids))
+        )
+        for st in st_res.all():
+            style_by_pid[int(st.project_id)] = st
     items: list[dict] = []
     for p in projects:
         pl = await compute_project_pipeline(session, p)
-        vj = (
-            await get_latest_video_export_job(session, int(p.id))
-            if p.id is not None
-            else None
-        )
-        vj_out_url = None
-        if vj is not None and (vj.status or "").strip().lower() == "succeeded":
-            vj_out_url = latest_export_media_url(int(p.id), settings.storage_root)
-        st = await get_project_style(session, p)
+        st = style_by_pid.get(int(p.id)) if p.id is not None else None
         preset = (
-            (st.style_preset if st else "aurora_glass") or "aurora_glass"
-        ).strip() or "aurora_glass"
-        page_size = resolve_project_page_size(p)
-        deck_status = await compute_project_deck_status(session, int(p.id)) if p.id is not None else "idle"
+            (st.style_preset if st else "none") or "none"
+        ).strip() or "none"
+        page_size = (p.deck_page_size or "16:9").strip() or "16:9"
         oid = int(p.owner_user_id) if p.owner_user_id is not None else 0
         items.append(
             {
@@ -411,7 +566,7 @@ async def list_projects(
                 "owner_username": username_by_uid.get(oid, ""),
                 "is_shared": bool(p.is_shared),
                 "status": p.status,
-                "deck_status": deck_status,
+                "deck_status": p.deck_status or "idle",
                 "deck_style_preset": preset,
                 "deck_page_size": page_size,
                 "created_at": p.created_at.isoformat(),
@@ -420,26 +575,27 @@ async def list_projects(
                     p.id, settings.storage_root
                 ),
                 "pipeline": pl,
-                "workflow": await workflow_public_dict_async(session, p),
-                "video_export_job": video_export_job_public_dict(
-                    vj, success_output_url=vj_out_url
+                "workflow": await workflow_public_dict_async(
+                    session, p, style_row=st
                 ),
-                "video_exported_at": None,
-                "deck_master_source_project_id": (
-                    int(st.origin_project_id)
-                    if st and st.origin_project_id is not None
-                    else deck_master_source_project_id_from_description(p.description)
+                "video_exported_at": p.video_exported_at.isoformat()
+                if p.video_exported_at
+                else None,
+                "deck_master_source_project_id": deck_master_source_project_id_from_description(
+                    p.description
                 ),
+                "include_intro": include_intro_from_description(p.description),
+                "intro_style_id": intro_style_id_from_description(p.description),
+                "include_outro": include_outro_from_description(p.description),
+                "narration_target_seconds": p.narration_target_seconds,
                 "pipeline_auto_advance": bool(
                     getattr(p, "pipeline_auto_advance", True)
                 ),
-                "text_structure_mode": (
-                    getattr(p, "text_structure_mode", None) or "polish"
+                "text_structure_mode": (getattr(p, "text_structure_mode", None) or "polish"),
+                "manual_outline_confirmed": bool(
+                    getattr(p, "manual_outline_confirmed", True)
                 ),
-                # 片头/片尾（暂不下发；库内 __sfmeta 仍可由 project_meta 解析）
-                # "include_intro": include_intro_from_description(p.description),
-                # "intro_style_id": intro_style_id_from_description(p.description),
-                # "include_outro": include_outro_from_description(p.description),
+                "input_prompt": p.input_prompt,
             }
         )
     return {"items": items}
@@ -452,7 +608,7 @@ async def create_project(
     session: AsyncSession = Depends(get_session),
     me: User = Depends(get_current_user),
 ) -> dict:
-    """立即创建项目（queued），后台跑结构化 → 配音 → 演示页。"""
+    """创建项目：自动模式入队跑结构化→配音→演示；手动模式为 pending_text，需用户在工程内点「文本结构化」启动。"""
     name = body.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="项目名称不能为空")
@@ -460,30 +616,7 @@ async def create_project(
     if not raw:
         raise HTTPException(status_code=400, detail="raw_text 不能为空")
 
-    target_sec = body.target_narration_seconds
-    if target_sec is not None:
-        if target_sec < 10 or target_sec > 1800:
-            raise HTTPException(
-                status_code=400,
-                detail="target_narration_seconds 应在 10～1800 之间",
-            )
-
-    tsm_store: str | None = None
-    if body.text_structure_mode is not None:
-        v = str(body.text_structure_mode).strip().lower()
-        if v not in ("polish", "verbatim_split"):
-            raise HTTPException(
-                status_code=400,
-                detail="text_structure_mode 须为 polish 或 verbatim_split",
-            )
-        if v == "verbatim_split":
-            tsm_store = "verbatim_split"
-
-    # if body.include_intro and body.intro_style_id is not None:
-    #     if int(body.intro_style_id) < 1:
-    #         raise HTTPException(status_code=400, detail="intro_style_id 须 >= 1")
-
-    page_size = _DEFAULT_PAGE_SIZE
+    page_size = "16:9"
     if body.deck_page_size is not None:
         ps = body.deck_page_size.strip()
         if ps not in DECK_PAGE_SIZE_OPTIONS:
@@ -499,7 +632,10 @@ async def create_project(
         src_project = await _get_accessible_project(
             session, int(copy_master_pid), int(me.id)
         )
-        src_style_row = await get_project_style(session, src_project)
+        st_res = await session.exec(
+            select(ProjectStyle).where(ProjectStyle.project_id == int(copy_master_pid))
+        )
+        src_style_row = st_res.first()
         ready, _, _ = deck_style_ready_from_storage(src_project, src_style_row)
         if not ready:
             raise HTTPException(
@@ -507,7 +643,7 @@ async def create_project(
                 detail="源项目还没有可用的演示风格母版，请换项目或留空以自动生成",
             )
 
-    preset = (body.deck_style_preset or "aurora_glass").strip() or "aurora_glass"
+    preset = (body.deck_style_preset or "none").strip() or "none"
     if copy_master_pid is None:
         try:
             resolve_deck_style_preset(preset)
@@ -515,29 +651,32 @@ async def create_project(
             raise HTTPException(status_code=400, detail=str(e)) from e
     else:
         assert src_style_row is not None
-        preset = (src_style_row.style_preset or "aurora_glass").strip() or "aurora_glass"
+        preset = (src_style_row.style_preset or "none").strip() or "none"
         try:
             resolve_deck_style_preset(preset)
         except RuntimeError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
     now = utc_now()
-    # 片头/片尾：恢复时改用 format_project_meta_description(..., include_intro=...)
-    # intro_sid = int(body.intro_style_id) if body.include_intro and body.intro_style_id is not None else None
-    # desc = format_project_meta_description(
-    #     deck_master_source_project_id=int(copy_master_pid) if copy_master_pid is not None else None,
-    #     include_intro=bool(body.include_intro),
-    #     include_outro=bool(body.include_outro),
-    #     intro_style_id=intro_sid,
-    # )
-    desc = (
-        format_deck_master_source_description(int(copy_master_pid))
-        if copy_master_pid is not None
-        else None
+    intro_sid: int | None = None
+    if body.include_intro:
+        intro_sid = int(body.intro_style_id) if body.intro_style_id is not None else 1
+    desc = format_project_meta_description(
+        deck_master_source_project_id=(
+            int(copy_master_pid) if copy_master_pid is not None else None
+        ),
+        include_intro=bool(body.include_intro),
+        include_outro=bool(body.include_outro),
+        intro_style_id=intro_sid,
     )
-    default_w, default_h = _EXPORT_SIZE_BY_PAGE.get(page_size, _EXPORT_SIZE_BY_PAGE[_DEFAULT_PAGE_SIZE])
-    auto_run = bool(body.pipeline_auto_advance)
-    tts_vt = (body.tts_voice_type or "").strip() or None
+    tts_vt_raw = body.tts_voice_type
+    tts_stored = None
+    if tts_vt_raw is not None:
+        tts_st = (tts_vt_raw or "").strip()
+        if len(tts_st) > 128:
+            raise HTTPException(status_code=400, detail="音色标识过长")
+        tts_stored = tts_st or None
+    auto_pipeline = bool(body.pipeline_auto_advance)
     project = Project(
         owner_user_id=int(me.id),
         user_id=int(me.id),
@@ -545,14 +684,15 @@ async def create_project(
         name=name,
         description=desc,
         input_prompt=raw,
-        status="queued",
-        aspect_ratio=page_size,
-        deck_width=default_w,
-        deck_height=default_h,
-        target_narration_seconds=target_sec,
-        text_structure_mode=tsm_store,
-        pipeline_auto_advance=auto_run,
-        tts_voice_type=tts_vt,
+        narration_target_seconds=body.narration_target_seconds,
+        tts_voice_type=tts_stored,
+        pipeline_auto_advance=auto_pipeline,
+        status="queued" if auto_pipeline else "pending_text",
+        text_status="running" if auto_pipeline else "not_started",
+        audio_status="not_started",
+        demo_status="not_started",
+        export_status="not_started",
+        deck_page_size=page_size,
         created_at=now,
         updated_at=now,
     )
@@ -561,33 +701,51 @@ async def create_project(
     await session.refresh(project)
     assert project.id is not None
     if copy_master_pid is not None and src_style_row is not None:
-        project.style_id = int(src_style_row.id)
-        project.updated_at = now
-        session.add(project)
-    else:
-        uh = (body.deck_style_user_hint or "").strip() or None
-        own_style = ProjectStyle(
-            origin_project_id=int(project.id),
-            style_preset=preset,
-            user_style_hint=uh,
-            style_prompt_text="",
-            style_data_json=None,
-            style_base_json="",
-            version=1,
-            created_at=now,
-            updated_at=now,
+        session.add(
+            ProjectStyle(
+                project_id=int(project.id),
+                style_preset=(src_style_row.style_preset or "none").strip()
+                or "none",
+                user_style_hint=src_style_row.user_style_hint,
+                style_prompt_text=src_style_row.style_prompt_text or "",
+                style_data_json=src_style_row.style_data_json,
+                style_base_json=src_style_row.style_base_json or "",
+                version=int(src_style_row.version or 1),
+                created_at=now,
+                updated_at=now,
+            )
         )
-        session.add(own_style)
-        await session.flush()
-        project.style_id = int(own_style.id)
-        project.updated_at = now
-        session.add(project)
+    else:
+        hint_raw = body.deck_style_user_hint
+        hint_val = (
+            hint_raw.strip()
+            if isinstance(hint_raw, str) and hint_raw.strip()
+            else None
+        )
+        session.add(
+            ProjectStyle(
+                project_id=int(project.id),
+                style_preset=preset,
+                user_style_hint=hint_val,
+                style_prompt_text="",
+                style_data_json=None,
+                style_base_json="",
+                version=1,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+    # 与 project_styles 同步；供 db 迁移从 projects 回填时读到正确预设（避免 NULL 误写成默认）
+    await session.execute(
+        text("UPDATE projects SET deck_style_preset = :p WHERE id = :id"),
+        {"p": preset, "id": int(project.id)},
+    )
     await session.commit()
     from app.services import workflow_engine as _wf
 
-    await _wf.ensure_workflow_for_project(session, project, align_from_project=False)
+    await _wf.ensure_workflow_for_project(session, project, align_from_project=True)
     await session.commit()
-    if auto_run:
+    if auto_pipeline:
         background_tasks.add_task(run_queued_project_pipeline_job, project.id)
     return {"project_id": project.id}
 
@@ -645,8 +803,8 @@ async def patch_project(
     session: AsyncSession = Depends(get_session),
     me: User = Depends(get_current_user),
 ) -> dict:
-    updates = body.model_dump(exclude_unset=True)
-    if not updates:
+    patch_data = body.model_dump(exclude_unset=True)
+    if not patch_data:
         raise HTTPException(
             status_code=400,
             detail="请提供要修改的字段",
@@ -654,90 +812,54 @@ async def patch_project(
     project = await _get_accessible_project(session, project_id, int(me.id))
     if not _can_manage_project(project, int(me.id)):
         raise HTTPException(status_code=403, detail="无权限修改该项目")
-    if "name" in updates:
-        name = str(updates["name"] or "").strip()
+    if "name" in patch_data:
+        name = (patch_data["name"] or "").strip()
         if not name:
             raise HTTPException(status_code=400, detail="项目名称不能为空")
         project.name = name
-    if "is_shared" in updates:
-        project.is_shared = bool(updates["is_shared"])
-    if "input_prompt" in updates:
-        project.input_prompt = str(updates["input_prompt"] or "").strip()
-    if "tts_voice_type" in updates:
-        raw_v = updates["tts_voice_type"]
-        if raw_v is None or (isinstance(raw_v, str) and not raw_v.strip()):
+    if "is_shared" in patch_data:
+        project.is_shared = bool(patch_data["is_shared"])
+    if "tts_voice_type" in patch_data:
+        raw_vt = patch_data["tts_voice_type"]
+        if raw_vt is None:
             project.tts_voice_type = None
         else:
-            project.tts_voice_type = str(raw_v).strip()[:200]
-    if "text_structure_mode" in updates:
-        tsm = updates["text_structure_mode"]
-        if tsm is None or (isinstance(tsm, str) and not str(tsm).strip()):
+            vt = (raw_vt or "").strip()
+            if len(vt) > 128:
+                raise HTTPException(status_code=400, detail="音色标识过长")
+            project.tts_voice_type = vt or None
+    if "input_prompt" in patch_data:
+        ip = patch_data["input_prompt"]
+        if ip is None:
+            raise HTTPException(status_code=400, detail="input_prompt 不能为 null")
+        raw = str(ip).strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="主题素材不能为空")
+        project.input_prompt = raw
+    if "text_structure_mode" in patch_data:
+        tsm = patch_data["text_structure_mode"]
+        if tsm is None:
             project.text_structure_mode = None
         else:
-            v = str(tsm).strip().lower()
+            v = (str(tsm).strip().lower() or "polish")
             if v not in ("polish", "verbatim_split"):
                 raise HTTPException(
                     status_code=400,
                     detail="text_structure_mode 须为 polish 或 verbatim_split",
                 )
-            project.text_structure_mode = None if v == "polish" else "verbatim_split"
+            project.text_structure_mode = v
     project.updated_at = utc_now()
     session.add(project)
     await session.commit()
-    return {"ok": True, "name": project.name, "is_shared": bool(project.is_shared)}
-
-
-def _normalize_workflow_step_key(step: str) -> str:
-    s = (step or "").strip().lower()
-    if s == "pages":
-        return "deck_render"
-    return s
-
-
-@app.post("/api/projects/{project_id}/workflow/step/cancel-running")
-async def workflow_step_cancel_running(
-    project_id: int,
-    body: WorkflowStepActionBody,
-    session: AsyncSession = Depends(get_session),
-    me: User = Depends(get_current_user),
-) -> dict:
-    project = await _get_accessible_project(session, project_id, int(me.id))
-    if not _can_manage_project(project, int(me.id)):
-        raise HTTPException(status_code=403, detail="无权限修改该项目")
-    if project.id is None:
-        raise HTTPException(status_code=400, detail="项目无效")
-    key = _normalize_workflow_step_key(body.step)
-    try:
-        await cancel_running_workflow_step(session, project, key)
-        await session.commit()
-    except ValueError as e:
-        await session.rollback()
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    await session.refresh(project)
-    return {"ok": True}
-
-
-@app.post("/api/projects/{project_id}/workflow/step/reopen-success")
-async def workflow_step_reopen_success(
-    project_id: int,
-    body: WorkflowStepActionBody,
-    session: AsyncSession = Depends(get_session),
-    me: User = Depends(get_current_user),
-) -> dict:
-    project = await _get_accessible_project(session, project_id, int(me.id))
-    if not _can_manage_project(project, int(me.id)):
-        raise HTTPException(status_code=403, detail="无权限修改该项目")
-    if project.id is None:
-        raise HTTPException(status_code=400, detail="项目无效")
-    key = _normalize_workflow_step_key(body.step)
-    try:
-        await reopen_success_workflow_step(session, project, key)
-        await session.commit()
-    except ValueError as e:
-        await session.rollback()
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    await session.refresh(project)
-    return {"ok": True}
+    return {
+        "ok": True,
+        "name": project.name,
+        "is_shared": bool(project.is_shared),
+        "tts_voice_type": project.tts_voice_type,
+        "tts_voice_effective": effective_voice_type(project.tts_voice_type),
+        "input_prompt": project.input_prompt,
+        "text_structure_mode": project.text_structure_mode or "polish",
+    }
 
 
 @app.delete("/api/projects/{project_id}")
@@ -753,14 +875,6 @@ async def delete_project(
         await delete_project_cascade(session, project_id)
     except RuntimeError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except IntegrityError as e:
-        await session.rollback()
-        orig = getattr(e, "orig", None)
-        hint = str(orig) if orig is not None else str(e)
-        raise HTTPException(
-            status_code=409,
-            detail=f"删除失败（数据库外键/约束）：{hint}",
-        ) from e
     media_dir = settings.storage_root / "projects" / str(project_id)
     if media_dir.is_dir():
         try:
@@ -785,59 +899,60 @@ async def get_project(
     await session.refresh(project)
     playlist = await load_playlist_rows(session, project_id)
     outline = await load_outline_tree(session, project_id)
-    st_row = await get_project_style(session, project)
+    st_res = await session.exec(
+        select(ProjectStyle).where(ProjectStyle.project_id == project_id)
+    )
+    st_row = st_res.first()
     if st_row is None:
         st_row = await get_or_create_project_style(session, project_id)
-    preset = (st_row.style_preset or "aurora_glass").strip() or "aurora_glass"
+    preset = (st_row.style_preset or "none").strip() or "none"
     deck_style_ready, deck_style_theme_name, deck_style_version = (
         deck_style_ready_from_storage(project, st_row)
     )
     export_url = latest_export_media_url(project_id, settings.storage_root)
     pl = await compute_project_pipeline(session, project)
-    deck_status = await compute_project_deck_status(session, project_id)
-    deck_error = None
-    if deck_status == "failed":
-        # 失败时返回首条错误（来自 page_deck_error）
-        from app.services.deck import _first_failed_page_deck_error  # type: ignore
-        deck_error = await _first_failed_page_deck_error(session, project_id)
-    latest_ex_job = await get_latest_video_export_job(session, project_id)
-    ex_job_out_url = None
-    if latest_ex_job is not None and (latest_ex_job.status or "").strip().lower() == "succeeded":
-        ex_job_out_url = latest_export_media_url(project_id, settings.storage_root)
     return {
         "latest_export_url": export_url,
-        "video_export_job": video_export_job_public_dict(
-            latest_ex_job, success_output_url=ex_job_out_url
+        "workflow": await workflow_public_dict_async(
+            session, project, style_row=st_row
         ),
-        "workflow": await workflow_public_dict_async(session, project),
         "pipeline": pl,
-        "video_exported_at": None,
+        "video_exported_at": project.video_exported_at.isoformat()
+        if project.video_exported_at
+        else None,
+        "video_source_updated_at": project.video_source_updated_at.isoformat()
+        if project.video_source_updated_at
+        else None,
         "project": {
             "id": project.id,
             "name": project.name,
             "owner_user_id": project.owner_user_id,
             "is_shared": bool(project.is_shared),
             "description": project.description,
-            "deck_master_source_project_id": (
-                int(st_row.origin_project_id)
-                if st_row and st_row.origin_project_id is not None
-                else deck_master_source_project_id_from_description(project.description)
+            "deck_master_source_project_id": deck_master_source_project_id_from_description(
+                project.description
             ),
-            "input_prompt": project.input_prompt,
-            "target_narration_seconds": project.target_narration_seconds,
+            "include_intro": include_intro_from_description(project.description),
+            "intro_style_id": intro_style_id_from_description(project.description),
+            "include_outro": include_outro_from_description(project.description),
+            "narration_target_seconds": project.narration_target_seconds,
+            "pipeline_auto_advance": bool(
+                getattr(project, "pipeline_auto_advance", True)
+            ),
             "text_structure_mode": (getattr(project, "text_structure_mode", None) or "polish"),
-            "tts_voice_type": (project.tts_voice_type or "").strip() or None,
-            "tts_voice_effective": resolve_tts_voice_type(project.tts_voice_type),
-            # "include_intro": include_intro_from_description(project.description),
-            # "intro_style_id": intro_style_id_from_description(project.description),
-            # "include_outro": include_outro_from_description(project.description),
+            "manual_outline_confirmed": bool(
+                getattr(project, "manual_outline_confirmed", True)
+            ),
+            "tts_voice_type": project.tts_voice_type,
+            "tts_voice_effective": effective_voice_type(project.tts_voice_type),
+            "input_prompt": project.input_prompt,
             "status": project.status,
-            "deck_status": deck_status,
-            "deck_error": deck_error,
+            "deck_status": project.deck_status or "idle",
+            "deck_error": project.deck_error,
             "deck_style_preset": preset,
             "deck_style_user_hint": st_row.user_style_hint or "",
             "deck_style_prompt_text": st_row.style_prompt_text or "",
-            "deck_page_size": resolve_project_page_size(project),
+            "deck_page_size": (project.deck_page_size or "16:9").strip() or "16:9",
             "deck_style_ready": deck_style_ready,
             "deck_style_version": deck_style_version,
             "deck_style_theme_name": deck_style_theme_name,
@@ -888,217 +1003,91 @@ async def export_video(
     pl_ok = bool(
         pl.get("outline") and pl.get("audio") and pl.get("deck")
     )
-    if not pl_ok:
+    if not pl_ok and not can_start_export(project):
         raise HTTPException(status_code=409, detail="请先完成全部前置步骤后再导出")
-    page_size = resolve_project_page_size(project)
     export_width, export_height = _resolve_export_video_size(
-        page_size, body.width, body.height
+        project.deck_page_size, body.width, body.height
     )
 
     latest_url = latest_export_media_url(project_id, settings.storage_root)
-    # 仅当流水线认定「成片有效」且用户未要求重导时才短路下载；避免磁盘上残留 mp4 但导出态已失效时误返回 download
-    if latest_url and not body.force_reexport and bool(pl.get("video")):
+    source_updated_at = (
+        project.video_source_updated_at or project.created_at or project.updated_at
+    )
+    is_export_fresh = (
+        project.video_exported_at is not None
+        and project.video_exported_at >= source_updated_at
+    )
+    if is_export_fresh and latest_url and not body.force_reexport:
         await mark_export_success(session, project, latest_url)
+        session.add(project)
         await session.commit()
+        await session.refresh(project)
         pl = await compute_project_pipeline(session, project)
         return ExportVideoResponse(
             output_url=latest_url,
             action="download",
             pipeline=PipelineStages(**pl),
-            video_exported_at=None,
-            export_job_id=None,
+            video_exported_at=project.video_exported_at.isoformat()
+            if project.video_exported_at
+            else None,
         )
 
-    if not (settings.export_worker_token or "").strip():
-        raise HTTPException(
-            status_code=503,
-            detail="未配置 EXPORT_WORKER_TOKEN，无法入队视频导出（请启动 worker 并与此密钥一致）",
-        )
-    auth_hdr = (authorization or "").strip()
-    if not auth_hdr or not auth_hdr.lower().startswith("bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail="导出需要有效的 Authorization: Bearer …（供 worker 拉取放映清单）",
-        )
-
-    if body.force_reexport:
-        await abort_stale_project_export_jobs(
-            session, project_id, "已取消：用户发起重新导出"
-        )
-        delete_project_export_files(settings.storage_root, project_id)
-        await reset_export_only(session, project)
-        await session.commit()
-        await session.refresh(project)
-        pl = await compute_project_pipeline(session, project)
-        latest_url = latest_export_media_url(project_id, settings.storage_root)
-
-    active = await find_active_video_export_job(session, project_id)
-    if active is not None and active.id is not None:
-        pl = await compute_project_pipeline(session, project)
-        return ExportVideoResponse(
-            output_url=latest_url or "",
-            action="queued",
-            pipeline=PipelineStages(**pl),
-            video_exported_at=None,
-            export_job_id=int(active.id),
-        )
     await mark_export_running(session, project)
     session.add(project)
-    job = await enqueue_video_export_job(
-        session,
-        project_id,
-        export_width,
-        export_height,
-        auth_hdr,
-    )
     await session.commit()
-    pl = await compute_project_pipeline(session, project)
-    return ExportVideoResponse(
-        output_url=latest_url or "",
-        action="queued",
-        pipeline=PipelineStages(**pl),
-        video_exported_at=None,
-        export_job_id=int(job.id) if job.id is not None else None,
-    )
 
-
-@app.get(
-    "/internal/worker/video-export/jobs/next",
-    response_model=WorkerVideoExportJobPayload | None,
-)
-async def worker_claim_next_video_export(
-    worker_id: str | None = None,
-    _: None = Depends(verify_export_worker_key),
-    session: AsyncSession = Depends(get_session),
-) -> WorkerVideoExportJobPayload | None:
-    label = (worker_id or "").strip() or "worker"
-    job = await claim_next_video_export_job(
-        session,
-        label,
-        stale_after_seconds=settings.export_job_running_timeout_seconds,
-    )
-    if job is None:
-        return None
-    project = await session.get(Project, job.project_id)
-    if project is None:
-        return None
-    auth = (job.request_authorization or "").strip()
-    if not auth:
-        await fail_video_export_job(session, int(job.id), "任务缺少 Authorization，已丢弃")
-        return None
-    forced = (settings.export_play_origin or "").strip()
-    frontend = forced or settings.export_frontend_url.strip()
-    media_base = _export_media_base_url()
-    if not media_base:
-        await fail_video_export_job(
-            session,
-            int(job.id),
-            "服务器未配置可访问的媒体根（EXPORT_PUBLIC_BASE_URL 或 EXPORT_API_URL）",
+    try:
+        output_path = await asyncio.to_thread(
+            _export_video_sync,
+            project_id,
+            project.name,
+            project.description,
+            export_width,
+            export_height,
+            body.frontend_url,
+            authorization,
         )
-        return None
-    assert job.id is not None
-    # --- 片头/片尾：恢复时取消注释，并在 config 中恢复 export_*_duration_ms ---
-    # desc = project.description or ""
-    intro_ms = 0
-    outro_ms = 0
-    intro_sid: int | None = None
-    # if include_intro_from_description(desc) and int(
-    #     settings.export_intro_duration_ms or 0
-    # ) > 0:
-    #     intro_ms = int(settings.export_intro_duration_ms)
-    #     intro_sid = intro_style_id_from_description(desc)
-    # if include_outro_from_description(desc) and int(
-    #     settings.export_outro_duration_ms or 0
-    # ) > 0:
-    #     outro_ms = int(settings.export_outro_duration_ms)
-    return WorkerVideoExportJobPayload(
-        job_id=int(job.id),
-        project_id=int(job.project_id),
-        project_name=(project.name or "").strip() or "project",
-        width=int(job.width),
-        height=int(job.height),
-        frontend_url=frontend,
-        api_url=(settings.export_api_url or "").strip(),
-        media_base_url=media_base,
-        authorization=auth,
-        export_intro_ms=intro_ms,
-        export_outro_ms=outro_ms,
-        intro_style_id=intro_sid,
-    )
+    except (subprocess.CalledProcessError, RuntimeError) as e:
+        async with async_session_maker() as fail_session:
+            p = await fail_session.get(Project, project_id)
+            if p:
+                detail = (
+                    _export_subprocess_detail(e)
+                    if isinstance(e, subprocess.CalledProcessError)
+                    else str(e)
+                )
+                await mark_export_failed(fail_session, p, detail or "导出失败")
+                await fail_session.commit()
+        if isinstance(e, subprocess.CalledProcessError):
+            raise HTTPException(
+                status_code=500, detail=_export_subprocess_detail(e) or "导出失败"
+            ) from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
-
-@app.post("/internal/worker/video-export/jobs/{job_id}/complete")
-async def worker_complete_video_export(
-    job_id: int,
-    file: UploadFile = File(...),
-    _: None = Depends(verify_export_worker_key),
-    session: AsyncSession = Depends(get_session),
-) -> dict:
-    job = await session.get(VideoExportJob, job_id)
-    if job is None or job.status != "running":
-        raise HTTPException(status_code=404, detail="任务不存在或未处于执行中")
-    project = await session.get(Project, job.project_id)
+    now = utc_now()
+    project = await session.get(Project, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="项目不存在")
-    ts = time.strftime("%Y%m%d-%H%M%S")
-    salt = f"{int(time.time() * 1000) % 1000:03d}-{uuid.uuid4().hex[:6]}"
-    output_path = (
-        settings.storage_root
-        / "projects"
-        / str(job.project_id)
-        / "exports"
-        / f"{ts}-{salt}"
-        / f"{_safe_export_basename(project.name)}.mp4"
+    project.video_exported_at = now
+    # 兼容历史项目：首次成功导出时补齐 source 时间锚点，避免后续因 updated_at 变化被误判“需重导”。
+    if project.video_source_updated_at is None:
+        project.video_source_updated_at = now
+    project.updated_at = now
+    rel = output_path.relative_to(settings.storage_root)
+    out_url = f"/media/{rel.as_posix()}"
+    await mark_export_success(session, project, out_url)
+    session.add(project)
+    await session.commit()
+    await session.refresh(project)
+    pl = await compute_project_pipeline(session, project)
+    return ExportVideoResponse(
+        output_url=out_url,
+        action="export",
+        pipeline=PipelineStages(**pl),
+        video_exported_at=project.video_exported_at.isoformat()
+        if project.video_exported_at
+        else None,
     )
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    max_bytes = max(32, int(settings.export_upload_max_bytes))
-    written = 0
-    chunk_size = 1024 * 1024
-    try:
-        with output_path.open("wb") as fh:
-            while True:
-                chunk = await file.read(chunk_size)
-                if not chunk:
-                    break
-                written += len(chunk)
-                if written > max_bytes:
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"上传文件过大，当前限制为 {max_bytes // (1024 * 1024)} MiB",
-                    )
-                fh.write(chunk)
-    except Exception:
-        try:
-            if output_path.exists():
-                output_path.unlink()
-        except OSError:
-            pass
-        raise
-    finally:
-        await file.close()
-    if written < 32:
-        raise HTTPException(status_code=400, detail="上传文件过小或为空")
-    try:
-        out_url = await complete_video_export_job(
-            session, job_id, output_path, settings.storage_root
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    return {"ok": True, "output_url": out_url}
-
-
-@app.post("/internal/worker/video-export/jobs/{job_id}/fail")
-async def worker_fail_video_export(
-    job_id: int,
-    body: WorkerVideoExportFailBody,
-    _: None = Depends(verify_export_worker_key),
-    session: AsyncSession = Depends(get_session),
-) -> dict:
-    try:
-        await fail_video_export_job(session, job_id, body.error)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    return {"ok": True}
 
 
 @app.get("/api/projects/{project_id}/workflow")
@@ -1137,20 +1126,11 @@ async def workflow_run_text(
     project = await _get_accessible_project(session, project_id, int(me.id))
     if not _can_manage_project(project, int(me.id)):
         raise HTTPException(status_code=403, detail="无权限修改该项目")
-    if project.status == "queued":
+    if project.text_status == "running" or project.status in (
+        "queued",
+        "structuring",
+    ):
         raise HTTPException(status_code=409, detail="文本正在生成中")
-    if project.status == "structuring":
-        text_st = await get_workflow_text_step_status(session, project)
-        if text_st == WF_STEP_RUNNING:
-            raise HTTPException(status_code=409, detail="文本正在生成中")
-        # 取消文本后未回落、或后台异常退出导致 projects.status 陈旧
-        project.status = (
-            "ready" if text_st == WF_STEP_SUCCEEDED else "draft"
-        )
-        project.updated_at = utc_now()
-        session.add(project)
-        await session.commit()
-        await session.refresh(project)
     background_tasks.add_task(run_text_rebuild_job, project_id)
     return {"ok": True, "queued": True}
 
@@ -1162,49 +1142,18 @@ async def manual_confirm_outline(
     session: AsyncSession = Depends(get_session),
     me: User = Depends(get_current_user),
 ) -> dict:
-    """手动流水线：将用户编辑后的口播分段写回 outline / node_contents。"""
+    """手动流水线：用户在大表单中改完大标题/小标题/口播后提交，写入库并允许后续配音。"""
     project = await _get_accessible_project(session, project_id, int(me.id))
     if not _can_manage_project(project, int(me.id)):
         raise HTTPException(status_code=403, detail="无权限修改该项目")
+    if (project.text_status or "") != "success":
+        raise HTTPException(status_code=409, detail="请先完成文本结构化")
     try:
-        await apply_manual_outline_confirm(session, project, body.pages)
+        await apply_manual_outline_edits(session, project, body.pages)
         await session.commit()
     except ValueError as e:
-        await session.rollback()
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {"ok": True}
-
-
-@app.post("/api/projects/{project_id}/workflow/deck_master/run")
-async def workflow_run_deck_master(
-    project_id: int,
-    session: AsyncSession = Depends(get_session),
-    me: User = Depends(get_current_user),
-) -> dict:
-    """生成/刷新演示风格母版，并同步 workflow_step_runs.deck_master。"""
-    project = await _get_accessible_project(session, project_id, int(me.id))
-    if not _can_manage_project(project, int(me.id)):
-        raise HTTPException(status_code=403, detail="无权限修改该项目")
-    try:
-        await ensure_style_base(project_id)
-    except RuntimeError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    await invalidate_all_page_decks_after_master_change(session, project_id)
-    await session.commit()
-    await session.refresh(project)
-    async with async_session_maker() as wf_session:
-        await notify_deck_master_success_if_pending(wf_session, project_id)
-        await sync_demo_workflow_from_deck(wf_session, project_id)
-        await wf_session.commit()
-    row = await get_project_style(session, project)
-    ready, theme, ver = deck_style_ready_from_storage(project, row)
-    return {
-        "ok": True,
-        "deck_style_ready": ready,
-        "deck_style_version": ver or 1,
-        "deck_style_theme_name": theme,
-        "deck_style_prompt_text": (row.style_prompt_text or "") if row else "",
-    }
 
 
 @app.post(
@@ -1219,10 +1168,14 @@ async def workflow_run_audio(
     project = await _get_accessible_project(session, project_id, int(me.id))
     if not _can_manage_project(project, int(me.id)):
         raise HTTPException(status_code=403, detail="无权限修改该项目")
-    pl = await compute_project_pipeline(session, project)
-    if not pl.get("outline"):
+    if not can_start_audio_or_demo(project):
         raise HTTPException(status_code=409, detail="请先完成文本结构化")
-    if project.status == "synthesizing":
+    if manual_outline_blocks_media_steps(project):
+        raise HTTPException(
+            status_code=409,
+            detail="请先在表单中确认并保存口播分段后再配音",
+        )
+    if project.audio_status == "running" or project.status == "synthesizing":
         raise HTTPException(status_code=409, detail="配音进行中")
     try:
         return await run_synthesize_project_audio(session, project_id)
@@ -1245,13 +1198,21 @@ async def workflow_run_demo(
     project = await _get_accessible_project(session, project_id, int(me.id))
     if not _can_manage_project(project, int(me.id)):
         raise HTTPException(status_code=403, detail="无权限修改该项目")
-    pl = await compute_project_pipeline(session, project)
-    if not pl.get("outline"):
+    if not can_start_audio_or_demo(project):
         raise HTTPException(status_code=409, detail="请先完成文本结构化")
-    wf = await workflow_public_dict_async(session, project)
-    if (wf.get("deckMasterStatus") or "").strip().lower() != "succeeded":
-        raise HTTPException(status_code=409, detail="请先完成演示母版")
-    if (await compute_project_deck_status(session, project_id)) == "generating":
+    if manual_outline_blocks_media_steps(project):
+        raise HTTPException(
+            status_code=409,
+            detail="请先在表单中确认口播分段后再生成演示",
+        )
+    if manual_demo_requires_audio(project):
+        if (project.audio_status or "") != STEP_SUCCESS:
+            raise HTTPException(
+                status_code=409,
+                detail="手动流程请先完成整稿配音，再生成场景页",
+            )
+    await _require_deck_master_success_for_batch_scene(session, project)
+    if await _demo_batch_generation_busy(session, project):
         raise HTTPException(status_code=409, detail="演示生成中")
     timeline = await load_deck_timeline(session, project_id)
     if not timeline:
@@ -1309,7 +1270,124 @@ async def workflow_export_download(
     url = latest_export_media_url(project_id, settings.storage_root)
     if pl.get("video") and url:
         return RedirectResponse(url=url, status_code=302)
+    if can_download(project) and (project.export_file_url or "").strip():
+        return RedirectResponse(url=project.export_file_url or "", status_code=302)
     raise HTTPException(status_code=404, detail="暂无可下载的导出文件")
+
+
+@app.post("/api/projects/{project_id}/workflow/step/cancel-running")
+async def workflow_step_cancel_running(
+    project_id: int,
+    body: WorkflowStepControlRequest,
+    session: AsyncSession = Depends(get_session),
+    me: User = Depends(get_current_user),
+) -> dict:
+    """将当前「进行中」的步骤标记为失败（用户取消），用于顶栏流水线。"""
+    from app.services import workflow_engine as wf
+
+    project = await _get_accessible_project(session, project_id, int(me.id))
+    if not _can_manage_project(project, int(me.id)):
+        raise HTTPException(status_code=403, detail="无权限修改该项目")
+    await sync_demo_workflow_from_deck(session, project_id)
+    step = body.step.strip().lower()
+    cancel_allowed = {"text", "audio", "pages", "deck_master", "deck_render", "export"}
+    if step not in cancel_allowed:
+        raise HTTPException(status_code=400, detail=f"不支持的步骤：{body.step}")
+
+    if step == "text":
+        st = (project.status or "").strip().lower()
+        if (project.text_status or "") != "running" and st not in ("queued", "structuring"):
+            raise HTTPException(status_code=409, detail="文案步骤当前未在运行")
+        await mark_text_failed(session, project, "用户已取消")
+        project.status = "failed"
+        project.updated_at = utc_now()
+        session.add(project)
+    elif step == "audio":
+        if (project.audio_status or "") != "running" and (
+            project.status or ""
+        ).strip().lower() != "synthesizing":
+            raise HTTPException(status_code=409, detail="配音步骤当前未在运行")
+        await wf.set_step(
+            session,
+            project,
+            wf.STEP_AUDIO,
+            wf.STEP_FAILED,
+            error_message="用户已取消",
+        )
+        project.status = "failed"
+        project.updated_at = utc_now()
+        session.add(project)
+    elif step == "export":
+        run = await wf.ensure_workflow_for_project(
+            session, project, align_from_project=False
+        )
+        ex = await wf._get_export_row(session, int(run.id)) if run and run.id else None
+        exporting = ex is not None and ex.status == wf.EXPORT_EXPORTING
+        proj_run = (project.export_status or "").strip().lower() == "running"
+        if not exporting and not proj_run:
+            raise HTTPException(status_code=409, detail="导出当前未在进行")
+        await mark_export_failed(session, project, "用户已取消")
+    elif step == "deck_master":
+        run = await wf.ensure_workflow_for_project(
+            session, project, align_from_project=False
+        )
+        if run is None or run.id is None:
+            raise HTTPException(status_code=409, detail="工作流未初始化")
+        steps = await wf._load_steps_map(session, int(run.id))
+        dm = steps.get(wf.STEP_DECK_MASTER)
+        if dm is None or dm.status != wf.STEP_RUNNING:
+            raise HTTPException(status_code=409, detail="母版步骤当前未在运行")
+        await wf.set_step(
+            session,
+            project,
+            wf.STEP_DECK_MASTER,
+            wf.STEP_FAILED,
+            error_message="用户已取消",
+        )
+    elif step in ("pages", "deck_render"):
+        await cancel_generating_deck_pages(session, project_id, reason="用户已取消")
+        await session.refresh(project)
+        run = await wf.ensure_workflow_for_project(
+            session, project, align_from_project=False
+        )
+        if run is not None and run.id is not None:
+            steps = await wf._load_steps_map(session, int(run.id))
+            dr = steps.get(wf.STEP_DECK_RENDER)
+            if dr is not None and dr.status == wf.STEP_RUNNING:
+                await wf.set_step(
+                    session,
+                    project,
+                    wf.STEP_DECK_RENDER,
+                    wf.STEP_FAILED,
+                    error_message="用户已取消",
+                )
+        await sync_demo_workflow_from_deck(session, project_id)
+
+    await session.commit()
+    await session.refresh(project)
+    return {"ok": True}
+
+
+@app.post("/api/projects/{project_id}/workflow/step/reopen-success")
+async def workflow_step_reopen_success(
+    project_id: int,
+    body: WorkflowStepControlRequest,
+    session: AsyncSession = Depends(get_session),
+    me: User = Depends(get_current_user),
+) -> dict:
+    """将指定步骤及其下游回退为未开始，并强制手动流水线（用于顶栏「回退」）。"""
+    project = await _get_accessible_project(session, project_id, int(me.id))
+    if not _can_manage_project(project, int(me.id)):
+        raise HTTPException(status_code=403, detail="无权限修改该项目")
+    await sync_demo_workflow_from_deck(session, project_id)
+    try:
+        await user_reopen_success_step(session, project, body.step.strip().lower())
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    await refresh_project_deck_status(session, project_id)
+    await session.commit()
+    await session.refresh(project)
+    return {"ok": True}
 
 
 @app.get("/api/projects/{project_id}/outline-nodes/{node_id}/deck-preview")
@@ -1351,6 +1429,20 @@ async def generate_deck_page(
     project = await _get_accessible_project(session, project_id, int(me.id))
     if not _can_manage_project(project, int(me.id)):
         raise HTTPException(status_code=403, detail="无权限修改该项目")
+    if not can_start_audio_or_demo(project):
+        raise HTTPException(status_code=409, detail="请先完成文本结构化")
+    if manual_outline_blocks_media_steps(project):
+        raise HTTPException(
+            status_code=409,
+            detail="请先在表单中确认口播分段后再生成演示页",
+        )
+    if manual_demo_requires_audio(project):
+        if (project.audio_status or "") != STEP_SUCCESS:
+            raise HTTPException(
+                status_code=409,
+                detail="手动流程请先完成整稿配音，再生成场景页",
+            )
+    await _require_deck_master_success_for_batch_scene(session, project)
     timeline = await load_deck_timeline(session, project_id)
     if not timeline:
         raise HTTPException(status_code=400, detail="没有可演示的分段")
@@ -1397,7 +1489,7 @@ async def generate_contextual_ai_draft(
             current_json_text=current_json_text,
             instruction=body.instruction,
             style_prompt_text=style_prompt,
-            page_size=_DEFAULT_PAGE_SIZE,
+            page_size=project.deck_page_size,
         )
     except RuntimeError as e:
         # 将 AI 侧可预期失败（鉴权/限流/解析失败等）转为可读错误，避免前端只看到 500。
@@ -1461,6 +1553,10 @@ async def apply_contextual_ai_draft(
         nc.page_deck_error = None
         nc.updated_at = now
     session.add(nc)
+    project.deck_json = _merge_page_html_into_deck_json(project.deck_json, main_title, html)
+    project.deck_status = "ready"
+    project.video_source_updated_at = now
+    project.video_exported_at = None
     project.updated_at = now
     session.add(project)
     await reset_export_only(session, project)
@@ -1483,7 +1579,7 @@ async def cancel_deck_page(
         session,
         project_id,
         node_id,
-        reason="用户手动取消该页场景生成",
+        reason="用户手动取消该页生成（已标记失败）",
     )
     if st == "not_found":
         raise HTTPException(status_code=404, detail="页面节点不存在")
@@ -1506,8 +1602,7 @@ async def cancel_deck_all_pages(
     cancelled_ids = await cancel_generating_deck_pages(
         session,
         project_id,
-        reason="用户手动取消全部场景生成",
-        user_cancelled=True,
+        reason="用户手动取消全部页面生成（已标记失败）",
     )
     await sync_demo_workflow_from_deck(session, project_id)
     await session.commit()
@@ -1525,23 +1620,40 @@ async def patch_project_deck_style(
     session: AsyncSession = Depends(get_session),
     me: User = Depends(get_current_user),
 ) -> dict:
-    if body.deck_style_preset is None and body.deck_style_user_hint is None:
+    if (
+        body.deck_style_preset is None
+        and body.deck_style_user_hint is None
+        and body.deck_page_size is None
+    ):
         raise HTTPException(
             status_code=400,
-            detail="至少提供 deck_style_preset / deck_style_user_hint 之一",
+            detail="至少提供 deck_style_preset / deck_style_user_hint / deck_page_size 之一",
         )
     project = await _get_accessible_project(session, project_id, int(me.id))
     if not _can_manage_project(project, int(me.id)):
         raise HTTPException(status_code=403, detail="无权限修改该项目")
-    st = await get_or_create_project_style(session, project_id, for_update=True)
+    st = await get_or_create_project_style(session, project_id)
     if body.deck_style_preset is not None:
         try:
             resolve_deck_style_preset(body.deck_style_preset)
         except RuntimeError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
-        st.style_preset = body.deck_style_preset.strip() or "aurora_glass"
+        st.style_preset = body.deck_style_preset.strip() or "none"
+        await session.execute(
+            text("UPDATE projects SET deck_style_preset = :p WHERE id = :id"),
+            {"p": st.style_preset, "id": project_id},
+        )
     if body.deck_style_user_hint is not None:
-        st.user_style_hint = body.deck_style_user_hint
+        uh = body.deck_style_user_hint.strip() or None
+        st.user_style_hint = uh
+    if body.deck_page_size is not None:
+        ps = body.deck_page_size.strip()
+        if ps not in DECK_PAGE_SIZE_OPTIONS:
+            raise HTTPException(
+                status_code=400,
+                detail="deck_page_size 非法，可选：16:9, 4:3, 9:16, 1:1",
+            )
+        project.deck_page_size = ps
     now = utc_now()
     st.style_data_json = None
     st.style_base_json = ""
@@ -1549,78 +1661,99 @@ async def patch_project_deck_style(
     st.version = int(st.version or 1) + 1
     st.updated_at = now
     session.add(st)
+    project.video_source_updated_at = now
+    project.video_exported_at = None
     await reset_export_only(session, project)
+    project.updated_at = now
     if body.deck_style_preset is not None or body.deck_style_user_hint is not None:
         nd = merge_deck_master_source_id(project.description, None)
         if nd != project.description:
             project.description = nd
-    project.updated_at = now
     session.add(project)
     await invalidate_all_page_decks_after_master_change(session, project_id)
     await session.commit()
     return {"ok": True}
 
 
+@app.patch("/api/projects/{project_id}/deck-style-prompt-text")
+async def patch_deck_style_prompt_text(
+    project_id: int,
+    body: DeckStylePromptTextPatch,
+    session: AsyncSession = Depends(get_session),
+    me: User = Depends(get_current_user),
+) -> dict:
+    """写入风格表中的 AI 风格说明；供生成场景页前在前端展示并微调。"""
+    project = await _get_accessible_project(session, project_id, int(me.id))
+    if not _can_manage_project(project, int(me.id)):
+        raise HTTPException(status_code=403, detail="无权限修改该项目")
+    st = await get_or_create_project_style(session, project_id)
+    text = (body.deck_style_prompt_text or "").strip()
+    now = utc_now()
+    st.style_prompt_text = text
+    st.version = int(st.version or 1) + 1
+    st.updated_at = now
+    session.add(st)
+    project.updated_at = now
+    session.add(project)
+    await session.commit()
+    return {"ok": True, "deck_style_prompt_text": text}
+
+
 @app.post("/api/projects/{project_id}/copy-deck-style-from")
-async def copy_deck_style_from_project(
+async def copy_project_deck_style_from(
     project_id: int,
     body: CopyDeckStyleFromRequest,
     session: AsyncSession = Depends(get_session),
     me: User = Depends(get_current_user),
 ) -> dict:
-    """将另一项目已就绪的演示母版（project_styles）挂到当前项目。"""
+    """从已有工程复制就绪的演示母版样式到本项目，不调用模型生成母版。"""
+    src_pid = int(body.source_project_id)
+    if src_pid == int(project_id):
+        raise HTTPException(status_code=400, detail="不能从本项目复制母版")
     project = await _get_accessible_project(session, project_id, int(me.id))
     if not _can_manage_project(project, int(me.id)):
         raise HTTPException(status_code=403, detail="无权限修改该项目")
-    src = await _get_accessible_project(session, body.source_project_id, int(me.id))
-    src_style_row = await get_project_style(session, src)
-    if src_style_row is None:
-        raise HTTPException(status_code=400, detail="源项目没有演示样式记录")
-    ready, _, _ = deck_style_ready_from_storage(src, src_style_row)
+    src_project = await _get_accessible_project(session, src_pid, int(me.id))
+    st_res = await session.exec(
+        select(ProjectStyle).where(ProjectStyle.project_id == src_pid)
+    )
+    src_style_row = st_res.first()
+    ready, _, _ = deck_style_ready_from_storage(src_project, src_style_row)
     if not ready:
         raise HTTPException(
             status_code=400,
-            detail="源项目还没有可用的演示风格母版，请换项目或先生成母版",
+            detail="源项目还没有可用的演示风格母版，请换项目或改用「自己设计」生成",
         )
+    assert src_style_row is not None
+    tgt_st = await get_or_create_project_style(session, project_id)
     now = utc_now()
-    project.style_id = int(src_style_row.id)
-    src_pid = int(body.source_project_id)
-    nd = merge_deck_master_source_id(project.description, src_pid)
-    project.description = nd if nd is not None else format_deck_master_source_description(
-        src_pid
+    tgt_st.style_preset = (src_style_row.style_preset or "none").strip() or "none"
+    tgt_st.user_style_hint = src_style_row.user_style_hint
+    tgt_st.style_prompt_text = src_style_row.style_prompt_text or ""
+    tgt_st.style_data_json = src_style_row.style_data_json
+    tgt_st.style_base_json = src_style_row.style_base_json or ""
+    tgt_st.version = int(tgt_st.version or 1) + 1
+    tgt_st.updated_at = now
+    session.add(tgt_st)
+    preset = tgt_st.style_preset
+    await session.execute(
+        text("UPDATE projects SET deck_style_preset = :p WHERE id = :id"),
+        {"p": preset, "id": project_id},
     )
+    nd = merge_deck_master_source_id(project.description, src_pid)
+    if nd != project.description:
+        project.description = nd
+    project.video_source_updated_at = now
+    project.video_exported_at = None
+    await reset_export_only(session, project)
     project.updated_at = now
     session.add(project)
-    await reset_export_only(session, project)
     await invalidate_all_page_decks_after_master_change(session, project_id)
     await session.commit()
     async with async_session_maker() as wf_session:
         await notify_deck_master_success_if_pending(wf_session, project_id)
         await sync_demo_workflow_from_deck(wf_session, project_id)
         await wf_session.commit()
-    return {"ok": True}
-
-
-@app.patch("/api/projects/{project_id}/deck-style-prompt-text")
-async def patch_project_deck_style_prompt_text(
-    project_id: int,
-    body: DeckStylePromptTextPatch,
-    session: AsyncSession = Depends(get_session),
-    me: User = Depends(get_current_user),
-) -> dict:
-    """更新当前项目关联的 style_prompt_text（不改母版 JSON，供后续演示生成参考）。"""
-    project = await _get_accessible_project(session, project_id, int(me.id))
-    if not _can_manage_project(project, int(me.id)):
-        raise HTTPException(status_code=403, detail="无权限修改该项目")
-    st = await get_or_create_project_style(session, project_id, for_update=True)
-    now = utc_now()
-    st.style_prompt_text = body.deck_style_prompt_text or ""
-    st.updated_at = now
-    session.add(st)
-    project.updated_at = now
-    session.add(project)
-    await reset_export_only(session, project)
-    await session.commit()
     return {"ok": True}
 
 
@@ -1640,14 +1773,16 @@ async def generate_project_deck_style(
         raise HTTPException(status_code=400, detail=str(e)) from e
     await invalidate_all_page_decks_after_master_change(session, project_id)
     await session.commit()
-    await session.refresh(project)
     # 独立「刷新母版」接口只写 project_styles，须同步 workflow_step_runs.deck_master，
     # 否则顶栏仍显示母版失败（分步 UI 以 workflow 为准）。
     async with async_session_maker() as wf_session:
         await notify_deck_master_success_if_pending(wf_session, project_id)
         await sync_demo_workflow_from_deck(wf_session, project_id)
         await wf_session.commit()
-    row = await get_project_style(session, project)
+    st_res = await session.exec(
+        select(ProjectStyle).where(ProjectStyle.project_id == project_id)
+    )
+    row = st_res.first()
     ready, theme, ver = deck_style_ready_from_storage(project, row)
     return {
         "ok": True,
@@ -1668,6 +1803,20 @@ async def generate_deck_all_pages(
     project = await _get_accessible_project(session, project_id, int(me.id))
     if not _can_manage_project(project, int(me.id)):
         raise HTTPException(status_code=403, detail="无权限修改该项目")
+    if not can_start_audio_or_demo(project):
+        raise HTTPException(status_code=409, detail="请先完成文本结构化")
+    if manual_outline_blocks_media_steps(project):
+        raise HTTPException(
+            status_code=409,
+            detail="请先在表单中确认口播分段后再生成演示",
+        )
+    if manual_demo_requires_audio(project):
+        if (project.audio_status or "") != STEP_SUCCESS:
+            raise HTTPException(
+                status_code=409,
+                detail="手动流程请先完成整稿配音，再生成场景页",
+            )
+    await _require_deck_master_success_for_batch_scene(session, project)
     timeline = await load_deck_timeline(session, project_id)
     if not timeline:
         raise HTTPException(status_code=400, detail="没有可演示的分段")
@@ -1709,6 +1858,7 @@ async def generate_outline(
             body.raw_text,
             project_name=body.name,
             owner_user_id=int(me.id),
+            narration_target_seconds=body.narration_target_seconds,
         )
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -1731,6 +1881,11 @@ async def synthesize_audio(
     project = await _get_accessible_project(session, project_id, int(me.id))
     if not _can_manage_project(project, int(me.id)):
         raise HTTPException(status_code=403, detail="无权限修改该项目")
+    if manual_outline_blocks_media_steps(project):
+        raise HTTPException(
+            status_code=409,
+            detail="请先在表单中确认并保存口播分段后再配音",
+        )
     try:
         return await run_synthesize_project_audio(session, project_id)
     except RuntimeError as e:
@@ -1740,45 +1895,6 @@ async def synthesize_audio(
             status_code=500,
             detail=f"配音过程异常：{e}",
         ) from e
-
-
-@app.patch("/api/projects/{project_id}/outline-nodes/{node_id}/narration-text")
-async def patch_outline_node_narration_text(
-    project_id: int,
-    node_id: int,
-    body: NarrationTextPatch,
-    session: AsyncSession = Depends(get_session),
-    me: User = Depends(get_current_user),
-) -> dict:
-    """更新单个口播 step 的 narration_text；旧时间轴与当前 mp3 可能失效，需重新配音。"""
-    project = await _get_accessible_project(session, project_id, int(me.id))
-    if not _can_manage_project(project, int(me.id)):
-        raise HTTPException(status_code=403, detail="无权限修改该项目")
-    node = await session.get(OutlineNode, node_id)
-    if node is None or node.project_id != project_id:
-        raise HTTPException(status_code=404, detail="段落节点不存在")
-    if node.node_kind != KIND_STEP:
-        raise HTTPException(
-            status_code=400,
-            detail="仅支持编辑口播 step 的正文",
-        )
-    res = await session.exec(select(NodeContent).where(NodeContent.node_id == node.id))
-    nc = res.first()
-    if nc is None:
-        raise HTTPException(status_code=404, detail="段落缺少内容记录")
-    t = utc_now()
-    nc.narration_text = body.narration_text or ""
-    nc.narration_alignment_json = None
-    nc.updated_at = t
-    session.add(nc)
-    project.updated_at = t
-    session.add(project)
-    await reset_export_only(session, project)
-    await session.commit()
-    return {
-        "step_node_id": node_id,
-        "narration_text": nc.narration_text,
-    }
 
 
 @app.post("/api/projects/{project_id}/outline-nodes/{node_id}/resynthesize-audio")
@@ -1807,6 +1923,37 @@ async def resynthesize_step_audio(
         ) from e
 
 
+@app.patch("/api/projects/{project_id}/outline-nodes/{node_id}/narration-text")
+async def patch_outline_node_narration_text(
+    project_id: int,
+    node_id: int,
+    body: NarrationTextPatch,
+    session: AsyncSession = Depends(get_session),
+    me: User = Depends(get_current_user),
+) -> dict:
+    """仅更新 step 节点已保存的口播正文（不触发 TTS）。"""
+    project = await _get_accessible_project(session, project_id, int(me.id))
+    if not _can_manage_project(project, int(me.id)):
+        raise HTTPException(status_code=403, detail="无权限修改该项目")
+    node = await session.get(OutlineNode, node_id)
+    if node is None or node.project_id != project_id:
+        raise HTTPException(status_code=404, detail="段落节点不存在")
+    if node.node_kind != KIND_STEP:
+        raise HTTPException(status_code=400, detail="仅支持对口播 step 更新文案")
+    res = await session.exec(select(NodeContent).where(NodeContent.node_id == node.id))
+    nc = res.first()
+    if nc is None:
+        raise HTTPException(status_code=400, detail="段落缺少内容记录")
+    t = utc_now()
+    nc.narration_text = body.narration_text
+    nc.updated_at = t
+    session.add(nc)
+    project.updated_at = t
+    session.add(project)
+    await session.commit()
+    return {"ok": True, "node_id": node_id}
+
+
 @app.post("/api/generate", response_model=GenerateResponse)
 async def generate(
     body: GenerateRequest,
@@ -1819,6 +1966,7 @@ async def generate(
             body.raw_text,
             project_name=body.name,
             owner_user_id=int(me.id),
+            narration_target_seconds=body.narration_target_seconds,
         )
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

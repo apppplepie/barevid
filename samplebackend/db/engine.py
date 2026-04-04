@@ -11,20 +11,14 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import settings
 
-_raw_db_url = (settings.database_url or "").strip()
-if not _raw_db_url:
-    raise RuntimeError(
-        "未设置 DATABASE_URL。后端只读取 SlideForge/backend/.env（不是 frontend/.env）。\n"
-        "示例：DATABASE_URL=mysql+asyncmy://user:pass@localhost:3306/slideforge?charset=utf8mb4\n"
-        "若必须使用 SQLite，请显式填写 sqlite+aiosqlite:////绝对路径/slideforge.db"
-    )
-
-DATABASE_URL = _raw_db_url
+# 数据库文件与上传的媒体同级放在 storage 下，便于备份与部署
+_db_path = (settings.storage_root / "slideforge.db").resolve()
+DATABASE_URL = f"sqlite+aiosqlite:///{_db_path.as_posix()}"
 
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
-    connect_args={"timeout": 30} if DATABASE_URL.startswith("sqlite") else {},
+    connect_args={"timeout": 30},
 )
 async_session_maker = sessionmaker(
     engine,
@@ -44,7 +38,7 @@ def _migrate_project_styles_v2(sync_conn) -> None:
     has_proj_cache = "deck_style_cache_json" in proj_cols
 
     for sql in (
-        "ALTER TABLE project_styles ADD COLUMN style_preset TEXT DEFAULT 'aurora_glass'",
+        "ALTER TABLE project_styles ADD COLUMN style_preset TEXT DEFAULT 'none'",
         "ALTER TABLE project_styles ADD COLUMN user_style_hint TEXT",
         "ALTER TABLE project_styles ADD COLUMN style_prompt_text TEXT DEFAULT ''",
         "ALTER TABLE project_styles ADD COLUMN style_data_json TEXT",
@@ -58,8 +52,6 @@ def _migrate_project_styles_v2(sync_conn) -> None:
 
     insp = inspect(sync_conn)
     cols = {c["name"] for c in insp.get_columns("project_styles")}
-    if "origin_project_id" in cols and "project_id" not in cols:
-        return
     if "style_base_json" in cols and "style_data_json" in cols:
         sync_conn.execute(
             text(
@@ -254,17 +246,18 @@ async def _migrate_sqlite(conn) -> None:
         "ALTER TABLE projects ADD COLUMN audio_result_url TEXT",
         "ALTER TABLE projects ADD COLUMN demo_result_url TEXT",
         "ALTER TABLE projects ADD COLUMN export_file_url TEXT",
-        "ALTER TABLE projects ADD COLUMN target_narration_seconds INTEGER",
-        "ALTER TABLE projects ADD COLUMN pipeline_auto_advance INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE projects ADD COLUMN narration_target_seconds INTEGER",
         "ALTER TABLE projects ADD COLUMN tts_voice_type TEXT",
+        "ALTER TABLE projects ADD COLUMN pipeline_auto_advance INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE projects ADD COLUMN text_structure_mode TEXT",
+        "ALTER TABLE projects ADD COLUMN manual_outline_confirmed INTEGER NOT NULL DEFAULT 1",
     ]
 
     _create_project_styles = """
     CREATE TABLE IF NOT EXISTS project_styles (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        origin_project_id INTEGER,
-        style_preset TEXT NOT NULL DEFAULT 'aurora_glass',
+        project_id INTEGER NOT NULL UNIQUE,
+        style_preset TEXT NOT NULL DEFAULT 'none',
         user_style_hint TEXT,
         style_prompt_text TEXT NOT NULL DEFAULT '',
         style_data_json TEXT,
@@ -272,7 +265,7 @@ async def _migrate_sqlite(conn) -> None:
         version INTEGER NOT NULL DEFAULT 1,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
-        FOREIGN KEY(origin_project_id) REFERENCES projects(id)
+        FOREIGN KEY(project_id) REFERENCES projects(id)
     )
     """
     try:
@@ -283,7 +276,7 @@ async def _migrate_sqlite(conn) -> None:
             raise
     try:
         await conn.execute(
-            text("CREATE INDEX IF NOT EXISTS ix_project_styles_origin_project_id ON project_styles(origin_project_id)")
+            text("CREATE INDEX IF NOT EXISTS ix_project_styles_project_id ON project_styles(project_id)")
         )
     except OperationalError:
         pass
@@ -312,9 +305,7 @@ async def _migrate_sqlite(conn) -> None:
         output_snapshot TEXT,
         error_message TEXT,
         started_at DATETIME,
-        ready_at DATETIME,
         finished_at DATETIME,
-        cancelled_at DATETIME,
         updated_at DATETIME NOT NULL,
         FOREIGN KEY(workflow_run_id) REFERENCES workflow_runs(id),
         UNIQUE (workflow_run_id, step_key)
@@ -640,126 +631,17 @@ def _migrate_outline_node_kinds_legacy_sync(sync_conn) -> None:
     )
 
 
-def _migrate_mysql_add_project_target_narration_seconds_sync(sync_conn) -> None:
-    insp = inspect(sync_conn)
-    if not insp.has_table("projects"):
-        return
-    cols = {c["name"] for c in insp.get_columns("projects")}
-    if "target_narration_seconds" in cols:
-        return
-    sync_conn.execute(
-        text("ALTER TABLE projects ADD COLUMN target_narration_seconds INT NULL")
-    )
-
-
-def _migrate_mysql_add_project_pipeline_auto_advance_sync(sync_conn) -> None:
-    insp = inspect(sync_conn)
-    if not insp.has_table("projects"):
-        return
-    cols = {c["name"] for c in insp.get_columns("projects")}
-    if "pipeline_auto_advance" in cols:
-        return
-    sync_conn.execute(
-        text(
-            "ALTER TABLE projects ADD COLUMN pipeline_auto_advance TINYINT(1) NOT NULL DEFAULT 1"
-        )
-    )
-
-
-def _migrate_mysql_add_project_tts_voice_type_sync(sync_conn) -> None:
-    insp = inspect(sync_conn)
-    if not insp.has_table("projects"):
-        return
-    cols = {c["name"] for c in insp.get_columns("projects")}
-    if "tts_voice_type" in cols:
-        return
-    sync_conn.execute(
-        text("ALTER TABLE projects ADD COLUMN tts_voice_type VARCHAR(200) NULL")
-    )
-
-
-def _migrate_mysql_add_project_text_structure_mode_sync(sync_conn) -> None:
-    insp = inspect(sync_conn)
-    if not insp.has_table("projects"):
-        return
-    cols = {c["name"] for c in insp.get_columns("projects")}
-    if "text_structure_mode" in cols:
-        return
-    sync_conn.execute(
-        text("ALTER TABLE projects ADD COLUMN text_structure_mode VARCHAR(32) NULL")
-    )
-
-
-def _migrate_mysql_text_columns_sync(sync_conn) -> None:
-    """MySQL 历史库早期由 create_all 建表，很多长文本字段被落成 VARCHAR(255)。"""
-    insp = inspect(sync_conn)
-    if not insp.has_table("node_contents"):
-        return
-
-    stmts = [
-        "ALTER TABLE projects MODIFY COLUMN description TEXT NULL",
-        "ALTER TABLE projects MODIFY COLUMN input_prompt TEXT NOT NULL",
-        "ALTER TABLE project_styles MODIFY COLUMN style_prompt_text TEXT NOT NULL",
-        "ALTER TABLE project_styles MODIFY COLUMN style_data_json TEXT NULL",
-        "ALTER TABLE project_styles MODIFY COLUMN style_base_json TEXT NULL",
-        "ALTER TABLE workflow_step_runs MODIFY COLUMN input_snapshot TEXT NULL",
-        "ALTER TABLE workflow_step_runs MODIFY COLUMN output_snapshot TEXT NULL",
-        "ALTER TABLE workflow_step_runs MODIFY COLUMN error_message TEXT NULL",
-        "ALTER TABLE workflow_export_runs MODIFY COLUMN output_file_url TEXT NULL",
-        "ALTER TABLE workflow_export_runs MODIFY COLUMN error_message TEXT NULL",
-        "ALTER TABLE workflow_artifacts MODIFY COLUMN file_url TEXT NULL",
-        "ALTER TABLE workflow_artifacts MODIFY COLUMN meta_json TEXT NULL",
-        "ALTER TABLE node_contents MODIFY COLUMN page_code TEXT NULL",
-        "ALTER TABLE node_contents MODIFY COLUMN page_deck_error TEXT NULL",
-        "ALTER TABLE node_contents MODIFY COLUMN narration_text TEXT NOT NULL",
-        "ALTER TABLE node_contents MODIFY COLUMN narration_brief TEXT NULL",
-        "ALTER TABLE node_contents MODIFY COLUMN narration_alignment_json TEXT NULL",
-        "ALTER TABLE node_contents MODIFY COLUMN scene_style_json TEXT NULL",
-    ]
-    for sql in stmts:
-        sync_conn.execute(text(sql))
-
-
-def _migrate_mysql_workflow_step_runs_timestamp_columns_sync(sync_conn) -> None:
-    """ready_at / cancelled_at：新库 create_all 已含列时不得重复 ADD。"""
-    insp = inspect(sync_conn)
-    if not insp.has_table("workflow_step_runs"):
-        return
-    cols = {c["name"] for c in insp.get_columns("workflow_step_runs")}
-    if "ready_at" not in cols:
-        sync_conn.execute(
-            text(
-                "ALTER TABLE workflow_step_runs ADD COLUMN ready_at DATETIME NULL DEFAULT NULL"
-            )
-        )
-    if "cancelled_at" not in cols:
-        sync_conn.execute(
-            text(
-                "ALTER TABLE workflow_step_runs ADD COLUMN cancelled_at DATETIME NULL DEFAULT NULL"
-            )
-        )
-
-
 async def init_db() -> None:
     # 确保 models 已导入以注册 metadata
     from app.db import models as _models  # noqa: F401
 
     async with engine.begin() as conn:
-        if DATABASE_URL.startswith("sqlite"):
-            await conn.exec_driver_sql("PRAGMA journal_mode=WAL")
+        await conn.exec_driver_sql("PRAGMA journal_mode=WAL")
         await conn.run_sync(SQLModel.metadata.create_all)
-        if DATABASE_URL.startswith("sqlite"):
-            await _migrate_sqlite(conn)
-            await conn.run_sync(_migrate_slides_to_outline_sync)
-            await conn.run_sync(_migrate_outline_node_kinds_legacy_sync)
-            await conn.run_sync(_ensure_legacy_user_sync)
-        elif DATABASE_URL.startswith("mysql"):
-            await conn.run_sync(_migrate_mysql_text_columns_sync)
-            await conn.run_sync(_migrate_mysql_workflow_step_runs_timestamp_columns_sync)
-            await conn.run_sync(_migrate_mysql_add_project_target_narration_seconds_sync)
-            await conn.run_sync(_migrate_mysql_add_project_pipeline_auto_advance_sync)
-            await conn.run_sync(_migrate_mysql_add_project_tts_voice_type_sync)
-            await conn.run_sync(_migrate_mysql_add_project_text_structure_mode_sync)
+        await _migrate_sqlite(conn)
+        await conn.run_sync(_migrate_slides_to_outline_sync)
+        await conn.run_sync(_migrate_outline_node_kinds_legacy_sync)
+        await conn.run_sync(_ensure_legacy_user_sync)
 
     from app.services.workflow_engine import backfill_workflow_for_all_projects
     from app.services.workflow_state import backfill_legacy_workflow_columns

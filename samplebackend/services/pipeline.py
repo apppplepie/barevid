@@ -1,8 +1,7 @@
 import asyncio
-import logging
 import shutil
 
-from sqlalchemy import text, update
+from sqlalchemy import update
 from sqlalchemy.orm import aliased
 from sqlmodel import delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -15,7 +14,6 @@ from app.db.models import (
     OutlineNode,
     Project,
     ProjectStyle,
-    VideoExportJob,
     WorkflowArtifact,
     WorkflowExportRun,
     WorkflowRun,
@@ -25,6 +23,7 @@ from app.db.models import (
 from app.db.engine import async_session_maker
 from app.integrations.deepseek import structure_raw_text
 from app.integrations.doubao_tts_service import synthesize_to_file
+from app.tts_voice_presets import effective_voice_type
 from app.mediautil import audio_duration_ms, resolve_slide_audio_url
 from app.schemas import (
     AudioPart,
@@ -37,90 +36,20 @@ from app.services import workflow_engine as wf_engine
 from app.services.workflow_state import (
     STEP_FAILED,
     STEP_RUNNING,
-    STEP_SUCCEEDED,
+    STEP_SUCCESS,
     mark_text_failed,
     mark_text_running,
-    mark_text_succeeded,
+    mark_text_success,
     reset_downstream_after_text_retry,
     reset_export_only,
 )
 
 _TTS_SEMAPHORE = asyncio.Semaphore(settings.tts_concurrency_limit)
-logger = logging.getLogger(__name__)
 
 
 def _text_structure_mode(project: Project) -> str:
     m = (getattr(project, "text_structure_mode", None) or "polish").strip().lower()
     return "verbatim_split" if m == "verbatim_split" else "polish"
-
-
-def _clip_pipeline_err(message: object, max_len: int = 1800) -> str:
-    text = str(message).strip() or "未知错误"
-    if len(text) <= max_len:
-        return text
-    return text[: max_len - 3].rstrip() + "..."
-
-
-async def _mark_audio_pipeline_failed(project_id: int, message: object) -> None:
-    detail = _clip_pipeline_err(message)
-    async with async_session_maker() as session:
-        project = await session.get(Project, project_id)
-        if project is None:
-            return
-        await wf_engine.set_step(
-            session,
-            project,
-            wf_engine.STEP_AUDIO,
-            wf_engine.STEP_FAILED,
-            error_message=detail,
-        )
-        project.status = "failed"
-        project.updated_at = utc_now()
-        session.add(project)
-        await session.commit()
-
-
-async def _mark_deck_pipeline_failed(project_id: int, message: object) -> None:
-    from app.services.deck import (
-        cancel_generating_deck_pages,
-        fetch_style_prompt_for_project,
-        sync_demo_workflow_from_deck,
-    )
-
-    detail = _clip_pipeline_err(message)
-    async with async_session_maker() as session:
-        project = await session.get(Project, project_id)
-        if project is None:
-            return
-        await cancel_generating_deck_pages(session, project_id, reason=detail)
-        style_prompt = await fetch_style_prompt_for_project(session, project)
-        if style_prompt:
-            await wf_engine.set_step(
-                session,
-                project,
-                wf_engine.STEP_DECK_MASTER,
-                wf_engine.STEP_SUCCEEDED,
-            )
-            await wf_engine.set_step(
-                session,
-                project,
-                wf_engine.STEP_DECK_RENDER,
-                wf_engine.STEP_FAILED,
-                error_message=detail,
-            )
-        else:
-            await wf_engine.set_step(
-                session,
-                project,
-                wf_engine.STEP_DECK_MASTER,
-                wf_engine.STEP_FAILED,
-                error_message=detail,
-            )
-        project.status = "failed"
-        project.updated_at = utc_now()
-        session.add(project)
-        await sync_demo_workflow_from_deck(session, project_id)
-        await session.commit()
 
 
 def _flatten_segments(structured: StructuredPodcast) -> list[tuple[str, str, str]]:
@@ -206,11 +135,17 @@ async def _persist_structured_outline(
 
     project.status = "draft"
     now = utc_now()
+    project.video_source_updated_at = now
+    project.video_exported_at = None
     project.updated_at = now
     if advance_parallel:
         await wf_engine.after_text_success_parallel_ready(session, project)
     else:
-        await mark_text_succeeded(session, project)
+        await mark_text_success(session, project)
+    if getattr(project, "pipeline_auto_advance", True):
+        project.manual_outline_confirmed = True
+    else:
+        project.manual_outline_confirmed = False
     session.add(project)
     await session.commit()
 
@@ -219,11 +154,6 @@ async def clear_project_outline_nodes(session: AsyncSession, project_id: int) ->
     """删除大纲与节点内容，保留 projects 行。"""
     sub = select(OutlineNode.id).where(OutlineNode.project_id == project_id)
     await session.exec(delete(NodeContent).where(NodeContent.node_id.in_(sub)))
-    await session.execute(
-        update(OutlineNode)
-        .where(OutlineNode.project_id == project_id)
-        .values(parent_id=None)
-    )
     await session.exec(delete(OutlineNode).where(OutlineNode.project_id == project_id))
 
 
@@ -233,6 +163,7 @@ async def run_generate_outline_only(
     *,
     project_name: str | None = None,
     owner_user_id: int,
+    narration_target_seconds: int | None = None,
 ) -> GenerateOutlineResponse:
     """步骤 1：DeepSeek 结构化 + 写入大纲与口播文本，不调用 TTS。成功后项目 status=draft。"""
     now = utc_now()
@@ -242,32 +173,32 @@ async def run_generate_outline_only(
         is_shared=False,
         name=(project_name or "未命名项目").strip() or "未命名项目",
         description=None,
+        narration_target_seconds=narration_target_seconds,
         input_prompt=raw_text,
         status="structuring",
-        aspect_ratio="16:9",
-        deck_width=1920,
-        deck_height=1080,
+        text_status="running",
+        audio_status="not_started",
+        demo_status="not_started",
+        export_status="not_started",
         created_at=now,
         updated_at=now,
     )
     session.add(project)
     await session.commit()
     await session.refresh(project)
-    style = ProjectStyle(
-        origin_project_id=int(project.id),
-        style_preset="aurora_glass",
-        user_style_hint=None,
-        style_prompt_text="",
-        style_data_json=None,
-        style_base_json="",
-        version=1,
-        created_at=now,
-        updated_at=now,
+    session.add(
+        ProjectStyle(
+            project_id=int(project.id),
+            style_preset="none",
+            user_style_hint=None,
+            style_prompt_text="",
+            style_data_json=None,
+            style_base_json="",
+            version=1,
+            created_at=now,
+            updated_at=now,
+        )
     )
-    session.add(style)
-    await session.flush()
-    project.style_id = int(style.id)
-    session.add(project)
     await session.commit()
     await wf_engine.ensure_workflow_for_project(session, project, align_from_project=True)
     await session.commit()
@@ -275,7 +206,7 @@ async def run_generate_outline_only(
     try:
         structured = await structure_raw_text(
             raw_text,
-            narration_target_seconds=getattr(project, "target_narration_seconds", None),
+            narration_target_seconds=narration_target_seconds,
             structure_mode=_text_structure_mode(project),
         )
         await _persist_structured_outline(session, project, structured)
@@ -299,6 +230,20 @@ async def run_synthesize_project_audio(
     project_id: int,
 ) -> SynthesizeAudioResponse:
     """步骤 2：按已有 step 口播文本调用豆包 TTS。成功后 status=ready。"""
+    class _AudioReopenCancelled(Exception):
+        """音频步骤被回退/取消后，主动停止本次合成任务。"""
+
+    async def _audio_step_still_running() -> bool:
+        prj = await session.get(Project, project_id)
+        if prj is None:
+            return False
+        run = await wf_engine._get_run(session, project_id)
+        if run is None or run.id is None:
+            return (prj.audio_status or "").strip().lower() == "running"
+        steps_map = await wf_engine._load_steps_map(session, int(run.id))
+        row = steps_map.get(wf_engine.STEP_AUDIO)
+        return row is not None and row.status == wf_engine.STEP_RUNNING
+
     project = await session.get(Project, project_id)
     if project is None:
         raise RuntimeError("项目不存在")
@@ -319,6 +264,9 @@ async def run_synthesize_project_audio(
 
     now = utc_now()
     project.status = "synthesizing"
+    project.video_source_updated_at = now
+    project.video_exported_at = None
+    project.audio_error = None
     await reset_export_only(session, project)
     await wf_engine.set_step(
         session, project, wf_engine.STEP_AUDIO, wf_engine.STEP_RUNNING
@@ -333,8 +281,12 @@ async def run_synthesize_project_audio(
     base.mkdir(parents=True, exist_ok=True)
     audios: list[AudioPart] = []
 
+    vt = effective_voice_type(project.tts_voice_type)
+
     try:
         for nc, step_node, page_node in pairs:
+            if not await _audio_step_still_running():
+                raise _AudioReopenCancelled()
             seq = nc.audio_sequence
             if seq <= 0:
                 continue
@@ -343,11 +295,10 @@ async def run_synthesize_project_audio(
                 continue
             name = f"{seq:03d}.mp3"
             path = base / name
-            voice_ov = (project.tts_voice_type or "").strip() or None
             async with _TTS_SEMAPHORE:
-                alignment_json = await synthesize_to_file(
-                    script, path, voice_override=voice_ov
-                )
+                alignment_json = await synthesize_to_file(script, path, voice_type=vt)
+            if not await _audio_step_still_running():
+                raise _AudioReopenCancelled()
             duration_ms = audio_duration_ms(path)
             t = utc_now()
             nc.narration_alignment_json = alignment_json
@@ -368,15 +319,23 @@ async def run_synthesize_project_audio(
                 )
             )
 
+        if not await _audio_step_still_running():
+            raise _AudioReopenCancelled()
         project.status = "ready"
+        project.audio_error = None
+        if audios:
+            project.audio_result_url = audios[0].url
         project.updated_at = utc_now()
         await wf_engine.set_step(
-            session, project, wf_engine.STEP_AUDIO, wf_engine.STEP_SUCCEEDED
+            session, project, wf_engine.STEP_AUDIO, wf_engine.STEP_SUCCESS
         )
         session.add(project)
         await session.commit()
 
         return SynthesizeAudioResponse(project_id=project_id, audios=audios)
+    except _AudioReopenCancelled:
+        # 回退流程已将状态重置为 pending；此处静默结束，不再覆盖为 success/failed。
+        return SynthesizeAudioResponse(project_id=project_id, audios=[])
     except Exception as e:
         async with async_session_maker() as session:
             p = await session.get(Project, project_id)
@@ -386,8 +345,9 @@ async def run_synthesize_project_audio(
                     p,
                     wf_engine.STEP_AUDIO,
                     wf_engine.STEP_FAILED,
-                    error_message=_clip_pipeline_err(e),
+                    error_message=str(e)[:4000],
                 )
+                p.audio_error = str(e)[:4000]
                 p.status = "failed"
                 p.updated_at = utc_now()
                 session.add(p)
@@ -430,14 +390,11 @@ async def run_resynthesize_single_step_audio(
     name = f"{seq:03d}.mp3"
     path = base / name
 
-    project = await session.get(Project, project_id)
-    voice_ov = (
-        (project.tts_voice_type or "").strip() or None if project else None
-    )
+    proj = await session.get(Project, project_id)
+    vt = effective_voice_type(proj.tts_voice_type if proj else None)
+
     async with _TTS_SEMAPHORE:
-        alignment_json = await synthesize_to_file(
-            script, path, voice_override=voice_ov
-        )
+        alignment_json = await synthesize_to_file(script, path, voice_type=vt)
     duration_ms = audio_duration_ms(path)
     t = utc_now()
     nc.narration_alignment_json = alignment_json
@@ -445,7 +402,10 @@ async def run_resynthesize_single_step_audio(
     nc.updated_at = t
     session.add(nc)
 
+    project = await session.get(Project, project_id)
     if project:
+        project.video_source_updated_at = t
+        project.video_exported_at = None
         await reset_export_only(session, project)
         project.updated_at = t
         session.add(project)
@@ -460,46 +420,16 @@ async def run_resynthesize_single_step_audio(
     }
 
 
-async def _run_deck_master_entry_parallel(project_id: int) -> None:
-    """与文本结构化并行：生成风格母版并同步 workflow（DAG 入口 deck_master）。"""
-    from app.services.deck import ensure_style_base, sync_demo_workflow_from_deck
-
-    try:
-        await ensure_style_base(project_id)
-        async with async_session_maker() as session:
-            await wf_engine.notify_deck_master_success_if_pending(session, project_id)
-            await sync_demo_workflow_from_deck(session, project_id)
-            await session.commit()
-    except asyncio.CancelledError:
-        raise
-    except Exception as e:
-        logger.exception("project %s deck_master entry failed", project_id)
-        detail = _clip_pipeline_err(e)
-        try:
-            async with async_session_maker() as session:
-                project = await session.get(Project, project_id)
-                if project:
-                    await wf_engine.set_step(
-                        session,
-                        project,
-                        wf_engine.STEP_DECK_MASTER,
-                        wf_engine.STEP_FAILED,
-                        error_message=detail,
-                    )
-                    await session.commit()
-        except Exception:
-            logger.exception(
-                "project %s failed to persist deck_master failure", project_id
-            )
-
-
 async def _run_audio_and_deck_parallel(project_id: int) -> None:
-    """文本已成功：配音与演示页并行。"""
+    """
+    文本已成功且 `projects.pipeline_auto_advance` 为真时：整稿配音与批量场景页并行启动。
+
+    手动流水线（`pipeline_auto_advance=False`）不得在此函数内启动场景大页；须用户在工程内完成「演示母版」后，
+    再通过 `POST .../workflow/demo/run` 或 `generate-deck-all` 显式确认批量生成。
+    """
     from app.services.deck import (
         collect_deck_page_node_ids_needing_generation,
-        fetch_style_prompt_for_project,
         run_generate_deck_all_job,
-        sync_demo_workflow_from_deck,
         try_start_page_deck_generation,
     )
     from app.services.outline import load_deck_timeline
@@ -507,27 +437,28 @@ async def _run_audio_and_deck_parallel(project_id: int) -> None:
     async def _audio_branch() -> None:
         try:
             async with async_session_maker() as session:
-                await asyncio.wait_for(
-                    run_synthesize_project_audio(session, project_id),
-                    timeout=max(60, int(settings.audio_pipeline_timeout_seconds or 600)),
-                )
-        except asyncio.TimeoutError:
-            detail = (
-                "音频生成超时：后台任务长时间未完成。"
-                "请检查 Docker 容器到豆包 TTS 的网络/配额状态后重试。"
-            )
-            logger.exception("project %s audio branch timed out", project_id)
-            await _mark_audio_pipeline_failed(project_id, detail)
-        except Exception as e:
-            logger.exception("project %s audio branch crashed", project_id)
-            await _mark_audio_pipeline_failed(project_id, e)
+                await run_synthesize_project_audio(session, project_id)
+        except Exception:
+            pass
 
     async def _deck_branch() -> None:
         try:
             async with async_session_maker() as session:
+                project = await session.get(Project, project_id)
+                if project is None or not bool(
+                    getattr(project, "pipeline_auto_advance", True)
+                ):
+                    return
                 timeline = await load_deck_timeline(session, project_id)
                 if not timeline:
-                    raise RuntimeError("没有可演示的分段，无法启动演示生成")
+                    p = await session.get(Project, project_id)
+                    if p:
+                        p.demo_status = STEP_FAILED
+                        p.demo_error = "没有可演示的分段"
+                        p.updated_at = utc_now()
+                        session.add(p)
+                        await session.commit()
+                    return
                 page_ids = await collect_deck_page_node_ids_needing_generation(
                     session, project_id
                 )
@@ -541,39 +472,100 @@ async def _run_audio_and_deck_parallel(project_id: int) -> None:
                 async with async_session_maker() as s2:
                     p = await s2.get(Project, project_id)
                     if p:
-                        if await fetch_style_prompt_for_project(s2, p):
-                            await wf_engine.set_step(
-                                s2,
-                                p,
-                                wf_engine.STEP_DECK_MASTER,
-                                wf_engine.STEP_SUCCEEDED,
-                            )
+                        p.demo_status = STEP_FAILED
+                        p.demo_error = "没有可启动的演示页"
                         p.updated_at = utc_now()
-                        s2.add(p)
-                        await sync_demo_workflow_from_deck(s2, project_id)
+                        session.add(p)
                         await s2.commit()
                 return
-            await asyncio.wait_for(
-                run_generate_deck_all_job(project_id, started),
-                timeout=max(120, int(settings.deck_pipeline_timeout_seconds or 900)),
-            )
-        except asyncio.TimeoutError:
-            detail = (
-                "演示生成超时：后台任务长时间未完成。"
-                "请检查 Docker 容器到 DeepSeek 的网络、代理或限流状态后重试。"
-            )
-            logger.exception("project %s deck branch timed out", project_id)
-            await _mark_deck_pipeline_failed(project_id, detail)
-        except Exception as e:
-            logger.exception("project %s deck branch crashed", project_id)
-            await _mark_deck_pipeline_failed(project_id, e)
+            await run_generate_deck_all_job(project_id, started)
+        except Exception:
+            pass
 
     await asyncio.gather(_audio_branch(), _deck_branch())
 
 
+async def _run_deck_master_while_text_structuring(project_id: int) -> None:
+    """
+    与文案结构化并行：推进演示母版（project_styles 风格正文）。
+    - 自行设计：与结构化同时跑 ensure_style_base，完成后标母版成功。
+    - 复用母版：库中已有可用 style_prompt 时仅标母版进行中，等文案成功后再标成功，
+      避免「未打开工程母版已绿」的错位感。
+    """
+    from app.services.deck import deck_style_ready_from_storage, ensure_style_base
+
+    try:
+        ready_at_start = False
+        async with async_session_maker() as session:
+            project = await session.get(Project, project_id)
+            if project is None or not bool(
+                getattr(project, "pipeline_auto_advance", True)
+            ):
+                return
+            st = (project.status or "").strip().lower()
+            if st != "structuring":
+                return
+            st_res = await session.exec(
+                select(ProjectStyle).where(ProjectStyle.project_id == project_id)
+            )
+            row = st_res.first()
+            ready_at_start, _, _ = deck_style_ready_from_storage(project, row)
+            await wf_engine.ensure_workflow_for_project(
+                session, project, align_from_project=False
+            )
+            await wf_engine.set_step(
+                session,
+                project,
+                wf_engine.STEP_DECK_MASTER,
+                wf_engine.STEP_RUNNING,
+            )
+            await session.commit()
+
+        if not ready_at_start:
+            try:
+                await ensure_style_base(project_id)
+            except Exception as e:
+                msg = (str(e).strip() or "演示风格母版生成失败")[:1800]
+                async with async_session_maker() as session:
+                    project = await session.get(Project, project_id)
+                    if project is None:
+                        return
+                    await wf_engine.set_step(
+                        session,
+                        project,
+                        wf_engine.STEP_DECK_MASTER,
+                        wf_engine.STEP_FAILED,
+                        error_message=msg,
+                    )
+                    await session.commit()
+                return
+
+            async with async_session_maker() as session:
+                project = await session.get(Project, project_id)
+                if project is None:
+                    return
+                await wf_engine.notify_deck_master_success_if_pending(
+                    session, project_id
+                )
+                await session.commit()
+    except Exception:
+        async with async_session_maker() as session:
+            project = await session.get(Project, project_id)
+            if project is None:
+                return
+            await wf_engine.set_step(
+                session,
+                project,
+                wf_engine.STEP_DECK_MASTER,
+                wf_engine.STEP_FAILED,
+                error_message="演示风格母版任务异常",
+            )
+            await session.commit()
+
+
 async def run_text_rebuild_job(project_id: int) -> None:
     """
-    清空大纲并重跑结构化 → 并行配音 + 演示。
+    清空大纲并重跑结构化；若 pipeline_auto_advance 则继续并行配音 + 演示。
     由 POST .../workflow/text/run 触发。
     """
     async with async_session_maker() as session:
@@ -589,34 +581,43 @@ async def run_text_rebuild_job(project_id: int) -> None:
         await session.commit()
 
     structured: StructuredPodcast | None = None
-    deck_master_task = asyncio.create_task(
-        _run_deck_master_entry_parallel(project_id)
-    )
-    try:
-        async with async_session_maker() as session:
-            project = await session.get(Project, project_id)
-            if project is None or project.status != "structuring":
-                await deck_master_task
-                return
-            raw = (project.input_prompt or "").strip()
-            if not raw:
-                raise RuntimeError("项目缺少生成素材")
-            structured = await structure_raw_text(
-                raw,
-                narration_target_seconds=project.target_narration_seconds,
-                structure_mode=_text_structure_mode(project),
-            )
+    text_exc: Exception | None = None
 
-        async with async_session_maker() as session:
-            project = await session.get(Project, project_id)
-            if project is None or project.status != "structuring":
-                await deck_master_task
-                return
-            assert structured is not None
-            await _persist_structured_outline(
-                session, project, structured, advance_parallel=True
-            )
-    except Exception:
+    async def _text_branch() -> None:
+        nonlocal structured, text_exc
+        try:
+            async with async_session_maker() as session:
+                project = await session.get(Project, project_id)
+                if project is None or project.status != "structuring":
+                    return
+                raw = (project.input_prompt or "").strip()
+                if not raw:
+                    raise RuntimeError("项目缺少生成素材")
+                nts = project.narration_target_seconds
+                structured = await structure_raw_text(
+                    raw,
+                    narration_target_seconds=nts,
+                    structure_mode=_text_structure_mode(project),
+                )
+
+            async with async_session_maker() as session:
+                project = await session.get(Project, project_id)
+                if project is None or project.status != "structuring":
+                    return
+                assert structured is not None
+                advance = bool(getattr(project, "pipeline_auto_advance", True))
+                await _persist_structured_outline(
+                    session, project, structured, advance_parallel=advance
+                )
+        except Exception as e:
+            text_exc = e
+
+    await asyncio.gather(
+        _text_branch(),
+        _run_deck_master_while_text_structuring(project_id),
+    )
+
+    if text_exc is not None:
         async with async_session_maker() as session:
             p = await session.get(Project, project_id)
             if p:
@@ -624,17 +625,24 @@ async def run_text_rebuild_job(project_id: int) -> None:
                 p.status = "failed"
                 session.add(p)
                 await session.commit()
-        await deck_master_task
         return
 
-    await deck_master_task
-    await _run_audio_and_deck_parallel(project_id)
+    if structured is None:
+        return
+
+    async with async_session_maker() as session:
+        p = await session.get(Project, project_id)
+        run_parallel = p is not None and bool(
+            getattr(p, "pipeline_auto_advance", True)
+        )
+    if run_parallel:
+        await _run_audio_and_deck_parallel(project_id)
 
 
 async def run_queued_project_pipeline_job(project_id: int) -> None:
     """
-    后台：queued → structuring；结构化阶段与 deck_master（风格母版）并行；
-    入库 draft 后（配音 ∥ 演示页）并行。
+    后台：queued → structuring →（文案结构化 ∥ 演示母版风格）并行 → 入库 draft
+    →（配音 ∥ 演示页）并行。
     与 POST /api/projects 配对；若项目已被删或状态不是 queued 则直接返回。
     """
     async with async_session_maker() as session:
@@ -656,34 +664,43 @@ async def run_queued_project_pipeline_job(project_id: int) -> None:
         await session.commit()
 
     structured: StructuredPodcast | None = None
-    deck_master_task = asyncio.create_task(
-        _run_deck_master_entry_parallel(project_id)
-    )
-    try:
-        async with async_session_maker() as session:
-            project = await session.get(Project, project_id)
-            if project is None or project.status != "structuring":
-                await deck_master_task
-                return
-            raw = (project.input_prompt or "").strip()
-            if not raw:
-                raise RuntimeError("项目缺少生成素材")
-            structured = await structure_raw_text(
-                raw,
-                narration_target_seconds=project.target_narration_seconds,
-                structure_mode=_text_structure_mode(project),
-            )
+    text_exc: Exception | None = None
 
-        async with async_session_maker() as session:
-            project = await session.get(Project, project_id)
-            if project is None or project.status != "structuring":
-                await deck_master_task
-                return
-            assert structured is not None
-            await _persist_structured_outline(
-                session, project, structured, advance_parallel=True
-            )
-    except Exception:
+    async def _text_branch() -> None:
+        nonlocal structured, text_exc
+        try:
+            async with async_session_maker() as session:
+                project = await session.get(Project, project_id)
+                if project is None or project.status != "structuring":
+                    return
+                raw = (project.input_prompt or "").strip()
+                if not raw:
+                    raise RuntimeError("项目缺少生成素材")
+                nts = project.narration_target_seconds
+                structured = await structure_raw_text(
+                    raw,
+                    narration_target_seconds=nts,
+                    structure_mode=_text_structure_mode(project),
+                )
+
+            async with async_session_maker() as session:
+                project = await session.get(Project, project_id)
+                if project is None or project.status != "structuring":
+                    return
+                assert structured is not None
+                advance = bool(getattr(project, "pipeline_auto_advance", True))
+                await _persist_structured_outline(
+                    session, project, structured, advance_parallel=advance
+                )
+        except Exception as e:
+            text_exc = e
+
+    await asyncio.gather(
+        _text_branch(),
+        _run_deck_master_while_text_structuring(project_id),
+    )
+
+    if text_exc is not None:
         async with async_session_maker() as session:
             p = await session.get(Project, project_id)
             if p:
@@ -691,11 +708,18 @@ async def run_queued_project_pipeline_job(project_id: int) -> None:
                 p.status = "failed"
                 session.add(p)
                 await session.commit()
-        await deck_master_task
         return
 
-    await deck_master_task
-    await _run_audio_and_deck_parallel(project_id)
+    if structured is None:
+        return
+
+    async with async_session_maker() as session:
+        p = await session.get(Project, project_id)
+        run_parallel = p is not None and bool(
+            getattr(p, "pipeline_auto_advance", True)
+        )
+    if run_parallel:
+        await _run_audio_and_deck_parallel(project_id)
 
 
 async def run_generate(
@@ -704,6 +728,7 @@ async def run_generate(
     *,
     project_name: str | None = None,
     owner_user_id: int,
+    narration_target_seconds: int | None = None,
 ) -> GenerateResponse:
     """兼容：文案 + 配音一步完成（旧 /api/generate）。"""
     outline = await run_generate_outline_only(
@@ -711,6 +736,7 @@ async def run_generate(
         raw_text,
         project_name=project_name,
         owner_user_id=owner_user_id,
+        narration_target_seconds=narration_target_seconds,
     )
     synth = await run_synthesize_project_audio(session, outline.project_id)
     return GenerateResponse(
@@ -721,10 +747,7 @@ async def run_generate(
 
 
 async def delete_project_cascade(session: AsyncSession, project_id: int) -> None:
-    """删除项目、大纲、内容行；不删除磁盘媒体时由调用方处理。
-
-    project_styles 行保留（不随项目级联删除），便于复用母版或审计；仅断开 origin_project_id 等外键引用。
-    """
+    """删除项目、大纲、内容行；不删除磁盘媒体时由调用方处理。"""
     project = await session.get(Project, project_id)
     if project is None:
         raise RuntimeError("项目不存在")
@@ -746,40 +769,11 @@ async def delete_project_cascade(session: AsyncSession, project_id: int) -> None
         )
         await session.exec(delete(WorkflowRun).where(WorkflowRun.id == wid))
 
-    await session.exec(
-        delete(VideoExportJob).where(VideoExportJob.project_id == project_id)
-    )
     sub = select(OutlineNode.id).where(OutlineNode.project_id == project_id)
     await session.exec(delete(NodeContent).where(NodeContent.node_id.in_(sub)))
-    await session.execute(
-        update(OutlineNode)
-        .where(OutlineNode.project_id == project_id)
-        .values(parent_id=None)
-    )
     await session.exec(delete(OutlineNode).where(OutlineNode.project_id == project_id))
-    # MySQL 等会校验外键：project_styles.origin_project_id -> projects.id
-    # （含克隆共用母版时仍指向源项目）。先断开引用再删项目行。
-    # 注意：UPDATE 须用 session.execute；exec() 主要面向 select，误用可能导致 500。
-    await session.execute(
-        update(ProjectStyle)
-        .where(ProjectStyle.origin_project_id == project_id)
-        .values(origin_project_id=None)
+    await session.exec(
+        delete(ProjectStyle).where(ProjectStyle.project_id == project_id)
     )
-    # 极老库曾存在 project_styles.project_id -> projects.id（models 已移除该列）。
-    try:
-        await session.execute(
-            text(
-                "UPDATE project_styles SET project_id = NULL WHERE project_id = :pid"
-            ),
-            {"pid": project_id},
-        )
-    except Exception as e:
-        err = str(e).lower()
-        if "unknown column" in err and "project_id" in err:
-            pass
-        elif "doesn't exist" in err or "no such column" in err:
-            pass
-        else:
-            raise
     await session.delete(project)
     await session.commit()

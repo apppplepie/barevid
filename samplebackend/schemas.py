@@ -22,6 +22,12 @@ class StructuredPodcast(BaseModel):
 class GenerateRequest(BaseModel):
     raw_text: str = Field(..., min_length=1)
     name: str | None = Field(default=None, description="项目名称，可选")
+    narration_target_seconds: int | None = Field(
+        default=None,
+        ge=10,
+        le=3600,
+        description="口播目标体量（秒），传入则写入项目并约束结构化字数",
+    )
 
 
 class ProjectCloneRequest(BaseModel):
@@ -39,52 +45,53 @@ class ProjectCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=200, description="项目名称")
     raw_text: str = Field(..., min_length=1, description="主题素材，送入 STRUCTURE_SYSTEM")
-    deck_page_size: str | None = Field(default=None, description="（已废弃）")
+    deck_page_size: str | None = Field(
+        default=None,
+        description="16:9 | 4:3 | 9:16 | 1:1",
+    )
     deck_style_preset: str | None = Field(
         default=None,
-        description="基本风格：aurora_glass | minimal_tech | dark_neon | editorial_luxury | futuristic_hud",
+        description="基本风格：none（默认未选）| aurora_glass | minimal_tech | dark_neon | editorial_luxury | futuristic_hud",
+    )
+    deck_style_user_hint: str | None = Field(
+        default=None,
+        max_length=8000,
+        description="演示风格用户补充提示词，写入样式表并参与母版生成；可与预设同时生效",
     )
     copy_deck_master_from_project_id: int | None = Field(
         default=None,
         ge=1,
         description="指定时从该项目的 project_styles 复制已就绪的演示母版到新项目，跳过 AI 生成母版",
     )
-    deck_style_user_hint: str | None = Field(
-        default=None,
-        max_length=4000,
-        description="用户自定义风格补充，写入 user_style_hint；仅在不复用源母版时参与母版生成",
+    include_intro: bool = Field(
+        default=False,
+        description="导出视频时附加服务端默认时长的片头",
     )
-    target_narration_seconds: int | None = Field(
+    intro_style_id: int | None = Field(
         default=None,
-        description="目标口播总时长（秒），送入结构化以约束全文 script 体量；省略表示不限制",
+        ge=1,
+        le=99,
+        description="片头样式 id（与前端 bumper 注册表一致）；省略且勾选片头时默认为 1",
     )
-    pipeline_auto_advance: bool = Field(
-        default=True,
-        description="为 False 时创建后不自动排队跑流水线，需在工程内手动点步骤开始",
+    include_outro: bool = Field(
+        default=False,
+        description="导出视频时附加服务端默认时长的片尾",
+    )
+    narration_target_seconds: int | None = Field(
+        default=None,
+        ge=10,
+        le=3600,
+        description="结构化口播目标体量（秒），换算为字数区间提示模型；省略表示不额外约束",
     )
     tts_voice_type: str | None = Field(
         default=None,
-        max_length=200,
-        description="项目级 TTS 音色覆盖；空表示用服务器默认",
+        max_length=128,
+        description="豆包 TTS 音色 voice_type；省略或空串则使用服务器 .env 默认",
     )
-    text_structure_mode: str | None = Field(
-        default=None,
-        description="polish=整理口播腔；verbatim_split=保留原文仅分段",
+    pipeline_auto_advance: bool = Field(
+        default=True,
+        description="True=文案成功后自动跑配音与演示；False=仅结构化，需在工程内手动开始各步",
     )
-    # --- 片头/片尾（暂不下线产品功能；恢复时取消下面注释并接 main.create_project）---
-    # include_intro: bool = Field(
-    #     default=False,
-    #     description="成片是否含片头（写入项目 description 元数据）",
-    # )
-    # intro_style_id: int | None = Field(
-    #     default=None,
-    #     ge=1,
-    #     description="片头样式 id；仅 include_intro 时有效",
-    # )
-    # include_outro: bool = Field(
-    #     default=False,
-    #     description="成片是否含片尾（写入项目 description 元数据）",
-    # )
 
 
 class RegisterRequest(BaseModel):
@@ -134,74 +141,85 @@ class ResynthesizeStepAudioRequest(BaseModel):
 
 
 class NarrationTextPatch(BaseModel):
-    """口播面板：保存某 step 节点的口播正文（与已生成音频可能不一致，需再点重配）。"""
+    """将 step 节点的口播正文写入库（与已合成音频应对齐；通常先 resynthesize 再保存）。"""
 
-    narration_text: str = Field(default="", description="口播全文")
+    narration_text: str = Field(default="", description="口播全文，允许空串")
 
 
 class ProjectPatch(BaseModel):
     name: str | None = Field(default=None, description="项目名称")
     is_shared: bool | None = Field(default=None, description="是否共享给所有用户可编辑")
-    input_prompt: str | None = Field(
-        default=None,
-        description="项目原始素材/口播稿（手动流水线编辑后保存）",
-    )
     tts_voice_type: str | None = Field(
         default=None,
-        description="项目 TTS 音色；传 null 或空串可清除覆盖",
+        description="豆包音色 voice_type；传空串清除项目覆盖并跟随服务器默认；省略则不修改",
+    )
+    input_prompt: str | None = Field(
+        default=None,
+        description="主题素材原文；手动流程可在生成口播前修改后再跑结构化",
     )
     text_structure_mode: str | None = Field(
         default=None,
-        description="polish | verbatim_split；null 恢复默认 polish",
+        description="polish=AI 整理口播腔；verbatim_split=不改写原文仅分段+概括",
     )
 
 
-class ManualConfirmOutlineSegment(BaseModel):
+class ManualOutlineSegmentEdit(BaseModel):
     step_node_id: int = Field(..., ge=1)
-    subtitle: str = ""
-    narration_text: str = ""
-    narration_brief: str | None = None
+    subtitle: str = Field(default="", max_length=4000)
+    narration_text: str = Field(default="", max_length=500_000)
+    narration_brief: str | None = Field(default=None, max_length=16_000)
 
 
-class ManualConfirmOutlinePage(BaseModel):
+class ManualOutlinePageEdit(BaseModel):
     page_node_id: int = Field(..., ge=1)
-    main_title: str = ""
-    segments: list[ManualConfirmOutlineSegment] = Field(default_factory=list)
+    main_title: str = Field(default="", max_length=4000)
+    segments: list[ManualOutlineSegmentEdit] = Field(default_factory=list)
 
 
 class ManualConfirmOutlineRequest(BaseModel):
-    pages: list[ManualConfirmOutlinePage] = Field(..., min_length=1)
+    pages: list[ManualOutlinePageEdit] = Field(..., min_length=1)
 
 
-class CopyDeckStyleFromRequest(BaseModel):
-    source_project_id: int = Field(..., ge=1)
-
-
-class DeckStylePromptTextPatch(BaseModel):
-    deck_style_prompt_text: str = Field(
-        default="",
-        description="写入 project_styles.style_prompt_text",
-    )
-
-
-class WorkflowStepActionBody(BaseModel):
-    """工作流面板：取消运行中步骤 / 回退已完成步骤。"""
+class WorkflowStepControlRequest(BaseModel):
+    """顶栏流水线：取消进行中 / 成功步骤回退。"""
 
     step: str = Field(
-        description="text | audio | deck_master | deck_render | pages | export",
+        ...,
+        min_length=2,
+        max_length=32,
+        description="text | audio | pages | deck_master | deck_render | export",
     )
 
 
 class DeckStylePatch(BaseModel):
     deck_style_preset: str | None = Field(
         default=None,
-        description="基本风格：aurora_glass | minimal_tech | dark_neon | editorial_luxury | futuristic_hud",
+        description="基本风格：none | aurora_glass | minimal_tech | dark_neon | editorial_luxury | futuristic_hud",
     )
     deck_style_user_hint: str | None = Field(
         default=None,
         description="用户提示词，写入样式表并参与风格母版生成",
     )
-    deck_page_size: str | None = Field(default=None, description="（已废弃）")
+    deck_page_size: str | None = Field(
+        default=None,
+        description="页面尺寸预设：16:9 | 4:3 | 9:16 | 1:1",
+    )
+
+
+class DeckStylePromptTextPatch(BaseModel):
+    """仅更新 project_styles.style_prompt_text，不清空母版 JSON、不整表重置导出。"""
+
+    deck_style_prompt_text: str = Field(
+        default="",
+        max_length=32000,
+        description="AI 生成的风格说明纯文本；生成场景页前可由用户微调后写入",
+    )
+
+
+class CopyDeckStyleFromRequest(BaseModel):
+    """将另一项目的就绪演示母版样式复制到当前项目（不调用模型生成）。"""
+
+    source_project_id: int = Field(..., ge=1, description="源项目数字 ID")
 
 class ExportVideoRequest(BaseModel):
     width: int | None = Field(default=None, description="导出视频宽度（像素），可选")
@@ -224,41 +242,14 @@ class PipelineStages(BaseModel):
 
 
 class ExportVideoResponse(BaseModel):
-    output_url: str = Field(
-        default="",
-        description="成片 URL；排队中可能为空或仍为旧成片链接",
-    )
+    output_url: str
     action: str = Field(
-        description="export | download | queued（远程 worker 模式下入队）",
+        description="export: 本次执行了重新合成；download: 复用已有 mp4 直链下载",
     )
     pipeline: PipelineStages
-    video_exported_at: str | None = Field(default=None, description="（已废弃）")
-    export_job_id: int | None = Field(
-        default=None,
-        description="新导出任务入队后返回；与已有任务重复排队时返回在办 job id",
+    video_exported_at: str | None = Field(
+        default=None, description="ISO 时间，最近一次导出成功"
     )
-
-
-class WorkerVideoExportFailBody(BaseModel):
-    error: str = Field(default="导出失败", description="错误信息")
-
-
-class WorkerVideoExportJobPayload(BaseModel):
-    job_id: int
-    project_id: int
-    project_name: str
-    width: int
-    height: int
-    frontend_url: str
-    api_url: str
-    media_base_url: str
-    authorization: str = Field(
-        description="含 Bearer 的完整 Authorization 值，传给 export_video 子进程",
-    )
-    # 片头/片尾：字段保留以便 worker 契约稳定；当前 main 侧恒传默认，见 worker_claim 注释块
-    export_intro_ms: int = Field(default=0, description="（暂不使用）片头时长 ms")
-    export_outro_ms: int = Field(default=0, description="（暂不使用）片尾时长 ms")
-    intro_style_id: int | None = Field(default=None, description="（暂不使用）片头样式 id")
 
 
 class ContextualAIDraftRequest(BaseModel):

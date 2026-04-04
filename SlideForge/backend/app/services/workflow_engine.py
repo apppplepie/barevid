@@ -103,6 +103,20 @@ async def _get_run(session: AsyncSession, project_id: int) -> WorkflowRun | None
     return r.first()
 
 
+async def get_workflow_text_step_status(
+    session: AsyncSession, project: Project
+) -> str | None:
+    """当前 text 步骤在 workflow_step_runs 中的 status；无记录时 None。"""
+    if project.id is None:
+        return None
+    run = await _get_run(session, int(project.id))
+    if run is None or run.id is None:
+        return None
+    steps = await _load_steps_map(session, int(run.id))
+    row = steps.get(STEP_TEXT)
+    return row.status if row else None
+
+
 async def _load_steps_map(
     session: AsyncSession, workflow_run_id: int
 ) -> dict[str, WorkflowStepRun]:
@@ -394,13 +408,7 @@ async def reset_downstream_for_text_retry(
         ex.finished_at = None
         ex.updated_at = now
         session.add(ex)
-    project.audio_error = None
-    project.demo_error = None
-    project.export_error = None
-    project.audio_result_url = None
-    project.demo_result_url = None
-    project.export_file_url = None
-    _ = project
+    # 旧版 projects 表上的 *_error / *_result_url 已废弃；状态以 workflow_* 表为准。
     await apply_overall_only(session, run)
 
 

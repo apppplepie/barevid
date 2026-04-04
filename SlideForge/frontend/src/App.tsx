@@ -1932,8 +1932,9 @@ export default function App() {
       if (typeof tns === 'number' && Number.isFinite(tns) && tns >= 10 && tns <= 1800) {
         body.target_narration_seconds = Math.round(tns);
       }
-      if (newProject.includeIntro) body.include_intro = true;
-      if (newProject.includeOutro) body.include_outro = true;
+      // 片头/片尾暂不使用；恢复时与后端 ProjectCreate 字段一并打开
+      // if (newProject.includeIntro) body.include_intro = true;
+      // if (newProject.includeOutro) body.include_outro = true;
       const ttsVt = (newProject.ttsVoiceType || '').trim();
       if (ttsVt) body.tts_voice_type = ttsVt;
       const res = await apiFetch<{ project_id: number }>('/api/projects', {

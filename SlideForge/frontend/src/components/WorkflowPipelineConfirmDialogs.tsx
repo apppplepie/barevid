@@ -111,7 +111,7 @@ export function CancelRunningPipelineStepDialog({
 
   return (
     <div
-      className="sf-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-[2px]"
+      className="sf-modal-backdrop fixed inset-0 z-[140] flex items-center justify-center p-4 backdrop-blur-[2px]"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !busy) onClose();
@@ -209,7 +209,7 @@ export function ReopenSuccessPipelineStepDialog({
 
   return (
     <div
-      className="sf-modal-backdrop fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-[2px]"
+      className="sf-modal-backdrop fixed inset-0 z-[140] flex items-center justify-center p-4 backdrop-blur-[2px]"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !busy) onClose();

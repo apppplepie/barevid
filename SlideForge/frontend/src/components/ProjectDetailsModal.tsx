@@ -402,9 +402,10 @@ export function ProjectDetailsModal({ open, onClose, projectId }: ProjectDetails
                     : '—'
                 }
               />
-              <Row label="导出含片头" value={formatValue(p.include_intro)} />
-              <Row label="片头样式 ID" value={formatValue(p.intro_style_id)} />
-              <Row label="导出含片尾" value={formatValue(p.include_outro)} />
+              {/* 片头/片尾暂不在详情中展示；后端仍可在 description __sfmeta 中保留 */}
+              {/* <Row label="导出含片头" value={formatValue(p.include_intro)} /> */}
+              {/* <Row label="片头样式 ID" value={formatValue(p.intro_style_id)} /> */}
+              {/* <Row label="导出含片尾" value={formatValue(p.include_outro)} /> */}
             </Section>
           </div>
         );

@@ -84,6 +84,20 @@ async def cancel_running_workflow_step(
     await wf.cascade_cancel_dependent_steps(session, project, step_key)
     await _invalidate_export_after_pipeline_step_cancel(session, project, wid)
 
+    # projects.status 仍被若干 API 用作闸门；取消后必须与 workflow 一致，避免 409 卡死
+    if step_key == wf.STEP_TEXT:
+        project.status = "draft"
+    elif step_key == wf.STEP_AUDIO:
+        steps_after = await _steps_map(session, wid)
+        tr = steps_after.get(wf.STEP_TEXT)
+        project.status = (
+            "ready"
+            if tr is not None and tr.status == wf.STEP_SUCCEEDED
+            else "draft"
+        )
+    project.updated_at = utc_now()
+    session.add(project)
+
 
 async def reopen_success_workflow_step(
     session: AsyncSession, project: Project, step_key: str

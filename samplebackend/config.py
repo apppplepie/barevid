@@ -2,7 +2,7 @@ import os
 import sys
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -48,15 +48,17 @@ class Settings(BaseSettings):
     # FIM 补全（Beta）网关，需与官方文档一致，例如 https://api.deepseek.com/beta
     deepseek_beta_base_url: str = "https://api.deepseek.com/beta"
     deepseek_model: str = "deepseek-chat"
-    # 容器/远程网络下若模型长时间无响应，需尽快失败并回写 workflow，避免长期 running。
-    deepseek_request_timeout_seconds: int = 180
-    deepseek_style_timeout_seconds: int = 180
-    deepseek_deck_timeout_seconds: int = 420
     # 放映页 HTML（JSON 包一大段字符串）易触顶截断，适当加大；0 表示交给 API 默认
     deepseek_deck_max_tokens: int = 8192
     deepseek_fim_enabled: bool = True
     # FIM 单次 max_tokens 上限（官方说明约 4K）
     deepseek_fim_max_tokens: int = 4096
+    # DeepSeek 调用 asyncio 超时（秒，内部至少 30s）：结构化/JSON 修复/FIM 等
+    deepseek_request_timeout_seconds: int = 240
+    # 多页 HTML 生成往往更久
+    deepseek_deck_timeout_seconds: int = 720
+    # 风格母版纯文本一次调用
+    deepseek_style_timeout_seconds: int = 180
 
     # 豆包语音合成：默认 HTTP V3 单向流式（文档 1598757）；V1 见 1257584
     doubao_tts_use_v3: bool = True
@@ -73,10 +75,6 @@ class Settings(BaseSettings):
     doubao_tts_with_timestamp: bool = True
 
     storage_root: Path = Field(default_factory=_default_storage_root)
-    # 必填（无默认值，避免误用 SQLite）。见 backend/.env 中 DATABASE_URL。
-    # mysql+asyncmy://user:pass@host:3306/slideforge?charset=utf8mb4
-    # 或显式 SQLite：sqlite+aiosqlite:////abs/path/slideforge.db
-    database_url: str = ""
 
     @field_validator("storage_root", mode="after")
     @classmethod
@@ -87,43 +85,34 @@ class Settings(BaseSettings):
         return (_BACKEND_DIR / v).resolve()
 
     # 视频导出：Playwright 打开的放映页 origin（无前端进程时会连接失败）
-    export_frontend_url: str = "http://127.0.0.1:3000"
+    export_frontend_url: str = "http://127.0.0.1:5173"
     # 非空时优先于请求体里的 frontend_url：专用录屏实例（如 npm run dev:play 的 5174）
     export_play_origin: str = ""
 
     # 导出脚本拉取 play-manifest 的 API 根地址（子进程内访问，默认同机 8000）
     export_api_url: str = "http://127.0.0.1:8000"
 
-    # 视频导出一律入队；Worker 请求头 X-SlideForge-Worker-Key 须与此一致（必填，否则无法导出）
-    export_worker_token: str = ""
-    # 远程 worker 用 HTTP 拉取 /media/... 音频时的站点根（通常与对外 API 同源，如 https://api.example.com）
-    export_public_base_url: str = ""
-    export_job_running_timeout_seconds: int = 7200
-    export_upload_max_bytes: int = 1_073_741_824
-
-    # 默认禁用遗留开发后门；仅在显式设置时才允许 Bearer legacy。
-    legacy_dev_auth_enabled: bool = False
-    auth_session_ttl_days: int = 30
+    # 片头/片尾：Playwright 固定时长录制（无独立音轨，导出脚本在音轨首尾拼静音）；0 表示不启用
+    export_intro_duration_ms: int = Field(
+        default=0,
+        validation_alias=AliasChoices(
+            "EXPORT_INTRO_DURATION_MS",
+            "SLIDEFORGE_EXPORT_INTRO_MS",
+        ),
+    )
+    export_outro_duration_ms: int = Field(
+        default=0,
+        validation_alias=AliasChoices(
+            "EXPORT_OUTRO_DURATION_MS",
+            "SLIDEFORGE_EXPORT_OUTRO_MS",
+        ),
+    )
 
     # 并发控制：限制重任务同时运行数量，避免数据库锁争用与外部 API 限流
     tts_concurrency_limit: int = 5
     deck_page_concurrency_limit: int = 5
-    audio_pipeline_timeout_seconds: int = 600
-    deck_pipeline_timeout_seconds: int = 900
     # 单页演示生成超过该时长仍处于 generating，则判定为失败，避免前端长期转圈
     deck_page_generating_timeout_seconds: int = 600
-
-    # --- 片头/片尾配置（暂不使用；恢复时取消注释并在 worker_claim 中取消对应逻辑注释）---
-    # export_intro_duration_ms: int = Field(
-    #     default=0,
-    #     ge=0,
-    #     description="片头时长（毫秒）；0 表示不插入",
-    # )
-    # export_outro_duration_ms: int = Field(
-    #     default=0,
-    #     ge=0,
-    #     description="片尾时长（毫秒）；0 表示不插入",
-    # )
 
 
 settings = Settings()

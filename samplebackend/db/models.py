@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import Column, Text, UniqueConstraint
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -28,43 +28,88 @@ class Project(SQLModel, table=True):
     )
     is_shared: bool = False
     name: str
-    description: Optional[str] = Field(default=None, sa_column=Column(Text))
-    input_prompt: str = Field(sa_column=Column(Text, nullable=False))
-    status: str  # queued / structuring / draft / synthesizing / ready / failed / …
-    aspect_ratio: Optional[str] = Field(default="16:9")
-    deck_width: Optional[int] = Field(default=1920)
-    deck_height: Optional[int] = Field(default=1080)
-    style_id: Optional[int] = Field(default=None, foreign_key="project_styles.id")
-    # 目标口播总时长（秒），结构化时写入 AI 约束；NULL 表示不限制（旧项目）
-    target_narration_seconds: Optional[int] = Field(default=None)
-    # polish | verbatim_split；决定结构化系统提示（verbatim 不改写原文仅分段）
+    description: Optional[str] = Field(default=None)
+    input_prompt: str
+    status: str  # queued / pending_text / structuring / draft / synthesizing / ready / failed / …
+    deck_status: Optional[str] = Field(
+        default=None,
+        description="idle / generating / ready / failed",
+    )
+    deck_json: Optional[str] = Field(
+        default=None,
+        description="演示页聚合 JSON（各页 HTML 等），与样式配置无关",
+    )
+    deck_error: Optional[str] = Field(default=None)
+    deck_page_size: Optional[str] = Field(
+        default="16:9",
+        description="演示页面尺寸预设：16:9 | 4:3 | 9:16 | 1:1（留在项目表）",
+    )
+    video_exported_at: Optional[datetime] = Field(
+        default=None,
+        description="最近一次成功导出成片（export.mp4）的时间",
+    )
+    video_source_updated_at: datetime = Field(
+        default_factory=utc_now,
+        description="影响视频内容的素材最近变更时间；晚于导出时间则需重新导出",
+    )
+    text_status: Optional[str] = Field(
+        default=None,
+        description="文本结构化：not_started | running | success | failed",
+    )
+    audio_status: Optional[str] = Field(
+        default=None,
+        description="配音：not_started | running | success | failed",
+    )
+    demo_status: Optional[str] = Field(
+        default=None,
+        description="演示页：not_started | running | success | failed",
+    )
+    export_status: Optional[str] = Field(
+        default=None,
+        description="导出：not_started | running | success | failed",
+    )
+    text_error: Optional[str] = Field(default=None)
+    audio_error: Optional[str] = Field(default=None)
+    demo_error: Optional[str] = Field(default=None)
+    export_error: Optional[str] = Field(default=None)
+    text_result_url: Optional[str] = Field(default=None)
+    audio_result_url: Optional[str] = Field(default=None)
+    demo_result_url: Optional[str] = Field(default=None)
+    export_file_url: Optional[str] = Field(default=None)
+    narration_target_seconds: Optional[int] = Field(
+        default=None,
+        description="结构化口播目标体量（秒）；用于换算字数区间提示模型，非成片精确时长",
+    )
+    tts_voice_type: Optional[str] = Field(
+        default=None,
+        description="豆包 TTS 音色 voice_type（V3 即 speaker）；空则使用服务器 .env 默认",
+    )
+    pipeline_auto_advance: bool = Field(
+        default=True,
+        description="为 True 时文案成功后自动并行配音与演示；任一步失败会置 False（退回手动逐步确认）",
+    )
     text_structure_mode: Optional[str] = Field(
         default=None,
-        max_length=32,
-        description="polish | verbatim_split",
+        description="polish | verbatim_split；决定结构化时使用的系统提示",
     )
-    # False：创建后不自动跑 queued 流水线，由用户在工程内手动触发各步
-    pipeline_auto_advance: bool = Field(default=True)
-    # 非空时覆盖全局 DOUBAO_TTS_VOICE_TYPE 作为该项目默认合成音色
-    tts_voice_type: Optional[str] = Field(default=None, max_length=200)
+    manual_outline_confirmed: bool = Field(
+        default=True,
+        description="手动流水线：为 False 时禁止整稿配音/场景生成，直至用户确认口播分段",
+    )
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
 
 class ProjectStyle(SQLModel, table=True):
-    """演示母版：由 projects.style_id 引用，可被多个项目复用。"""
+    """演示样式：与项目 1:1。基本风格与用户提示词在此表；屏幕尺寸在项目表。"""
 
     __tablename__ = "project_styles"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    origin_project_id: Optional[int] = Field(
-        default=None,
-        foreign_key="projects.id",
-        index=True,
-    )
+    project_id: int = Field(foreign_key="projects.id", unique=True, index=True)
     style_preset: str = Field(
-        default="aurora_glass",
-        description="基本风格 slug：aurora_glass | minimal_tech | …",
+        default="none",
+        description="基本风格 slug：none | aurora_glass | minimal_tech | …",
     )
     user_style_hint: Optional[str] = Field(
         default=None,
@@ -72,17 +117,14 @@ class ProjectStyle(SQLModel, table=True):
     )
     style_prompt_text: str = Field(
         default="",
-        sa_column=Column(Text, nullable=False),
         description="AI 生成的纯文本风格说明（可读摘要）",
     )
     style_data_json: Optional[str] = Field(
         default=None,
-        sa_column=Column(Text),
         description='可选扩展 JSON；母版生成成功后存信封 {"preset","user_hint","page_size","style_base"}',
     )
     style_base_json: Optional[str] = Field(
         default="",
-        sa_column=Column(Text),
         description="旧库 NOT NULL 兼容；与 style_data_json 同步写入，读取优先 style_data_json",
     )
     version: int = Field(default=1, ge=1)
@@ -100,7 +142,7 @@ class WorkflowRun(SQLModel, table=True):
     owner_user_id: int = Field(foreign_key="users.id", index=True)
     overall_status: str = Field(
         default="pending",
-        description="pending | running | success | failed | partial | cancelled",
+        description="pending | running | success | failed | partial",
     )
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
@@ -120,14 +162,12 @@ class WorkflowStepRun(SQLModel, table=True):
     step_key: str = Field(index=True, description="text | audio | deck_master | deck_render")
     status: str = Field(
         default="pending",
-        description="pending | ready | running | succeeded | failed | cancelled",
+        description="pending | running | success | failed",
     )
-    ready_at: Optional[datetime] = Field(default=None)
-    cancelled_at: Optional[datetime] = Field(default=None)
     attempt_no: int = Field(default=0, ge=0)
-    input_snapshot: Optional[str] = Field(default=None, sa_column=Column(Text))
-    output_snapshot: Optional[str] = Field(default=None, sa_column=Column(Text))
-    error_message: Optional[str] = Field(default=None, sa_column=Column(Text))
+    input_snapshot: Optional[str] = Field(default=None)
+    output_snapshot: Optional[str] = Field(default=None)
+    error_message: Optional[str] = Field(default=None)
     started_at: Optional[datetime] = Field(default=None)
     finished_at: Optional[datetime] = Field(default=None)
     updated_at: datetime = Field(default_factory=utc_now)
@@ -145,8 +185,8 @@ class WorkflowExportRun(SQLModel, table=True):
         description="not_exported | exporting | export_success | export_failed",
     )
     export_format: Optional[str] = Field(default="mp4")
-    output_file_url: Optional[str] = Field(default=None, sa_column=Column(Text))
-    error_message: Optional[str] = Field(default=None, sa_column=Column(Text))
+    output_file_url: Optional[str] = Field(default=None)
+    error_message: Optional[str] = Field(default=None)
     started_at: Optional[datetime] = Field(default=None)
     finished_at: Optional[datetime] = Field(default=None)
     created_at: datetime = Field(default_factory=utc_now)
@@ -162,35 +202,9 @@ class WorkflowArtifact(SQLModel, table=True):
     workflow_run_id: int = Field(foreign_key="workflow_runs.id", index=True)
     step_key: str = Field(index=True)
     artifact_type: str = Field(default="file", index=True)
-    file_url: Optional[str] = Field(default=None, sa_column=Column(Text))
-    meta_json: Optional[str] = Field(default=None, sa_column=Column(Text))
+    file_url: Optional[str] = Field(default=None)
+    meta_json: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=utc_now)
-
-
-class VideoExportJob(SQLModel, table=True):
-    """视频导出异步任务：入队于服务器，由远程 worker 领取、上传成品。"""
-
-    __tablename__ = "video_export_jobs"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    project_id: int = Field(foreign_key="projects.id", index=True)
-    status: str = Field(
-        default="queued",
-        description="queued | running | succeeded | failed",
-    )
-    width: int = Field(default=1920, ge=2)
-    height: int = Field(default=1080, ge=2)
-    request_authorization: Optional[str] = Field(
-        default=None,
-        sa_column=Column(Text),
-        description="任务存活期内的 Authorization 请求头原文，用于 worker 调 play-manifest；结束后清空",
-    )
-    error_message: Optional[str] = Field(default=None, sa_column=Column(Text))
-    worker_id: Optional[str] = Field(default=None, max_length=128)
-    created_at: datetime = Field(default_factory=utc_now)
-    updated_at: datetime = Field(default_factory=utc_now)
-    started_at: Optional[datetime] = Field(default=None)
-    finished_at: Optional[datetime] = Field(default=None)
 
 
 class User(SQLModel, table=True):
@@ -249,24 +263,21 @@ class NodeContent(SQLModel, table=True):
     node_id: int = Field(foreign_key="outline_nodes.id", unique=True, index=True)
     page_code: Optional[str] = Field(
         default=None,
-        sa_column=Column(Text),
         description="page 节点：AI 生成的整页 HTML（含 data-key 占位）",
     )
     page_deck_status: Optional[str] = Field(
         default=None,
-        description="page 节点：idle / generating / ready / failed / cancelled",
+        description="page 节点：idle / generating / ready / failed",
     )
-    page_deck_error: Optional[str] = Field(default=None, sa_column=Column(Text))
-    narration_text: str = Field(default="", sa_column=Column(Text, nullable=False))
+    page_deck_error: Optional[str] = Field(default=None)
+    narration_text: str = ""
     narration_brief: Optional[str] = Field(
         default=None,
-        sa_column=Column(Text),
         description="step 节点：口播提炼版（用于演示页生成、摘要展示）",
     )
     duration_ms: Optional[int] = Field(default=None)
     narration_alignment_json: Optional[str] = Field(
         default=None,
-        sa_column=Column(Text),
         description="step：豆包 TTS with_timestamp 返回的附加信息 JSON（含字级时间轴等）",
     )
     audio_sequence: int = Field(
@@ -276,8 +287,5 @@ class NodeContent(SQLModel, table=True):
     audio_asset_id: Optional[int] = Field(default=None)
     image_asset_id: Optional[int] = Field(default=None)
     background_asset_id: Optional[int] = Field(default=None)
-    scene_style_json: Optional[str] = Field(default=None, sa_column=Column(Text))
-    enter_transition: Optional[str] = Field(default=None)
-    exit_transition: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

@@ -9,6 +9,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import settings
+from app.db.models import WorkflowRun
 from app.db.engine import async_session_maker
 from app.db.models import (
     KIND_PAGE,
@@ -16,8 +17,6 @@ from app.db.models import (
     OutlineNode,
     Project,
     ProjectStyle,
-    WorkflowRun,
-    WorkflowStepRun,
     utc_now,
 )
 from app.integrations.deepseek import (
@@ -30,49 +29,10 @@ from app.services.outline import (
     load_deck_timeline,
 )
 from app.services import workflow_engine as wf_engine
-from app.services.workflow_state import (
-    STEP_FAILED,
-    STEP_RUNNING,
-    STEP_SUCCEEDED,
-    reset_export_only,
-)
+from app.services.workflow_state import STEP_FAILED, STEP_RUNNING, STEP_SUCCESS
 
 _style_base_locks: dict[int, asyncio.Lock] = {}
 _DECK_PAGE_SEMAPHORE = asyncio.Semaphore(settings.deck_page_concurrency_limit)
-
-
-async def _project_status_after_user_cancelled_deck(
-    session: AsyncSession, project: Project
-) -> None:
-    """用户取消场景生成后：文本+配音已成功则保持可操作 ready，否则 draft（不标整项目 failed）。"""
-    if project.id is None:
-        project.status = "draft"
-        return
-    run = (
-        await session.exec(
-            select(WorkflowRun).where(WorkflowRun.project_id == int(project.id))
-        )
-    ).first()
-    if run is None or run.id is None:
-        project.status = "draft"
-        return
-    res = await session.exec(
-        select(WorkflowStepRun).where(
-            WorkflowStepRun.workflow_run_id == int(run.id)
-        )
-    )
-    sm = {r.step_key: r for r in res.all()}
-    tr = sm.get(wf_engine.STEP_TEXT)
-    ar = sm.get(wf_engine.STEP_AUDIO)
-    if (
-        tr is not None
-        and tr.status == wf_engine.STEP_SUCCEEDED
-        and ar is not None
-        and ar.status == wf_engine.STEP_SUCCEEDED
-    ):
-        project.status = "ready"
-    else:
-        project.status = "draft"
 _PAGE_SIZE_META: dict[str, dict[str, str]] = {
     "16:9": {"label": "16:9 横屏（1920x1080）", "width": "1920", "height": "1080"},
     "4:3": {"label": "4:3 横屏（1024x768）", "width": "1024", "height": "768"},
@@ -102,11 +62,6 @@ def _clip_deck_err(message: object, max_len: int = 1800) -> str:
 def _resolve_page_size(page_size: str | None) -> dict[str, str]:
     key = (page_size or "").strip()
     return _PAGE_SIZE_META.get(key) or _PAGE_SIZE_META["16:9"]
-
-
-def resolve_project_page_size(project: Project | None) -> str:
-    key = ((project.aspect_ratio or "").strip() if project else "") or "16:9"
-    return key if key in _PAGE_SIZE_META else "16:9"
 
 
 def _as_utc_aware(dt: datetime) -> datetime:
@@ -140,75 +95,28 @@ def _project_style_keys(
     project: Project, style_row: ProjectStyle | None
 ) -> tuple[str, str, str]:
     if style_row is not None:
-        preset = (style_row.style_preset or "aurora_glass").strip() or "aurora_glass"
+        preset = (style_row.style_preset or "none").strip() or "none"
         hint = _norm_deck_hint(style_row.user_style_hint)
     else:
-        preset = "aurora_glass"
+        preset = "none"
         hint = ""
-    page_key = resolve_project_page_size(project)
+    page_key = (project.deck_page_size or "16:9").strip() or "16:9"
     return preset, hint, page_key
 
 
-async def get_project_style(
-    session: AsyncSession, project: Project | int
-) -> ProjectStyle | None:
-    proj = project if isinstance(project, Project) else await session.get(Project, project)
-    if proj is None:
-        return None
-    if proj.style_id is not None:
-        row = await session.get(ProjectStyle, int(proj.style_id))
-        if row is not None:
-            return row
-    if proj.id is None:
-        return None
+async def get_or_create_project_style(
+    session: AsyncSession, project_id: int
+) -> ProjectStyle:
     res = await session.exec(
-        select(ProjectStyle).where(ProjectStyle.origin_project_id == int(proj.id))
+        select(ProjectStyle).where(ProjectStyle.project_id == project_id)
     )
     row = res.first()
-    if row is not None and row.id is not None:
-        proj.style_id = int(row.id)
-        proj.updated_at = utc_now()
-        session.add(proj)
-        await session.commit()
-        await session.refresh(proj)
-    return row
-
-
-async def get_or_create_project_style(
-    session: AsyncSession, project_id: int, *, for_update: bool = False
-) -> ProjectStyle:
-    project = await session.get(Project, project_id)
-    if project is None:
-        raise RuntimeError("项目不存在")
-    row = await get_project_style(session, project)
-    if row is not None and (not for_update or int(row.origin_project_id or 0) == int(project_id)):
+    if row:
         return row
-
     now = utc_now()
-    if row is not None and for_update:
-        row = ProjectStyle(
-            origin_project_id=project_id,
-            style_preset=(row.style_preset or "aurora_glass").strip() or "aurora_glass",
-            user_style_hint=row.user_style_hint,
-            style_prompt_text=row.style_prompt_text or "",
-            style_data_json=row.style_data_json,
-            style_base_json=row.style_base_json or "",
-            version=int(row.version or 1),
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(row)
-        await session.flush()
-        project.style_id = int(row.id)
-        project.updated_at = now
-        session.add(project)
-        await session.commit()
-        await session.refresh(row)
-        return row
-
     row = ProjectStyle(
-        origin_project_id=project_id,
-        style_preset="aurora_glass",
+        project_id=project_id,
+        style_preset="none",
         user_style_hint=None,
         style_prompt_text="",
         style_data_json=None,
@@ -218,10 +126,6 @@ async def get_or_create_project_style(
         updated_at=now,
     )
     session.add(row)
-    await session.flush()
-    project.style_id = int(row.id)
-    project.updated_at = now
-    session.add(project)
     await session.commit()
     await session.refresh(row)
     return row
@@ -230,7 +134,7 @@ async def get_or_create_project_style(
 def _style_config_matches_row(
     row: ProjectStyle, preset: str, hint: str
 ) -> bool:
-    rp = (row.style_preset or "aurora_glass").strip() or "aurora_glass"
+    rp = (row.style_preset or "none").strip() or "none"
     rh = _norm_deck_hint(row.user_style_hint)
     return rp == preset and rh == hint
 
@@ -311,14 +215,31 @@ async def _persist_style_prompt_success(
     """仅在母版生成成功时写入；清空扩展 JSON 列。"""
     now = utc_now()
     text = (style_prompt_text or "").strip()
-    row = await get_or_create_project_style(session, project_id, for_update=True)
-    row.style_preset = style_preset
-    row.user_style_hint = user_style_hint or None
-    row.style_prompt_text = text
-    row.style_data_json = None
-    row.style_base_json = ""
-    row.version = int(row.version or 1) + 1
-    row.updated_at = now
+    res = await session.exec(
+        select(ProjectStyle).where(ProjectStyle.project_id == project_id)
+    )
+    row = res.first()
+    if row:
+        row.style_preset = style_preset
+        row.user_style_hint = user_style_hint or None
+        row.style_prompt_text = text
+        row.style_data_json = None
+        row.style_base_json = ""
+        row.version = int(row.version or 1) + 1
+        row.updated_at = now
+        session.add(row)
+        return row
+    row = ProjectStyle(
+        project_id=project_id,
+        style_preset=style_preset,
+        user_style_hint=user_style_hint or None,
+        style_prompt_text=text,
+        style_data_json=None,
+        style_base_json="",
+        version=1,
+        created_at=now,
+        updated_at=now,
+    )
     session.add(row)
     return row
 
@@ -330,7 +251,11 @@ async def fetch_style_prompt_for_project(
     """读取当前项目可用的风格正文。"""
     if project.id is None:
         return None
-    row = await get_project_style(session, project)
+    pid = int(project.id)
+    res = await session.exec(
+        select(ProjectStyle).where(ProjectStyle.project_id == pid)
+    )
+    row = res.first()
     return _effective_style_prompt(project, row)
 
 
@@ -344,7 +269,10 @@ async def ensure_style_base(project_id: int) -> str:
             project = await session.get(Project, project_id)
             if project is None:
                 raise RuntimeError("项目不存在")
-            row = await get_project_style(session, project)
+            res = await session.exec(
+                select(ProjectStyle).where(ProjectStyle.project_id == project_id)
+            )
+            row = res.first()
             preset, hint, _ = _project_style_keys(project, row)
 
             cached = _effective_style_prompt(project, row)
@@ -355,7 +283,7 @@ async def ensure_style_base(project_id: int) -> str:
                 prompt_text = await generate_style_prompt_text(
                     preset_id=preset,
                     user_hint=hint or None,
-                    project_title=(project.name or "").strip() or None,
+                    project_title=project.name,
                 )
             except Exception as e:
                 raise RuntimeError(
@@ -373,6 +301,7 @@ async def ensure_style_base(project_id: int) -> str:
                 user_style_hint=hint,
                 style_prompt_text=prompt_text,
             )
+            project.deck_error = None
             project.updated_at = utc_now()
             session.add(project)
             await session.commit()
@@ -428,7 +357,7 @@ async def invalidate_all_page_decks_after_master_change(
 ) -> None:
     """
     母版或全局演示风格变更后，既有页面 HTML 与新母版不一致；
-    清空各页演示产物，使 deck 步骤需重做，并失效导出状态。
+    清空各页演示产物，使流水线 deck 未完成，并避免 sync 误将 deck_render 标为 success。
     """
     page_ids = await collect_deck_page_node_ids(session, project_id)
     now = utc_now()
@@ -450,8 +379,39 @@ async def invalidate_all_page_decks_after_master_change(
         session.add(nc)
     project = await session.get(Project, project_id)
     if project is not None:
+        project.deck_json = None
+        project.video_exported_at = None
+        project.video_source_updated_at = now
         project.updated_at = now
-        await reset_export_only(session, project)
+        session.add(project)
+
+
+async def reset_all_page_decks_for_reopen(
+    session: AsyncSession, project_id: int, reason: str | None = None
+) -> None:
+    """
+    用户回退场景页/渲染后，重置所有 page 的生成状态与 HTML。
+    """
+    page_ids = await collect_deck_page_node_ids(session, project_id)
+    now = utc_now()
+    for nid in page_ids:
+        node = await session.get(OutlineNode, nid)
+        if node is None:
+            continue
+        nc = await _get_or_create_page_node_content(session, node)
+        # 回退语义：无论之前是 generating / failed / ready，统一落回未开始（idle）。
+        # 正在执行的后台单页任务在落库前会再检查状态；检测到非 generating 会自行退出，不会回写成功。
+        nc.page_deck_status = "idle"
+        nc.page_deck_error = None
+        nc.page_code = None
+        nc.updated_at = now
+        session.add(nc)
+    project = await session.get(Project, project_id)
+    if project is not None:
+        project.deck_json = None
+        project.video_exported_at = None
+        project.video_source_updated_at = now
+        project.updated_at = now
         session.add(project)
 
 
@@ -473,13 +433,18 @@ async def _first_failed_page_deck_error(
     return None
 
 
-async def compute_project_deck_status(
-    session: AsyncSession, project_id: int
-) -> str:
-    """聚合 page 节点的 deck 状态，返回 idle/generating/failed/ready。"""
+async def refresh_project_deck_status(session: AsyncSession, project_id: int) -> None:
+    """
+    统一回写 projects.deck_status，避免前端读取项目级状态时漂移。
+    优先级：generating > failed > ready > idle。
+    """
+    project = await session.get(Project, project_id)
+    if project is None:
+        return
+
     page_ids = await collect_deck_page_node_ids(session, project_id)
     if not page_ids:
-        return "idle"
+        next_status = "idle"
     else:
         states: list[str] = []
         all_ready = True
@@ -507,33 +472,41 @@ async def compute_project_deck_status(
                 all_ready = False
 
         if any(st == "generating" for st in states):
-            return "generating"
+            next_status = "generating"
         elif any(st == "failed" for st in states):
-            return "failed"
-        elif any(st == "cancelled" for st in states):
-            return "cancelled"
+            next_status = "failed"
         elif all_ready:
-            return "ready"
+            next_status = "ready"
         else:
-            return "idle"
+            next_status = "idle"
+
+    if (project.deck_status or "idle") != next_status:
+        project.deck_status = next_status
+        project.updated_at = utc_now()
+        session.add(project)
 
 
 async def sync_demo_workflow_from_deck(session: AsyncSession, project_id: int) -> None:
-    """聚合 deck 页状态并回写 deck_render step；必要时更新 projects.status。"""
+    """聚合 deck 页状态；有 workflow_run 时更新 deck_render 并回写 projects.demo_*。"""
     from app.services import workflow_engine as wf
     from app.services.project_pipeline import compute_project_pipeline
 
     project = await session.get(Project, project_id)
     if project is None:
         return
+    await refresh_project_deck_status(session, project_id)
+    await session.refresh(project)
     pl = await compute_project_pipeline(session, project)
     deck_done = bool(pl.get("deck"))
-    ds = await compute_project_deck_status(session, project_id)
+    ds = (project.deck_status or "idle").strip().lower()
     any_failed = ds == "failed"
-    deck_user_cancelled = ds == "cancelled"
     failed_msg: str | None = None
     if any_failed:
-        aggregated = await _first_failed_page_deck_error(session, project_id) or ""
+        aggregated = (project.deck_error or "").strip()
+        if not aggregated:
+            aggregated = (
+                await _first_failed_page_deck_error(session, project_id) or ""
+            )
         failed_msg = (aggregated or "演示页生成失败")[:4000]
 
     wf_run_row = (
@@ -548,31 +521,43 @@ async def sync_demo_workflow_from_deck(session: AsyncSession, project_id: int) -
             deck_done,
             any_failed,
             failed_message=failed_msg,
-            deck_user_cancelled=deck_user_cancelled,
         )
-        # projects.status 仅作 UI 辅助：失败则置 failed；成功则置 ready。
-        if any_failed:
+        await session.refresh(project)
+        if deck_done:
+            project.deck_error = None
+            if (
+                (project.text_status or "").strip().lower() == STEP_SUCCESS
+                and (project.audio_status or "").strip().lower() == STEP_SUCCESS
+            ):
+                project.status = "ready"
+        elif any_failed:
+            # 取消/失败都应让项目进入失败态，避免前端持续显示进行中。
             project.status = "failed"
-        elif deck_user_cancelled:
-            await _project_status_after_user_cancelled_deck(session, project)
-        elif deck_done:
-            # 若文本/配音/演示均完成，则置 ready（以 workflow 为准）
-            run = await wf._get_run(session, project_id)  # type: ignore[attr-defined]
-            if run is not None and run.id is not None:
-                steps = await wf._load_steps_map(session, int(run.id))  # type: ignore[attr-defined]
-                ok = (
-                    (steps.get(wf.STEP_TEXT).status if steps.get(wf.STEP_TEXT) else wf.STEP_PENDING)
-                    == wf.STEP_SUCCEEDED
-                    and (steps.get(wf.STEP_AUDIO).status if steps.get(wf.STEP_AUDIO) else wf.STEP_PENDING)
-                    == wf.STEP_SUCCEEDED
-                    and (steps.get(wf.STEP_DECK_RENDER).status if steps.get(wf.STEP_DECK_RENDER) else wf.STEP_PENDING)
-                    == wf.STEP_SUCCEEDED
-                )
-                if ok:
-                    project.status = "ready"
         project.updated_at = utc_now()
         session.add(project)
         return
+
+    if deck_done:
+        project.demo_status = STEP_SUCCESS
+        project.demo_error = None
+        project.deck_error = None
+        if (
+            (project.text_status or "").strip().lower() == STEP_SUCCESS
+            and (project.audio_status or "").strip().lower() == STEP_SUCCESS
+        ):
+            project.status = "ready"
+    else:
+        if ds == "generating":
+            project.demo_status = STEP_RUNNING
+        elif ds == "failed":
+            project.demo_status = STEP_FAILED
+            project.demo_error = failed_msg or "演示页生成已取消/失败"
+            project.status = "failed"
+        else:
+            project.demo_status = STEP_FAILED
+            project.demo_error = "演示未完成或缺少页面"
+    project.updated_at = utc_now()
+    session.add(project)
 
 
 def _build_pages_payload(rows: list[DeckTimelineRow]) -> dict:
@@ -720,6 +705,7 @@ async def _apply_single_page_success(
     nc.page_deck_error = None
     nc.updated_at = now
     session.add(nc)
+    project.deck_json = _merge_page_into_deck_json(project.deck_json, main_title, html)
     project.updated_at = now
     session.add(project)
 
@@ -752,8 +738,9 @@ async def try_start_page_deck_generation(
         return "conflict"
     project = await session.get(Project, project_id)
     if project is not None:
-        # 演示页重生成后旧成片不再有效；与前端「重新生成」语义一致，以工作流状态为准而非仅看磁盘文件
-        await reset_export_only(session, project)
+        project.deck_status = "generating"
+        project.video_source_updated_at = now
+        project.video_exported_at = None
         project.updated_at = now
         session.add(project)
     await session.commit()
@@ -765,7 +752,7 @@ async def try_cancel_page_deck_generation(
     project_id: int,
     page_node_id: int,
     *,
-    reason: str = "用户手动取消该页场景生成",
+    reason: str = "用户手动取消生成（已标记失败）",
 ) -> str:
     """返回 ok | not_found | noop。仅 generating 可取消。"""
     node = await session.get(OutlineNode, page_node_id)
@@ -775,24 +762,27 @@ async def try_cancel_page_deck_generation(
     nc = await _get_or_create_page_node_content(session, node)
     if (nc.page_deck_status or "").strip().lower() != "generating":
         return "noop"
-    nc.page_deck_status = "cancelled"
-    nc.page_deck_error = (reason or "用户手动取消该页场景生成").strip()[:1800]
+    nc.page_deck_status = "failed"
+    nc.page_deck_error = (reason or "用户手动取消生成（已标记失败）").strip()[:1800]
     nc.updated_at = now
     session.add(nc)
     project = await session.get(Project, project_id)
     if project is not None:
-        msg = (reason or "用户手动取消该页场景生成").strip()[:1800]
+        msg = (reason or "用户手动取消生成（已标记失败）").strip()[:1800]
+        project.deck_status = "failed"
+        project.deck_error = msg
+        project.demo_status = STEP_FAILED
+        project.demo_error = msg
+        project.status = "failed"
         project.updated_at = now
         session.add(project)
         await wf_engine.set_step(
             session,
             project,
             wf_engine.STEP_DECK_RENDER,
-            wf_engine.STEP_CANCELLED,
+            wf_engine.STEP_FAILED,
             error_message=msg,
         )
-        await _project_status_after_user_cancelled_deck(session, project)
-        session.add(project)
     return "ok"
 
 
@@ -800,22 +790,12 @@ async def cancel_generating_deck_pages(
     session: AsyncSession,
     project_id: int,
     *,
-    reason: str = "用户手动取消批量场景生成",
-    user_cancelled: bool = False,
+    reason: str = "用户手动取消批量生成（已标记失败）",
 ) -> list[int]:
-    """取消项目下所有 generating 页面，返回已取消的 page node ids。
-
-    user_cancelled=True 时页面标为 cancelled、工作流为 cancelled；否则为系统中止/失败路径，标 failed。
-    """
+    """取消项目下所有 generating 页面，返回已取消的 page node ids。"""
     page_ids = await collect_deck_page_node_ids(session, project_id)
     now = utc_now()
     out: list[int] = []
-    page_terminal = "cancelled" if user_cancelled else "failed"
-    default_reason = (
-        "用户手动取消批量场景生成"
-        if user_cancelled
-        else "用户手动取消批量生成（已标记失败）"
-    )
     for nid in page_ids:
         node = await session.get(OutlineNode, nid)
         if node is None or node.project_id != project_id:
@@ -823,36 +803,29 @@ async def cancel_generating_deck_pages(
         nc = await _get_or_create_page_node_content(session, node)
         if (nc.page_deck_status or "").strip().lower() != "generating":
             continue
-        nc.page_deck_status = page_terminal
-        nc.page_deck_error = (reason or default_reason).strip()[:1800]
+        nc.page_deck_status = "failed"
+        nc.page_deck_error = (reason or "用户手动取消批量生成（已标记失败）").strip()[:1800]
         nc.updated_at = now
         session.add(nc)
         out.append(nid)
     if out:
         project = await session.get(Project, project_id)
         if project is not None:
-            msg = (reason or default_reason).strip()[:1800]
+            msg = (reason or "用户手动取消批量生成（已标记失败）").strip()[:1800]
+            project.deck_status = "failed"
+            project.deck_error = msg
+            project.demo_status = STEP_FAILED
+            project.demo_error = msg
+            project.status = "failed"
             project.updated_at = now
             session.add(project)
-            if user_cancelled:
-                await wf_engine.set_step(
-                    session,
-                    project,
-                    wf_engine.STEP_DECK_RENDER,
-                    wf_engine.STEP_CANCELLED,
-                    error_message=msg,
-                )
-                await _project_status_after_user_cancelled_deck(session, project)
-            else:
-                project.status = "failed"
-                await wf_engine.set_step(
-                    session,
-                    project,
-                    wf_engine.STEP_DECK_RENDER,
-                    wf_engine.STEP_FAILED,
-                    error_message=msg,
-                )
-            session.add(project)
+            await wf_engine.set_step(
+                session,
+                project,
+                wf_engine.STEP_DECK_RENDER,
+                wf_engine.STEP_FAILED,
+                error_message=msg,
+            )
     return out
 
 
@@ -872,7 +845,7 @@ async def run_generate_deck_page_job(
             return
         if node.project_id != project_id or node.node_kind != KIND_PAGE:
             return
-        page_size_meta = _resolve_page_size(resolve_project_page_size(project))
+        page_size_meta = _resolve_page_size(project.deck_page_size)
         ptitle = (node.title or "").strip() or "（未命名页）"
         rows = await load_deck_timeline(session, project_id)
         sub = [r for r in rows if r.page_title == ptitle]
@@ -907,6 +880,7 @@ async def run_generate_deck_page_job(
                             wf_engine.STEP_FAILED,
                             error_message=detail,
                         )
+                        pr.deck_error = detail
                         pr.updated_at = utc_now()
                         session.add(pr)
                     await session.commit()
@@ -922,7 +896,7 @@ async def run_generate_deck_page_job(
         pr = await session.get(Project, project_id)
         if pr:
             style_prompt = await fetch_style_prompt_for_project(session, pr)
-            page_size_key = resolve_project_page_size(pr)
+            page_size_key = pr.deck_page_size
     if not style_prompt:
         miss = "缺少风格母版：请先成功生成演示风格母版后再生成页面"
         async with async_session_maker() as session:
@@ -932,6 +906,7 @@ async def run_generate_deck_page_job(
                 await sync_demo_workflow_from_deck(session, project_id)
                 pr = await session.get(Project, project_id)
                 if pr:
+                    pr.deck_error = miss
                     pr.updated_at = utc_now()
                     session.add(pr)
                 await session.commit()
@@ -1038,6 +1013,7 @@ async def run_generate_deck_all_job(project_id: int, page_node_ids: list[int]) -
                     wf_engine.STEP_FAILED,
                     error_message=detail,
                 )
+                prf.deck_error = detail
                 prf.updated_at = utc_now()
                 session.add(prf)
             for nid in page_node_ids:
@@ -1055,7 +1031,7 @@ async def run_generate_deck_all_job(project_id: int, page_node_ids: list[int]) -
                 session,
                 pr_ok,
                 wf_engine.STEP_DECK_MASTER,
-                wf_engine.STEP_SUCCEEDED,
+                wf_engine.STEP_SUCCESS,
             )
             await wf_engine.set_step(
                 session,

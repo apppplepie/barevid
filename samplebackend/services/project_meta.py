@@ -1,8 +1,4 @@
-"""项目表 `description` 上的轻量标记（避免为单一字段做迁移）。
-
-片头/片尾（include_intro / include_outro 等）的解析与合并逻辑完整保留，
-便于日后重新打开 API；当前创建项目与导出 worker 入口在 main.py 中已关闭。
-"""
+"""项目表 `description` 上的轻量标记（避免为单一字段做迁移）。"""
 
 import json
 

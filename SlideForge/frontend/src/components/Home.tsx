@@ -120,6 +120,7 @@ function pipelineStatusLabel(project: Project): string {
 }
 
 /** 为 false 时隐藏片头/片尾勾选 UI；状态仍参与提交，便于日后开放入口 */
+/** 与后端片头/片尾入口一致：暂关；恢复时改为 true 并打开 App 内 body.include_* */
 const SHOW_INTRO_OUTRO_UI = false;
 
 const ASPECT_PRESETS = [
