@@ -51,6 +51,10 @@ interface WorkflowProgressBarProps {
   /** 与 derive 手动闸门一致；用于判断「前置已满足、待用户操作」 */
   pipelineAutoAdvance?: boolean;
   manualOutlineConfirmed?: boolean;
+  /** 已完成步骤点击后打开回退确认（由父组件接 `openConfirmDialog('reopen', id)`） */
+  onRequestReopenSuccessStep?: (stepId: string) => void;
+  /** 回退 API 执行中，对应步骤圆标显示加载 */
+  reopeningWorkflowStepId?: string | null;
 }
 
 export function WorkflowProgressBar({
@@ -65,6 +69,8 @@ export function WorkflowProgressBar({
   cancellingStepId = null,
   pipelineAutoAdvance = true,
   manualOutlineConfirmed = true,
+  onRequestReopenSuccessStep,
+  reopeningWorkflowStepId = null,
 }: WorkflowProgressBarProps) {
   const manualBlocked =
     pipelineAutoAdvance === false && !manualOutlineConfirmed;
@@ -156,11 +162,39 @@ export function WorkflowProgressBar({
                           )}
                         </>
                       ) : isSuccess ? (
-                        <Check
-                          className="h-3 w-3 stroke-[2.5] sm:h-3.5 sm:w-3.5"
-                          strokeLinecap="round"
-                          aria-hidden
-                        />
+                        onRequestReopenSuccessStep ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (reopeningWorkflowStepId === step.id) return;
+                              onRequestReopenSuccessStep(step.id);
+                            }}
+                            disabled={reopeningWorkflowStepId === step.id}
+                            title={`${step.label} 已完成，点击回退（需确认）`}
+                            aria-label={`${step.label} 已完成，点击回退`}
+                            className="flex h-full w-full items-center justify-center rounded-full outline-none transition-colors hover:bg-emerald-500/20 focus-visible:ring-2 focus-visible:ring-emerald-400/50 disabled:opacity-50"
+                          >
+                            {reopeningWorkflowStepId === step.id ? (
+                              <Loader2
+                                className="h-3 w-3 animate-spin sm:h-3.5 sm:w-3.5"
+                                aria-hidden
+                              />
+                            ) : (
+                              <Check
+                                className="h-3 w-3 stroke-[2.5] sm:h-3.5 sm:w-3.5"
+                                strokeLinecap="round"
+                                aria-hidden
+                              />
+                            )}
+                          </button>
+                        ) : (
+                          <Check
+                            className="h-3 w-3 stroke-[2.5] sm:h-3.5 sm:w-3.5"
+                            strokeLinecap="round"
+                            aria-hidden
+                          />
+                        )
                       ) : isError ? (
                         onRetryStep ? (
                           <button

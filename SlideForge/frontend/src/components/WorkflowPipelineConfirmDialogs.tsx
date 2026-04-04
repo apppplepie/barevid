@@ -65,7 +65,7 @@ const REOPEN_COPY: Record<string, { title: string; description: string }> = {
   pages: {
     title: '回退场景生成',
     description:
-      '将把演示母版、场景页与导出恢复为「未开始」，并切换到手动流水线；随后可重新配置并生成场景。',
+      '将把场景页生成与导出记录恢复为「未开始」（演示母版若已完成会保留）；随后可在手动流程中重新生成场景页。',
   },
   export: {
     title: '回退导出步骤',

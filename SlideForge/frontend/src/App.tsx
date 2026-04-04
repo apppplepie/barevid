@@ -2245,6 +2245,8 @@ export default function App() {
           void handleCancelRunningWorkflowStep(id)
         }
         cancellingRunningWorkflowStepId={cancellingRunningWorkflowStepId}
+        onRequestReopenSuccessStep={(id) => openConfirmDialog('reopen', id)}
+        reopeningWorkflowStepId={reopeningWorkflowStepId}
         pipelineAutoAdvance={currentProject?.pipelineAutoAdvance !== false}
         manualOutlineConfirmed={currentProject?.manualOutlineConfirmed !== false}
         onOpenProjectDetails={() => setProjectDetailsOpen(true)}
@@ -2318,7 +2320,6 @@ export default function App() {
         }
         onClose={closeManualDialog}
         onQueued={() => {
-          setHeaderTextKickoffPending(true);
           setRetryPollBoostUntil(Date.now() + 20_000);
         }}
         onConfirmHandoff={() => setWorkflowPanelOpen(false)}

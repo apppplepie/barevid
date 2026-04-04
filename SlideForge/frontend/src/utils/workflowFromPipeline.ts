@@ -73,7 +73,7 @@ export function deriveWorkflowSteps(
     let outline = mapServerStepStatus(w.textStatus);
     let audio = mapServerStepStatus(w.audioStatus);
     const exportRaw = w.exportStatus ?? w.exportWorkflowStatus ?? null;
-    let exportStep = mapServerStepStatus(exportRaw);
+    const exportStep = mapServerStepStatus(exportRaw);
 
     const hasSplitDeck =
       w.deckMasterStatus != null && w.deckRenderStatus != null;
@@ -81,7 +81,6 @@ export function deriveWorkflowSteps(
     if (hasSplitDeck) {
       let master = mapServerStepStatus(w.deckMasterStatus);
       let render = mapServerStepStatus(w.deckRenderStatus);
-      const pMerged = { ...DEFAULT_PIPELINE, ...pipeline };
       if (!auto && outline === 'success' && audio === 'pending') {
         audio = 'waiting';
       }
@@ -89,24 +88,9 @@ export function deriveWorkflowSteps(
         !auto &&
         outline === 'success' &&
         master === 'success' &&
-        render === 'pending' &&
-        !pMerged.deck &&
-        (deckStatus || 'idle').toLowerCase() !== 'generating'
+        render === 'pending'
       ) {
         render = 'waiting';
-      }
-      if (outline !== 'success' || audio !== 'success' || render !== 'success') {
-        if (exportStep !== 'error' && exportStep !== 'running') {
-          exportStep = 'pending';
-        }
-      } else if (pMerged.video) {
-        exportStep = 'success';
-      } else {
-        exportStep = mapServerStepStatus(exportRaw);
-        if (exportStep === 'success') exportStep = 'pending';
-        else if (exportStep !== 'error' && exportStep !== 'running') {
-          exportStep = 'pending';
-        }
       }
       return [
         { id: 'deck_master', label: '演示母版', state: master, icon: Palette },
@@ -118,11 +102,6 @@ export function deriveWorkflowSteps(
     }
 
     let deck = mapServerStepStatus(w.demoStatus);
-    const dsLegacy = (deckStatus || 'idle').trim().toLowerCase();
-    const pMerged = { ...DEFAULT_PIPELINE, ...pipeline };
-    if (deck === 'running' && dsLegacy !== 'generating') {
-      deck = 'pending';
-    }
     if (!auto && outline === 'success' && audio === 'pending') {
       audio = 'waiting';
     }
@@ -130,24 +109,9 @@ export function deriveWorkflowSteps(
       !auto &&
       outline === 'success' &&
       audio === 'success' &&
-      deck === 'pending' &&
-      !pMerged.deck &&
-      dsLegacy !== 'generating'
+      deck === 'pending'
     ) {
       deck = 'waiting';
-    }
-    if (outline !== 'success' || audio !== 'success' || deck !== 'success') {
-      if (exportStep !== 'error' && exportStep !== 'running') {
-        exportStep = 'pending';
-      }
-    } else if (pMerged.video) {
-      exportStep = 'success';
-    } else {
-      exportStep = mapServerStepStatus(exportRaw);
-      if (exportStep === 'success') exportStep = 'pending';
-      else if (exportStep !== 'error' && exportStep !== 'running') {
-        exportStep = 'pending';
-      }
     }
     return [
       { id: 'text', label: '文本结构化', state: outline, icon: FileText },

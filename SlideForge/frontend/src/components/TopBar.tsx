@@ -17,6 +17,9 @@ interface TopBarProps {
   retryingWorkflowStepId?: string | null;
   onCancelRunningWorkflowStep?: (stepId: string) => void;
   cancellingRunningWorkflowStepId?: string | null;
+  /** 顶栏已完成步骤点击勾选 → 打开回退确认 */
+  onRequestReopenSuccessStep?: (stepId: string) => void;
+  reopeningWorkflowStepId?: string | null;
   pipelineAutoAdvance?: boolean;
   manualOutlineConfirmed?: boolean;
   username?: string | null;
@@ -39,6 +42,8 @@ export function TopBar({
   retryingWorkflowStepId = null,
   onCancelRunningWorkflowStep,
   cancellingRunningWorkflowStepId = null,
+  onRequestReopenSuccessStep,
+  reopeningWorkflowStepId = null,
   pipelineAutoAdvance = true,
   manualOutlineConfirmed = true,
   username: controlledUsername,
@@ -134,6 +139,8 @@ export function TopBar({
             retryingStepId={retryingWorkflowStepId}
             onCancelRunningStep={onCancelRunningWorkflowStep}
             cancellingStepId={cancellingRunningWorkflowStepId}
+            onRequestReopenSuccessStep={onRequestReopenSuccessStep}
+            reopeningWorkflowStepId={reopeningWorkflowStepId}
             pipelineAutoAdvance={pipelineAutoAdvance}
             manualOutlineConfirmed={manualOutlineConfirmed}
           />
