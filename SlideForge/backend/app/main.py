@@ -44,6 +44,7 @@ from app.mediautil import (
 from app.db.engine import async_session_maker, get_session, init_db
 from app.db.models import (
     KIND_PAGE,
+    KIND_STEP,
     NodeContent,
     OutlineNode,
     Project,
@@ -57,17 +58,22 @@ from app.integrations.deepseek import (
     list_deck_style_presets,
     resolve_deck_style_preset,
 )
+from app.integrations.doubao_tts_service import resolve_tts_voice_type
 from app.schemas import (
     AuthResponse,
     ContextualAIDraftApplyRequest,
     ContextualAIDraftRequest,
+    CopyDeckStyleFromRequest,
     DeckStylePatch,
+    DeckStylePromptTextPatch,
     ExportVideoRequest,
     ExportVideoResponse,
     GenerateOutlineResponse,
     GenerateRequest,
     GenerateResponse,
     LoginRequest,
+    ManualConfirmOutlineRequest,
+    NarrationTextPatch,
     PipelineStages,
     ProjectCloneRequest,
     ProjectCreate,
@@ -96,6 +102,7 @@ from app.services.deck import (
     try_cancel_page_deck_generation,
     try_start_page_deck_generation,
 )
+from app.services.manual_outline import apply_manual_outline_confirm
 from app.services.outline import (
     build_play_manifest,
     load_deck_timeline,
@@ -131,6 +138,7 @@ from app.services.project_meta import (
     deck_master_source_project_id_from_description,
     format_deck_master_source_description,
 )
+from app.tts_voice_presets import list_tts_voice_presets
 from app.services.project_pipeline import compute_project_pipeline
 from app.services.workflow_engine import (
     notify_deck_master_success_if_pending,
@@ -335,6 +343,11 @@ async def deck_style_presets() -> dict:
     return {"items": list_deck_style_presets()}
 
 
+@app.get("/api/tts/voice-presets")
+async def tts_voice_presets() -> dict:
+    return {"presets": list_tts_voice_presets()}
+
+
 @app.get("/api/projects")
 async def list_projects(
     session: AsyncSession = Depends(get_session),
@@ -477,6 +490,7 @@ async def create_project(
     )
     default_w, default_h = _EXPORT_SIZE_BY_PAGE.get(page_size, _EXPORT_SIZE_BY_PAGE[_DEFAULT_PAGE_SIZE])
     auto_run = bool(body.pipeline_auto_advance)
+    tts_vt = (body.tts_voice_type or "").strip() or None
     project = Project(
         owner_user_id=int(me.id),
         user_id=int(me.id),
@@ -490,6 +504,7 @@ async def create_project(
         deck_height=default_h,
         target_narration_seconds=target_sec,
         pipeline_auto_advance=auto_run,
+        tts_voice_type=tts_vt,
         created_at=now,
         updated_at=now,
     )
@@ -582,23 +597,30 @@ async def patch_project(
     session: AsyncSession = Depends(get_session),
     me: User = Depends(get_current_user),
 ) -> dict:
-    if body.name is None and body.is_shared is None and body.input_prompt is None:
+    updates = body.model_dump(exclude_unset=True)
+    if not updates:
         raise HTTPException(
             status_code=400,
-            detail="请提供要修改的字段（name / is_shared / input_prompt）",
+            detail="请提供要修改的字段",
         )
     project = await _get_accessible_project(session, project_id, int(me.id))
     if not _can_manage_project(project, int(me.id)):
         raise HTTPException(status_code=403, detail="无权限修改该项目")
-    if body.name is not None:
-        name = body.name.strip()
+    if "name" in updates:
+        name = str(updates["name"] or "").strip()
         if not name:
             raise HTTPException(status_code=400, detail="项目名称不能为空")
         project.name = name
-    if body.is_shared is not None:
-        project.is_shared = bool(body.is_shared)
-    if body.input_prompt is not None:
-        project.input_prompt = body.input_prompt.strip()
+    if "is_shared" in updates:
+        project.is_shared = bool(updates["is_shared"])
+    if "input_prompt" in updates:
+        project.input_prompt = str(updates["input_prompt"] or "").strip()
+    if "tts_voice_type" in updates:
+        raw_v = updates["tts_voice_type"]
+        if raw_v is None or (isinstance(raw_v, str) and not raw_v.strip()):
+            project.tts_voice_type = None
+        else:
+            project.tts_voice_type = str(raw_v).strip()[:200]
     project.updated_at = utc_now()
     session.add(project)
     await session.commit()
@@ -743,6 +765,8 @@ async def get_project(
             ),
             "input_prompt": project.input_prompt,
             "target_narration_seconds": project.target_narration_seconds,
+            "tts_voice_type": (project.tts_voice_type or "").strip() or None,
+            "tts_voice_effective": resolve_tts_voice_type(project.tts_voice_type),
             "status": project.status,
             "deck_status": deck_status,
             "deck_error": deck_error,
@@ -1036,6 +1060,26 @@ async def workflow_run_text(
         raise HTTPException(status_code=409, detail="文本正在生成中")
     background_tasks.add_task(run_text_rebuild_job, project_id)
     return {"ok": True, "queued": True}
+
+
+@app.post("/api/projects/{project_id}/manual/confirm-outline")
+async def manual_confirm_outline(
+    project_id: int,
+    body: ManualConfirmOutlineRequest,
+    session: AsyncSession = Depends(get_session),
+    me: User = Depends(get_current_user),
+) -> dict:
+    """手动流水线：将用户编辑后的口播分段写回 outline / node_contents。"""
+    project = await _get_accessible_project(session, project_id, int(me.id))
+    if not _can_manage_project(project, int(me.id)):
+        raise HTTPException(status_code=403, detail="无权限修改该项目")
+    try:
+        await apply_manual_outline_confirm(session, project, body.pages)
+        await session.commit()
+    except ValueError as e:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {"ok": True}
 
 
 @app.post("/api/projects/{project_id}/workflow/deck_master/run")
@@ -1416,6 +1460,66 @@ async def patch_project_deck_style(
     return {"ok": True}
 
 
+@app.post("/api/projects/{project_id}/copy-deck-style-from")
+async def copy_deck_style_from_project(
+    project_id: int,
+    body: CopyDeckStyleFromRequest,
+    session: AsyncSession = Depends(get_session),
+    me: User = Depends(get_current_user),
+) -> dict:
+    """将另一项目已就绪的演示母版（project_styles）挂到当前项目。"""
+    project = await _get_accessible_project(session, project_id, int(me.id))
+    if not _can_manage_project(project, int(me.id)):
+        raise HTTPException(status_code=403, detail="无权限修改该项目")
+    src = await _get_accessible_project(session, body.source_project_id, int(me.id))
+    src_style_row = await get_project_style(session, src)
+    if src_style_row is None:
+        raise HTTPException(status_code=400, detail="源项目没有演示样式记录")
+    ready, _, _ = deck_style_ready_from_storage(src, src_style_row)
+    if not ready:
+        raise HTTPException(
+            status_code=400,
+            detail="源项目还没有可用的演示风格母版，请换项目或先生成母版",
+        )
+    now = utc_now()
+    project.style_id = int(src_style_row.id)
+    project.description = format_deck_master_source_description(
+        int(body.source_project_id)
+    )
+    project.updated_at = now
+    session.add(project)
+    await reset_export_only(session, project)
+    await session.commit()
+    async with async_session_maker() as wf_session:
+        await notify_deck_master_success_if_pending(wf_session, project_id)
+        await sync_demo_workflow_from_deck(wf_session, project_id)
+        await wf_session.commit()
+    return {"ok": True}
+
+
+@app.patch("/api/projects/{project_id}/deck-style-prompt-text")
+async def patch_project_deck_style_prompt_text(
+    project_id: int,
+    body: DeckStylePromptTextPatch,
+    session: AsyncSession = Depends(get_session),
+    me: User = Depends(get_current_user),
+) -> dict:
+    """更新当前项目关联的 style_prompt_text（不改母版 JSON，供后续演示生成参考）。"""
+    project = await _get_accessible_project(session, project_id, int(me.id))
+    if not _can_manage_project(project, int(me.id)):
+        raise HTTPException(status_code=403, detail="无权限修改该项目")
+    st = await get_or_create_project_style(session, project_id, for_update=True)
+    now = utc_now()
+    st.style_prompt_text = body.deck_style_prompt_text or ""
+    st.updated_at = now
+    session.add(st)
+    project.updated_at = now
+    session.add(project)
+    await reset_export_only(session, project)
+    await session.commit()
+    return {"ok": True}
+
+
 @app.post("/api/projects/{project_id}/generate-deck-style")
 async def generate_project_deck_style(
     project_id: int,
@@ -1530,6 +1634,45 @@ async def synthesize_audio(
             status_code=500,
             detail=f"配音过程异常：{e}",
         ) from e
+
+
+@app.patch("/api/projects/{project_id}/outline-nodes/{node_id}/narration-text")
+async def patch_outline_node_narration_text(
+    project_id: int,
+    node_id: int,
+    body: NarrationTextPatch,
+    session: AsyncSession = Depends(get_session),
+    me: User = Depends(get_current_user),
+) -> dict:
+    """更新单个口播 step 的 narration_text；旧时间轴与当前 mp3 可能失效，需重新配音。"""
+    project = await _get_accessible_project(session, project_id, int(me.id))
+    if not _can_manage_project(project, int(me.id)):
+        raise HTTPException(status_code=403, detail="无权限修改该项目")
+    node = await session.get(OutlineNode, node_id)
+    if node is None or node.project_id != project_id:
+        raise HTTPException(status_code=404, detail="段落节点不存在")
+    if node.node_kind != KIND_STEP:
+        raise HTTPException(
+            status_code=400,
+            detail="仅支持编辑口播 step 的正文",
+        )
+    res = await session.exec(select(NodeContent).where(NodeContent.node_id == node.id))
+    nc = res.first()
+    if nc is None:
+        raise HTTPException(status_code=404, detail="段落缺少内容记录")
+    t = utc_now()
+    nc.narration_text = body.narration_text or ""
+    nc.narration_alignment_json = None
+    nc.updated_at = t
+    session.add(nc)
+    project.updated_at = t
+    session.add(project)
+    await reset_export_only(session, project)
+    await session.commit()
+    return {
+        "step_node_id": node_id,
+        "narration_text": nc.narration_text,
+    }
 
 
 @app.post("/api/projects/{project_id}/outline-nodes/{node_id}/resynthesize-audio")

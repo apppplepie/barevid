@@ -24,23 +24,6 @@ const TONE_CLASS: Record<SfTagTone, string> = {
     'border-amber-500/35 bg-amber-950/25 text-amber-100 light:border-amber-400/45 light:bg-amber-50 light:text-amber-900',
 };
 
-export type ProjectPipelineTagInput = {
-  serverStatus?: string;
-  deckStatus?: string;
-  pipeline?: { outline?: boolean; audio?: boolean; deck?: boolean; video?: boolean };
-};
-
-export function projectPipelineTagTone(project: ProjectPipelineTagInput): SfTagTone {
-  const st = (project.serverStatus || '').toLowerCase();
-  const pl = project.pipeline;
-  if (st === 'failed') return 'red';
-  if (pl?.video) return 'emerald';
-  if (pl?.audio && pl?.deck) return 'blue';
-  if (st === 'queued' || st === 'pending_text') return 'cyan';
-  if (st === 'structuring' || st === 'synthesizing') return 'amber';
-  return 'neutral';
-}
-
 type SfTagProps = HTMLAttributes<HTMLSpanElement> & {
   tone: SfTagTone;
   size?: 'xs' | 'sm';

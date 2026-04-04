@@ -62,6 +62,11 @@ class ProjectCreate(BaseModel):
         default=True,
         description="为 False 时创建后不自动排队跑流水线，需在工程内手动点步骤开始",
     )
+    tts_voice_type: str | None = Field(
+        default=None,
+        max_length=200,
+        description="项目级 TTS 音色覆盖；空表示用服务器默认",
+    )
 
 
 class RegisterRequest(BaseModel):
@@ -110,12 +115,50 @@ class ResynthesizeStepAudioRequest(BaseModel):
     text: str | None = None
 
 
+class NarrationTextPatch(BaseModel):
+    """口播面板：保存某 step 节点的口播正文（与已生成音频可能不一致，需再点重配）。"""
+
+    narration_text: str = Field(default="", description="口播全文")
+
+
 class ProjectPatch(BaseModel):
     name: str | None = Field(default=None, description="项目名称")
     is_shared: bool | None = Field(default=None, description="是否共享给所有用户可编辑")
     input_prompt: str | None = Field(
         default=None,
         description="项目原始素材/口播稿（手动流水线编辑后保存）",
+    )
+    tts_voice_type: str | None = Field(
+        default=None,
+        description="项目 TTS 音色；传 null 或空串可清除覆盖",
+    )
+
+
+class ManualConfirmOutlineSegment(BaseModel):
+    step_node_id: int = Field(..., ge=1)
+    subtitle: str = ""
+    narration_text: str = ""
+    narration_brief: str | None = None
+
+
+class ManualConfirmOutlinePage(BaseModel):
+    page_node_id: int = Field(..., ge=1)
+    main_title: str = ""
+    segments: list[ManualConfirmOutlineSegment] = Field(default_factory=list)
+
+
+class ManualConfirmOutlineRequest(BaseModel):
+    pages: list[ManualConfirmOutlinePage] = Field(..., min_length=1)
+
+
+class CopyDeckStyleFromRequest(BaseModel):
+    source_project_id: int = Field(..., ge=1)
+
+
+class DeckStylePromptTextPatch(BaseModel):
+    deck_style_prompt_text: str = Field(
+        default="",
+        description="写入 project_styles.style_prompt_text",
     )
 
 

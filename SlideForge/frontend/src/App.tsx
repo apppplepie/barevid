@@ -2175,7 +2175,6 @@ export default function App() {
           username={userId !== null ? username : null}
           onLogin={() => void bootstrap()}
           onLogout={() => void handleLogout()}
-          // onToggleTheme={toggleTheme}
         />
         {projectsError ? (
           <div
@@ -2223,7 +2222,6 @@ export default function App() {
         username={userId !== null ? username : null}
         onLogin={() => void bootstrap()}
         onLogout={() => void handleLogout()}
-        onToggleTheme={toggleTheme}
         projectName={currentProject?.name}
         onBackToHome={() => {
           suppressNextUrlProjectHydrateRef.current = true;
@@ -2249,7 +2247,6 @@ export default function App() {
         cancellingRunningWorkflowStepId={cancellingRunningWorkflowStepId}
         pipelineAutoAdvance={currentProject?.pipelineAutoAdvance !== false}
         manualOutlineConfirmed={currentProject?.manualOutlineConfirmed !== false}
-        onOpenWorkflowPanel={() => setWorkflowPanelOpen(true)}
         onOpenProjectDetails={() => setProjectDetailsOpen(true)}
       />
 
@@ -2551,6 +2548,7 @@ export default function App() {
         onSubtitlesVisibleChange={setPreviewSubtitlesVisible}
         leftDetailCollapsed={leftDetailCollapsed}
         onLeftDetailCollapsedChange={setLeftDetailCollapsed}
+        onOpenWorkflowPanel={() => setWorkflowPanelOpen(true)}
       />
 
       <audio

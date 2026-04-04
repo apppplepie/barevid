@@ -39,6 +39,8 @@ class Project(SQLModel, table=True):
     target_narration_seconds: Optional[int] = Field(default=None)
     # False：创建后不自动跑 queued 流水线，由用户在工程内手动触发各步
     pipeline_auto_advance: bool = Field(default=True)
+    # 非空时覆盖全局 DOUBAO_TTS_VOICE_TYPE 作为该项目默认合成音色
+    tts_voice_type: Optional[str] = Field(default=None, max_length=200)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 

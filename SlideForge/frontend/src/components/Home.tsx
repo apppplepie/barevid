@@ -37,7 +37,8 @@ import { apiFetch } from '../api';
 import { TtsVoiceSelect } from './TtsVoiceSelect';
 import type { VideoExportJobInfo } from './ExportVideoStatusDialog';
 import { APP_BRAND } from '../brand';
-import { SfTag, type SfTagTone } from './ui/SfTag';
+import { projectPipelineTagTone } from '../utils/projectPipelineTagTone';
+import { SfTag } from './ui/SfTag';
 
 export interface Project {
   id: string;
@@ -116,17 +117,6 @@ function pipelineStatusLabel(project: Project): string {
   if (pl?.audio) return '待演示页';
   if (pl?.outline) return '待配音';
   return '处理中';
-}
-
-function pipelineCardSfTone(project: Project): SfTagTone {
-  const st = (project.serverStatus || '').toLowerCase();
-  const pl = project.pipeline;
-  if (st === 'failed') return 'red';
-  if (pl?.video) return 'emerald';
-  if (pl?.audio && pl?.deck) return 'blue';
-  if (st === 'queued' || st === 'pending_text') return 'cyan';
-  if (st === 'structuring' || st === 'synthesizing') return 'amber';
-  return 'neutral';
 }
 
 /** 为 false 时隐藏片头/片尾勾选 UI；状态仍参与提交，便于日后开放入口 */
@@ -942,7 +932,7 @@ export function Home({
                     <Video className="w-5 h-5" />
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
-                    <SfTag tone={pipelineCardSfTone(project)} size="xs">
+                    <SfTag tone={projectPipelineTagTone(project)} size="xs">
                       {pipelineStatusLabel(project)}
                     </SfTag>
                     {project.isShared ? (
@@ -1096,7 +1086,7 @@ export function Home({
                     <Video className="w-5 h-5" />
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
-                    <SfTag tone={pipelineCardSfTone(project)} size="xs">
+                    <SfTag tone={projectPipelineTagTone(project)} size="xs">
                       {pipelineStatusLabel(project)}
                     </SfTag>
                     <button

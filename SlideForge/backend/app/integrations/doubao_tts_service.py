@@ -15,6 +15,14 @@ _DOUBAO_TTS_V1_URL = "https://openspeech.bytedance.com/api/v1/tts"
 _DOUBAO_TTS_V3_URL = "https://openspeech.bytedance.com/api/v3/tts/unidirectional"
 
 
+def resolve_tts_voice_type(stored: str | None) -> str:
+    """项目覆盖音色优先，否则使用环境默认。"""
+    t = (stored or "").strip()
+    if t:
+        return t
+    return (settings.doubao_tts_voice_type or "").strip() or "zh_male_m191_uranus_bigtts"
+
+
 def _atomic_write_bytes(out_path: Path, raw: bytes) -> None:
     """
     先写临时文件，再原子替换，避免并发读取到半写入音频。
@@ -97,7 +105,7 @@ def _http_error_detail_quota_hint(detail: str) -> str:
     return ""
 
 
-async def _synthesize_v1_to_file(text: str, out_path: Path) -> str | None:
+async def _synthesize_v1_to_file(text: str, out_path: Path, voice_type: str) -> str | None:
     app_id = (settings.doubao_tts_app_id or "").strip()
     token = (settings.doubao_tts_access_token or "").strip()
     if not app_id or not token:
@@ -123,7 +131,7 @@ async def _synthesize_v1_to_file(text: str, out_path: Path) -> str | None:
         },
         "user": {"uid": settings.doubao_tts_uid},
         "audio": {
-            "voice_type": settings.doubao_tts_voice_type,
+            "voice_type": voice_type,
             "encoding": "mp3",
             "speed_ratio": settings.doubao_tts_speed_ratio,
         },
@@ -170,7 +178,7 @@ async def _synthesize_v1_to_file(text: str, out_path: Path) -> str | None:
     return None
 
 
-async def _synthesize_v3_to_file(text: str, out_path: Path) -> str | None:
+async def _synthesize_v3_to_file(text: str, out_path: Path, voice_type: str) -> str | None:
     """
     HTTP V3 单向流式 Chunked，文档：https://www.volcengine.com/docs/6561/1598757
     """
@@ -206,7 +214,7 @@ async def _synthesize_v3_to_file(text: str, out_path: Path) -> str | None:
         "user": {"uid": settings.doubao_tts_uid},
         "req_params": {
             "text": text,
-            "speaker": settings.doubao_tts_voice_type,
+            "speaker": voice_type,
             "audio_params": audio_params,
         },
     }
@@ -312,11 +320,17 @@ async def _synthesize_v3_to_file(text: str, out_path: Path) -> str | None:
     return json.dumps(pack, ensure_ascii=False)
 
 
-async def synthesize_to_file(text: str, out_path: Path) -> str | None:
+async def synthesize_to_file(
+    text: str,
+    out_path: Path,
+    *,
+    voice_override: str | None = None,
+) -> str | None:
     """
     写入音频文件；若开启 doubao_tts_with_timestamp，返回可入库的 JSON 字符串。
     V1：addition 来自接口原文；V3：拼成与前端一致的 addition.frontend.words（毫秒）。
     """
+    voice = resolve_tts_voice_type(voice_override)
     if settings.doubao_tts_use_v3:
-        return await _synthesize_v3_to_file(text, out_path)
-    return await _synthesize_v1_to_file(text, out_path)
+        return await _synthesize_v3_to_file(text, out_path, voice)
+    return await _synthesize_v1_to_file(text, out_path, voice)

@@ -8,6 +8,7 @@ import {
   Video,
   Captions,
   LayoutPanelLeft,
+  GitBranch,
 } from 'lucide-react';
 import { ClipData, ClipNode } from '../types';
 
@@ -31,6 +32,8 @@ interface TimelineProps {
   /** false = 左侧详情栏展开；true = 收起 */
   leftDetailCollapsed?: boolean;
   onLeftDetailCollapsedChange?: (collapsed: boolean) => void;
+  /** 打开工作流面板（与字幕、左侧栏开关同排，在时间轴区域上方） */
+  onOpenWorkflowPanel?: () => void;
 }
 
 export function Timeline({
@@ -51,16 +54,9 @@ export function Timeline({
   onSubtitlesVisibleChange,
   leftDetailCollapsed = false,
   onLeftDetailCollapsedChange,
+  onOpenWorkflowPanel,
 }: TimelineProps) {
   const timelineRef = useRef<HTMLDivElement>(null);
-
-  if (isGenerating) {
-    return (
-      <div style={{ height }} className="flex w-full min-h-0 min-w-0 shrink-0 flex-col items-center justify-center border-t border-zinc-800 light:border-slate-200 bg-zinc-900/80 light:bg-white/90 text-sm text-sf-muted backdrop-blur-md z-30">
-        时间轴将在生成后可用
-      </div>
-    );
-  }
 
   const handleTimelineClick = (e: React.MouseEvent) => {
     if (!timelineRef.current) return;
@@ -164,10 +160,26 @@ export function Timeline({
           >
             <LayoutPanelLeft className="h-4 w-4" />
           </button>
+          {onOpenWorkflowPanel ? (
+            <button
+              type="button"
+              onClick={onOpenWorkflowPanel}
+              className="shrink-0 rounded-md p-2 text-violet-400/90 transition-colors hover:bg-violet-500/15 hover:text-violet-200 light:text-violet-700 light:hover:bg-violet-100/95"
+              title="工作流面板"
+              aria-label="工作流面板"
+            >
+              <GitBranch className="h-4 w-4" />
+            </button>
+          ) : null}
         </div>
       </div>
 
-      {/* Tracks Area */}
+      {isGenerating ? (
+        <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center px-4 text-sm text-sf-muted">
+          时间轴将在生成后可用
+        </div>
+      ) : (
+      /* Tracks Area */
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
         {/* Time Ruler */}
         <div className="h-6 border-b border-zinc-800 light:border-slate-200 flex relative text-[10px] text-sf-muted font-mono select-none bg-zinc-950/30 light:bg-slate-50/50">
@@ -237,6 +249,7 @@ export function Timeline({
           </Track>
         </div>
       </div>
+      )}
     </div>
   );
 }

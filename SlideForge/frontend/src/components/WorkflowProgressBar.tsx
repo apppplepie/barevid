@@ -20,7 +20,7 @@ const STEP_STATE_LABEL_ZH: Record<StepState, string> = {
   error: '失败',
 };
 
-export function stepStateLabelZh(state: StepState): string {
+function stepStateLabelZh(state: StepState): string {
   return STEP_STATE_LABEL_ZH[state] ?? state;
 }
 
@@ -79,17 +79,12 @@ export function WorkflowProgressBar({
     >
       <div className="min-w-0 flex-1 overflow-x-auto overflow-y-visible py-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="ml-auto flex w-max items-center gap-1 sm:gap-1.5">
-          {steps.map((step, index) => {
+          {steps.map((step) => {
             const isSuccess = step.state === 'success';
             const isRunning = step.state === 'running';
             const isError = step.state === 'error';
             const isWaiting = step.state === 'waiting';
             const Icon = step.icon;
-            const prevDone =
-              index === 0 ? true : steps[index - 1]!.state === 'success';
-            const segLit =
-              prevDone &&
-              (isSuccess || isRunning || isError || isWaiting);
             const canCancelRunning = isRunning && Boolean(onCancelRunningStep);
             const isPending =
               !isSuccess && !isRunning && !isError;
@@ -101,12 +96,6 @@ export function WorkflowProgressBar({
 
             return (
               <div key={step.id} className="flex items-center">
-                {index > 0 ? (
-                  <div
-                    className={`mx-0.5 h-px w-4 shrink-0 rounded-full sm:mx-1 sm:w-5 ${segLit ? 'bg-zinc-500/50 light:bg-slate-400/60' : 'bg-zinc-800 light:bg-slate-200'}`}
-                    aria-hidden
-                  />
-                ) : null}
                 <div className="flex min-w-0 items-center gap-1 sm:gap-1.5">
                   <div
                     role="listitem"
@@ -298,12 +287,6 @@ export function WorkflowProgressBar({
 
       {exportStep ? (
         <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
-          <div
-            className={`mx-0.5 h-px w-4 shrink-0 rounded-full sm:mx-1 sm:w-6 ${
-              downloadEnabled || downloadLoading ? 'bg-zinc-500/50 light:bg-slate-400/60' : 'bg-zinc-800 light:bg-slate-200'
-            }`}
-            aria-hidden
-          />
           <button
             type="button"
             onClick={onDownloadClick}

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
-import { Sparkles, ArrowLeft, ChevronDown, LogOut, GitBranch, Info } from 'lucide-react';
+import { Sparkles, ArrowLeft, ChevronDown, LogOut, Info } from 'lucide-react';
 import { WorkflowProgressBar, WorkflowStep } from './WorkflowProgressBar';
 import { APP_BRAND } from '../brand';
 import { AuthDialog } from './AuthDialog';
@@ -23,7 +23,6 @@ interface TopBarProps {
   onLogin?: () => void;
   onLogout?: () => void;
   // onToggleTheme?: () => void; // 暂不需要浅色切换入口
-  onOpenWorkflowPanel?: () => void;
   onOpenProjectDetails?: () => void;
   editorTopBarExtras?: ReactNode;
 }
@@ -45,7 +44,6 @@ export function TopBar({
   username: controlledUsername,
   onLogin,
   onLogout,
-  onOpenWorkflowPanel,
   onOpenProjectDetails,
   editorTopBarExtras,
 }: TopBarProps) {
@@ -113,17 +111,6 @@ export function TopBar({
             aria-label="项目详情"
           >
             <Info className="h-4 w-4" />
-          </button>
-        ) : null}
-        {projectName && onOpenWorkflowPanel ? (
-          <button
-            type="button"
-            onClick={onOpenWorkflowPanel}
-            className="shrink-0 rounded-md p-1.5 text-violet-400/90 transition-colors hover:bg-violet-500/15 hover:text-violet-200 light:text-violet-700 light:hover:bg-violet-100/95"
-            title="工作流面板"
-            aria-label="工作流面板"
-          >
-            <GitBranch className="h-4 w-4" />
           </button>
         ) : null}
         {editorTopBarExtras}

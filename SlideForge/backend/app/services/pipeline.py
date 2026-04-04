@@ -334,8 +334,11 @@ async def run_synthesize_project_audio(
                 continue
             name = f"{seq:03d}.mp3"
             path = base / name
+            voice_ov = (project.tts_voice_type or "").strip() or None
             async with _TTS_SEMAPHORE:
-                alignment_json = await synthesize_to_file(script, path)
+                alignment_json = await synthesize_to_file(
+                    script, path, voice_override=voice_ov
+                )
             duration_ms = audio_duration_ms(path)
             t = utc_now()
             nc.narration_alignment_json = alignment_json
@@ -418,8 +421,14 @@ async def run_resynthesize_single_step_audio(
     name = f"{seq:03d}.mp3"
     path = base / name
 
+    project = await session.get(Project, project_id)
+    voice_ov = (
+        (project.tts_voice_type or "").strip() or None if project else None
+    )
     async with _TTS_SEMAPHORE:
-        alignment_json = await synthesize_to_file(script, path)
+        alignment_json = await synthesize_to_file(
+            script, path, voice_override=voice_ov
+        )
     duration_ms = audio_duration_ms(path)
     t = utc_now()
     nc.narration_alignment_json = alignment_json
@@ -427,7 +436,6 @@ async def run_resynthesize_single_step_audio(
     nc.updated_at = t
     session.add(nc)
 
-    project = await session.get(Project, project_id)
     if project:
         await reset_export_only(session, project)
         project.updated_at = t
