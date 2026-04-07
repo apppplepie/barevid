@@ -52,14 +52,9 @@ const resources = {
         stat2Value: "Your look, your rules",
         stat3Label: "SLIDE CONTROL",
         stat3Value: "Tweak every page",
-        videos: {
-          neonRain: "Neon Rain",
-          cyberCity: "Cyber City",
-          alleyway: "Alleyway",
-          hologram: "Hologram",
-          dataStream: "Data Stream",
-          synthwave: "Synthwave"
-        }
+        noVideos: "No showcase clips yet. Drop .mp4 files into public/vidsrc and run npm run vidsrc:manifest.",
+        manifestError: "Could not load /vidsrc/manifest.json. Run npm run vidsrc:manifest after adding videos.",
+        loadingShowcase: "Loading showcase…"
       },
       pricing: {
         openSourceProtocol: "Open Source Protocol",
@@ -82,7 +77,9 @@ const resources = {
         industryStandard: "Industry Standard",
         bareVid: "BareVid",
         videoLength: "Video Length",
-        cost: "Cost ($)"
+        cost: "Cost ($)",
+        costHighlight: "~10 min of video for about ¥0.1 in API cost — real-world ballpark.",
+        costHighlightNote: "Heavy per-slide tweaking or extra LLM rounds may add roughly another ¥0.1, depending on how much you iterate."
       },
       status: {
         nodeStatus1: "NODE_",
@@ -166,14 +163,9 @@ const resources = {
         stat2Value: "私人定制",
         stat3Label: "自由度",
         stat3Value: "逐页微调",
-        videos: {
-          neonRain: "霓虹之雨",
-          cyberCity: "赛博城市",
-          alleyway: "小巷",
-          hologram: "全息图",
-          dataStream: "数据流",
-          synthwave: "合成器浪潮"
-        }
+        noVideos: "暂无展示视频。把 .mp4 放进 public/vidsrc 后执行 npm run vidsrc:manifest。",
+        manifestError: "无法加载 /vidsrc/manifest.json。添加视频后请执行 npm run vidsrc:manifest。",
+        loadingShowcase: "加载展示视频…"
       },
       pricing: {
         openSourceProtocol: "开源协议",
@@ -196,7 +188,9 @@ const resources = {
         industryStandard: "行业标准",
         bareVid: "BareVid",
         videoLength: "视频长度",
-        cost: "成本 ($)"
+        cost: "成本 ($)",
+        costHighlight: "10 分钟成片，API 成本约只要一毛钱！",
+        costHighlightNote: "逐页微调、多轮改稿，可能再多一毛左右（随调用量浮动）。"
       },
       status: {
         nodeStatus1: "节点_",

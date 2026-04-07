@@ -3,6 +3,9 @@ import { motion } from 'motion/react';
 import { Play, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+type ManifestVideo = { file: string; ratio?: string };
+type VidsrcManifest = { videos?: ManifestVideo[] };
+
 type WorkEntry = { id: number; ratio: string; video: string; title: string };
 
 function cssAspectRatioFromLabel(ratio: string): string {
@@ -10,10 +13,34 @@ function cssAspectRatioFromLabel(ratio: string): string {
   if (parts.length === 2 && parts.every((n) => Number.isFinite(n) && n > 0)) {
     return `${parts[0]} / ${parts[1]}`;
   }
-  return '4 / 5';
+  return '16 / 9';
+}
+
+function titleFromFilename(file: string): string {
+  const base = file.replace(/^.*[/\\]/, '');
+  const dot = base.lastIndexOf('.');
+  return dot > 0 ? base.slice(0, dot) : base;
+}
+
+function gcd(a: number, b: number): number {
+  let x = Math.abs(Math.round(a));
+  let y = Math.abs(Math.round(b));
+  while (y) {
+    const t = y;
+    y = x % y;
+    x = t;
+  }
+  return x || 1;
+}
+
+function ratioLabelFromPixels(w: number, h: number): string {
+  const g = gcd(w, h);
+  return `${Math.round(w / g)}:${Math.round(h / g)}`;
 }
 
 function WorkCard({ work, onOpen }: { work: WorkEntry; onOpen: () => void }) {
+  const [pixelAspect, setPixelAspect] = useState<{ w: number; h: number } | null>(null);
+
   return (
     <div
       role="button"
@@ -26,7 +53,11 @@ function WorkCard({ work, onOpen }: { work: WorkEntry; onOpen: () => void }) {
         }
       }}
       className="relative w-full group overflow-hidden bg-white/5 border border-white/10 p-2 shrink-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black rounded-sm"
-      style={{ aspectRatio: cssAspectRatioFromLabel(work.ratio) }}
+      style={{
+        aspectRatio: pixelAspect
+          ? `${pixelAspect.w} / ${pixelAspect.h}`
+          : cssAspectRatioFromLabel(work.ratio),
+      }}
     >
       <div className="w-full h-full relative overflow-hidden">
         <video
@@ -38,12 +69,20 @@ function WorkCard({ work, onOpen }: { work: WorkEntry; onOpen: () => void }) {
           autoPlay
           preload="metadata"
           aria-label={work.title}
+          onLoadedMetadata={(e) => {
+            const v = e.currentTarget;
+            if (v.videoWidth > 0 && v.videoHeight > 0) {
+              setPixelAspect({ w: v.videoWidth, h: v.videoHeight });
+            }
+          }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-5 pointer-events-none">
-          <div className="flex justify-between items-end">
-            <div>
-              <span className="font-black text-white tracking-widest uppercase text-lg block mb-1">{work.title}</span>
-              <span className="text-xs text-primary font-mono bg-primary/10 px-2 py-1 border border-primary/30">{work.ratio} • NEURAL_RENDER</span>
+          <div className="flex justify-between items-end gap-2">
+            <div className="min-w-0">
+              <span className="font-black text-white tracking-wide text-base md:text-lg block mb-1 break-words">{work.title}</span>
+              <span className="text-xs text-primary font-mono bg-primary/10 px-2 py-1 border border-primary/30">
+                {(pixelAspect ? ratioLabelFromPixels(pixelAspect.w, pixelAspect.h) : work.ratio)} • NEURAL_RENDER
+              </span>
             </div>
             <span className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white backdrop-blur-md border border-white/30 group-hover:bg-primary group-hover:border-primary transition-colors">
               <Play size={16} fill="currentColor" className="ml-1" />
@@ -60,6 +99,33 @@ function WorkCard({ work, onOpen }: { work: WorkEntry; onOpen: () => void }) {
 export function WorksGrid() {
   const { t } = useTranslation();
   const [lightbox, setLightbox] = useState<WorkEntry | null>(null);
+  const [works, setWorks] = useState<WorkEntry[]>([]);
+  const [galleryState, setGalleryState] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/vidsrc/manifest.json', { cache: 'no-store' });
+        if (!res.ok) throw new Error(String(res.status));
+        const data = (await res.json()) as VidsrcManifest;
+        if (cancelled) return;
+        const list: WorkEntry[] = (data.videos ?? []).map((v, i) => ({
+          id: i,
+          video: `/vidsrc/${encodeURIComponent(v.file)}`,
+          title: titleFromFilename(v.file),
+          ratio: (v.ratio && v.ratio.trim()) || '16:9',
+        }));
+        setWorks(list);
+        setGalleryState('ready');
+      } catch {
+        if (!cancelled) setGalleryState('error');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!lightbox) return;
@@ -75,17 +141,12 @@ export function WorksGrid() {
     };
   }, [lightbox]);
 
-  const works: WorkEntry[] = [
-    { id: 1, ratio: '9:16', video: '/vidsrc/1.mp4', title: t('works.videos.neonRain') },
-    { id: 2, ratio: '16:9', video: '/vidsrc/2.mp4', title: t('works.videos.cyberCity') },
-    { id: 3, ratio: '16:9', video: '/vidsrc/3.mp4', title: t('works.videos.alleyway') },
-    { id: 4, ratio: '4:3', video: '/vidsrc/4.mp4', title: t('works.videos.hologram') },
-    { id: 5, ratio: '16:9', video: '/vidsrc/5.mp4', title: t('works.videos.dataStream') },
-    { id: 6, ratio: '1:1', video: '/vidsrc/6.mp4', title: t('works.videos.synthwave') },
-  ];
-
-  const col1Works = [works[0], works[1], works[2]];
-  const col2Works = [works[3], works[4], works[5]];
+  const mid = Math.ceil(works.length / 2);
+  let col1Works = works.slice(0, mid);
+  let col2Works = works.slice(mid);
+  if (works.length === 1) {
+    col2Works = col1Works;
+  }
 
   return (
     <section id="works" className="h-screen w-full snap-start snap-always relative overflow-hidden flex items-center border-y border-white/5">
@@ -96,47 +157,66 @@ export function WorksGrid() {
 
       <div className="max-w-7xl mx-auto w-full h-full px-6 flex flex-col md:flex-row items-center gap-12 relative z-10 py-20">
 
-        {/* Left: Scrolling Gallery */}
+        {/* Left: Scrolling Gallery (videos from public/vidsrc via manifest.json) */}
         <div className="w-full md:w-7/12 h-[60vh] md:h-[85vh] relative overflow-hidden flex gap-4 md:gap-6 mask-image-vertical">
-          {/* Column 1 (Scrolls Up) */}
-          <div className="flex-1 overflow-hidden">
-            <div className="flex flex-col animate-marquee-up hover:[animation-play-state:paused]">
-              <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
-                {col1Works.map((work) => (
-                  <Fragment key={`col1-a-${work.id}`}>
-                    <WorkCard work={work} onOpen={() => setLightbox(work)} />
-                  </Fragment>
-                ))}
-              </div>
-              <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
-                {col1Works.map((work) => (
-                  <Fragment key={`col1-b-${work.id}`}>
-                    <WorkCard work={work} onOpen={() => setLightbox(work)} />
-                  </Fragment>
-                ))}
-              </div>
+          {galleryState === 'loading' && (
+            <div className="flex-1 flex items-center justify-center font-mono text-sm text-white/40 px-4 text-center">
+              {t('works.loadingShowcase')}
             </div>
-          </div>
+          )}
+          {galleryState === 'error' && (
+            <div className="flex-1 flex items-center justify-center font-mono text-sm text-white/50 px-4 text-center leading-relaxed">
+              {t('works.manifestError')}
+            </div>
+          )}
+          {galleryState === 'ready' && works.length === 0 && (
+            <div className="flex-1 flex items-center justify-center font-mono text-sm text-white/45 px-4 text-center leading-relaxed">
+              {t('works.noVideos')}
+            </div>
+          )}
+          {galleryState === 'ready' && works.length > 0 && (
+            <>
+              {/* Column 1 (Scrolls Up) */}
+              <div className="flex-1 overflow-hidden min-h-0">
+                <div className="flex flex-col animate-marquee-up hover:[animation-play-state:paused]">
+                  <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
+                    {col1Works.map((work) => (
+                      <Fragment key={`col1-a-${work.id}-${work.video}`}>
+                        <WorkCard work={work} onOpen={() => setLightbox(work)} />
+                      </Fragment>
+                    ))}
+                  </div>
+                  <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
+                    {col1Works.map((work) => (
+                      <Fragment key={`col1-b-${work.id}-${work.video}`}>
+                        <WorkCard work={work} onOpen={() => setLightbox(work)} />
+                      </Fragment>
+                    ))}
+                  </div>
+                </div>
+              </div>
 
-          {/* Column 2 (Scrolls Down) */}
-          <div className="flex-1 overflow-hidden">
-            <div className="flex flex-col animate-marquee-down hover:[animation-play-state:paused]">
-              <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
-                {col2Works.map((work) => (
-                  <Fragment key={`col2-a-${work.id}`}>
-                    <WorkCard work={work} onOpen={() => setLightbox(work)} />
-                  </Fragment>
-                ))}
+              {/* Column 2 (Scrolls Down) */}
+              <div className="flex-1 overflow-hidden min-h-0">
+                <div className="flex flex-col animate-marquee-down hover:[animation-play-state:paused]">
+                  <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
+                    {col2Works.map((work) => (
+                      <Fragment key={`col2-a-${work.id}-${work.video}`}>
+                        <WorkCard work={work} onOpen={() => setLightbox(work)} />
+                      </Fragment>
+                    ))}
+                  </div>
+                  <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
+                    {col2Works.map((work) => (
+                      <Fragment key={`col2-b-${work.id}-${work.video}`}>
+                        <WorkCard work={work} onOpen={() => setLightbox(work)} />
+                      </Fragment>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
-                {col2Works.map((work) => (
-                  <Fragment key={`col2-b-${work.id}`}>
-                    <WorkCard work={work} onOpen={() => setLightbox(work)} />
-                  </Fragment>
-                ))}
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
 
         {/* Right: Text & Typography */}
@@ -198,7 +278,7 @@ export function WorksGrid() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
-              <h3 id="works-lightbox-title" className="text-lg font-black uppercase tracking-widest text-white truncate pr-2">
+              <h3 id="works-lightbox-title" className="text-lg font-black tracking-wide text-white truncate pr-2">
                 {lightbox.title}
               </h3>
               <button

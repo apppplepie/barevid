@@ -46,6 +46,14 @@ export function Pricing() {
                   <span className="text-primary flex items-center gap-2">{t('pricing.platformFee')}</span>
                   <span className="text-primary font-bold text-lg">$0.00</span>
                 </div>
+                <div className="rounded-sm border border-secondary/35 bg-gradient-to-br from-secondary/15 via-primary/10 to-transparent px-4 py-3 space-y-1.5 shadow-[0_0_20px_rgba(0,243,255,0.08)]">
+                  <p className="text-[15px] md:text-base font-black text-white leading-snug tracking-tight">
+                    {t('pricing.costHighlight')}
+                  </p>
+                  <p className="text-[11px] md:text-xs text-white/40 font-mono leading-relaxed">
+                    {t('pricing.costHighlightNote')}
+                  </p>
+                </div>
               </div>
 
               <div className="flex gap-4 mt-auto">

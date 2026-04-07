@@ -13,6 +13,11 @@ from urllib.parse import urlparse
 
 import httpx
 
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - optional for minimal installs
+    load_dotenv = None  # type: ignore[assignment,misc]
+
 
 def _barevid_root() -> Path:
     """仓库根目录（barevid/）；本脚本位于 barevid/worker/export_video.py。"""
@@ -539,13 +544,35 @@ def _mux_video_audio(
     _run(cmd, timeout_seconds=_ffmpeg_timeout_seconds())
 
 
+def _default_api_url() -> str:
+    """Play-manifest 与媒体下载应对齐后端 API 根；勿用 SLIDEFORGE_FRONTEND_URL。"""
+    raw = (os.environ.get("SLIDEFORGE_API_URL") or "").strip()
+    return raw or "http://127.0.0.1:8000"
+
+
+def _default_frontend_url() -> str:
+    """Playwright 打开的放映页 origin；勿与 API 混用，且无公网默认（避免误连线上）。"""
+    raw = (os.environ.get("SLIDEFORGE_FRONTEND_URL") or "").strip()
+    return raw or "http://127.0.0.1:3000"
+
+
 def main(argv: Iterable[str] | None = None) -> int:
+    env_path = Path(__file__).resolve().parent / ".env"
+    if load_dotenv is not None:
+        load_dotenv(env_path)
+
     parser = argparse.ArgumentParser(description="Auto play and export video.")
     parser.add_argument("--project-id", type=int, required=True)
     parser.add_argument(
-        "--frontend-url", default="http://127.0.0.1:3000", help="Vite URL"
+        "--frontend-url",
+        default=_default_frontend_url(),
+        help="Play page origin (env SLIDEFORGE_FRONTEND_URL; default http://127.0.0.1:3000). Not the API base.",
     )
-    parser.add_argument("--api-url", default="http://127.0.0.1:8000")
+    parser.add_argument(
+        "--api-url",
+        default=_default_api_url(),
+        help="Backend API base for /api/projects/... (env SLIDEFORGE_API_URL; default http://127.0.0.1:8000).",
+    )
     parser.add_argument("--width", type=int, default=1920)
     parser.add_argument("--height", type=int, default=1080)
     parser.add_argument(

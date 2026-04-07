@@ -1,0 +1,2 @@
+[heartbeat] POST failed worker_id='creepender': Server error '503 Service Unavailable' for url 'http://localhost:8000/internal/worker/heartbeat?worker_id=creepender'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503
