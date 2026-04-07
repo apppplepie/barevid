@@ -103,6 +103,12 @@ class AuthResponse(BaseModel):
     username: str
 
 
+class VideoExportWorkersStatus(BaseModel):
+    """内存心跳统计的在线导出 worker 数（单 API 进程）。"""
+
+    alive: int
+
+
 class AudioPart(BaseModel):
     index: int
     filename: str

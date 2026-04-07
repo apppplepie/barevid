@@ -443,7 +443,7 @@ export default function App() {
   /** 母版弹窗确认后、workflow 尚未标母版 running 前的乐观态 */
   const [headerDeckMasterKickoffPending, setHeaderDeckMasterKickoffPending] =
     useState(false);
-  /** 点击启动场景页生成后、轮询到 running/pending 等之前，顶栏仅标进行中（不写 success） */
+  /** 点击启动场景页生成后、服务端尚未标 running 前，顶栏乐观为「进行中」（勿用 waiting/pending 清标记，否则与点击前状态相同会误清） */
   const [headerDeckPagesKickoffPending, setHeaderDeckPagesKickoffPending] =
     useState(false);
   const prevDeckSceneStateRef = useRef<WorkflowStep['state'] | undefined>(
@@ -518,13 +518,8 @@ export default function App() {
     const st = dr?.state;
     const prev = prevDeckSceneStateRef.current;
     if (headerDeckPagesKickoffPending) {
-      if (
-        st === 'running' ||
-        st === 'pending' ||
-        st === 'waiting' ||
-        st === 'error' ||
-        st === 'cancelled'
-      ) {
+      // 仅当服务端步态与「刚点确认」前不同才收乐观：waiting/pending 在点确认前后不变，不能用来清标记。
+      if (st === 'running' || st === 'error' || st === 'cancelled') {
         setHeaderDeckPagesKickoffPending(false);
       } else if (st === 'success' && prev === 'running') {
         setHeaderDeckPagesKickoffPending(false);
@@ -1930,23 +1925,61 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ step: stepId }),
       });
-      if (typeof cancelRes.pipeline_auto_advance === 'boolean') {
+      const pipelinePatch =
+        typeof cancelRes.pipeline_auto_advance === 'boolean'
+          ? { pipelineAutoAdvance: cancelRes.pipeline_auto_advance }
+          : null;
+
+      if (stepId === 'export') {
+        setExportSubmitting(false);
+        setExportTracking(null);
+        setExportStatusOpen(false);
+        setExportFailed(false);
+        setEditorFlashDownloadUrl(null);
         setProjects((prev) =>
-          prev.map((p) =>
-            p.id === String(pid)
-              ? mergeProjectWorkflowState(p, {
-                  pipelineAutoAdvance: cancelRes.pipeline_auto_advance,
-                })
-              : p,
-          ),
+          prev.map((p) => {
+            if (p.id !== String(pid)) return p;
+            const sw: ServerWorkflow | null =
+              p.serverWorkflow != null
+                ? {
+                    ...p.serverWorkflow,
+                    exportStatus: 'failed',
+                    exportWorkflowStatus: 'export_failed',
+                  }
+                : p.serverWorkflow;
+            const j = p.videoExportJob;
+            const nextJob: VideoExportJobInfo | null =
+              j && (j.status === 'queued' || j.status === 'running')
+                ? {
+                    ...j,
+                    status: 'failed',
+                    error_message: '用户取消',
+                    finished_at: new Date().toISOString(),
+                  }
+                : (p.videoExportJob ?? null);
+            return mergeProjectWorkflowState(p, {
+              ...(pipelinePatch ?? {}),
+              serverWorkflow: sw,
+              videoExportJob: nextJob,
+            });
+          }),
         );
+        setEditorFlashMessage('已取消视频导出。');
+      } else {
+        if (pipelinePatch) {
+          setProjects((prev) =>
+            prev.map((p) =>
+              p.id === String(pid) ? mergeProjectWorkflowState(p, pipelinePatch) : p,
+            ),
+          );
+        }
+        setEditorFlashMessage('已提交取消请求。');
       }
       closeConfirmDialog();
       if (stepId === 'pages' || stepId === 'deck_render') {
         clearDeckWatch();
         persistDeckRegenPending(pid, null);
       }
-      setEditorFlashMessage('已提交取消请求。');
       setRetryPollBoostUntil(Date.now() + 12_000);
       if (userId !== null) {
         await fetchProjects(userId, username);

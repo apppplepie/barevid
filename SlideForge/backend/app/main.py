@@ -82,6 +82,7 @@ from app.schemas import (
     RegisterRequest,
     ResynthesizeStepAudioRequest,
     SynthesizeAudioResponse,
+    VideoExportWorkersStatus,
     WorkerVideoExportFailBody,
     WorkerVideoExportJobPayload,
 )
@@ -119,6 +120,10 @@ from app.services.pipeline import (
     run_resynthesize_single_step_audio,
     run_synthesize_project_audio,
     run_text_rebuild_job,
+)
+from app.services.export_worker_registry import (
+    export_worker_alive_count,
+    record_export_worker_heartbeat,
 )
 from app.services.video_export_jobs import (
     abort_stale_project_export_jobs,
@@ -273,6 +278,12 @@ def _export_media_base_url() -> str:
 @app.get("/api/health")
 async def health() -> dict:
     return {"ok": True}
+
+
+@app.get("/api/video-export-workers/status", response_model=VideoExportWorkersStatus)
+async def video_export_workers_status() -> VideoExportWorkersStatus:
+    n = await export_worker_alive_count()
+    return VideoExportWorkersStatus(alive=n)
 
 
 @app.post("/api/auth/register", response_model=AuthResponse)
@@ -973,6 +984,15 @@ async def export_video(
     )
 
 
+@app.post("/internal/worker/heartbeat")
+async def worker_heartbeat(
+    worker_id: str | None = None,
+    _: None = Depends(verify_export_worker_key),
+) -> dict:
+    await record_export_worker_heartbeat(worker_id)
+    return {"ok": True}
+
+
 @app.get(
     "/internal/worker/video-export/jobs/next",
     response_model=WorkerVideoExportJobPayload | None,
@@ -1038,6 +1058,17 @@ async def worker_claim_next_video_export(
     )
 
 
+async def _drain_upload_file(file: UploadFile, *, chunk_size: int = 1024 * 1024) -> None:
+    """丢弃请求体，避免取消后 worker 仍上传时连接异常。"""
+    try:
+        while True:
+            chunk = await file.read(chunk_size)
+            if not chunk:
+                break
+    finally:
+        await file.close()
+
+
 @app.post("/internal/worker/video-export/jobs/{job_id}/complete")
 async def worker_complete_video_export(
     job_id: int,
@@ -1046,8 +1077,12 @@ async def worker_complete_video_export(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     job = await session.get(VideoExportJob, job_id)
-    if job is None or job.status != "running":
-        raise HTTPException(status_code=404, detail="任务不存在或未处于执行中")
+    if job is None:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    await session.refresh(job)
+    if job.status != "running":
+        await _drain_upload_file(file)
+        return {"ok": True, "discarded": True}
     project = await session.get(Project, job.project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="项目不存在")
@@ -1095,6 +1130,8 @@ async def worker_complete_video_export(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    if out_url is None:
+        return {"ok": True, "discarded": True}
     return {"ok": True, "output_url": out_url}
 
 

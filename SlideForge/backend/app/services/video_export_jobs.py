@@ -191,12 +191,19 @@ async def complete_video_export_job(
     job_id: int,
     output_path: Path,
     storage_root: Path,
-) -> str:
+) -> str | None:
     job = await session.get(VideoExportJob, job_id)
     if job is None:
         raise ValueError("任务不存在")
+    await session.refresh(job)
     if job.status != "running":
-        raise ValueError("任务状态不可完成")
+        # 用户取消等导致任务已非 running：不采纳成片、不写 workflow 成功
+        try:
+            if output_path.exists():
+                output_path.unlink()
+        except OSError:
+            pass
+        return None
     project = await session.get(Project, job.project_id)
     if project is None:
         raise ValueError("项目不存在")
@@ -224,8 +231,10 @@ async def fail_video_export_job(
     job = await session.get(VideoExportJob, job_id)
     if job is None:
         raise ValueError("任务不存在")
+    await session.refresh(job)
     if job.status != "running":
-        raise ValueError("任务状态不可标记失败")
+        # 已取消或已结束，幂等忽略 worker 回调
+        return
     project = await session.get(Project, job.project_id)
     if project is None:
         raise ValueError("项目不存在")

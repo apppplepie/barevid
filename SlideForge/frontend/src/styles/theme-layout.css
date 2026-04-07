@@ -303,6 +303,40 @@ html[data-theme='light'] {
   stroke: var(--sf-workflow-edge-inactive);
 }
 
+/** 前序已完成 → 当前进行/待操作步骤：蓝色虚线 + 沿路径前进的 dash 动画（offset 周期 = dash 周期无缝循环） */
+@keyframes sf-workflow-edge-dash-march {
+  to {
+    stroke-dashoffset: -5;
+  }
+}
+
+.sf-workflow-edge-progress {
+  stroke: rgb(59 130 246);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  stroke-dasharray: 3 2;
+  stroke-dashoffset: 0;
+  animation: sf-workflow-edge-dash-march 1s linear infinite;
+  filter: drop-shadow(0 0 1.2px rgb(59 130 246 / 0.55));
+}
+
+.light .sf-workflow-edge-progress {
+  stroke: rgb(37 99 235);
+  filter: drop-shadow(0 0 1px rgb(37 99 235 / 0.45));
+}
+
+/** 前序 → 已完成步骤：静态绿色实线（无动画） */
+.sf-workflow-edge-done {
+  stroke: rgb(16 185 129);
+  stroke-linecap: round;
+  fill: none;
+}
+
+.light .sf-workflow-edge-done {
+  stroke: rgb(5 150 105);
+}
+
 .sf-workflow-node-dim {
   background-color: var(--sf-workflow-node-dim-bg);
 }

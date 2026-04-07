@@ -12,6 +12,7 @@ from app.services.deck import (
     invalidate_all_page_decks_after_master_change,
 )
 from app.services.pipeline import clear_project_outline_nodes
+from app.services.video_export_jobs import abort_stale_project_export_jobs
 from app.services.workflow_state import reset_export_only
 
 _EXPORT = "export"
@@ -81,6 +82,10 @@ async def cancel_running_workflow_step(
     if step_key == _EXPORT:
         ex = await _export_row(session, wid)
         if ex and ex.status == wf.EXPORT_EXPORTING:
+            pid = int(project.id) if project.id is not None else None
+            if pid is not None:
+                # 撤回队列表中的导出任务；worker 若已领取见 complete 侧丢弃成片
+                await abort_stale_project_export_jobs(session, pid, "用户取消")
             await wf.set_export_status(
                 session, project, wf.EXPORT_FAILED, error_message="用户取消"
             )

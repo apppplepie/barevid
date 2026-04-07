@@ -235,6 +235,32 @@ export function Home({
   const [renameDialog, setRenameDialog] = useState<{ id: string; currentName: string } | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [deleteDialog, setDeleteDialog] = useState<{ id: string; name: string } | null>(null);
+  const [exportWorkerAlive, setExportWorkerAlive] = useState<number | null>(null);
+  const [exportWorkerStatusErr, setExportWorkerStatusErr] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const r = await apiFetch<{ alive: number }>('/api/video-export-workers/status');
+        if (!cancelled) {
+          setExportWorkerAlive(typeof r.alive === 'number' ? r.alive : 0);
+          setExportWorkerStatusErr(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setExportWorkerAlive(null);
+          setExportWorkerStatusErr(true);
+        }
+      }
+    };
+    void tick();
+    const id = window.setInterval(tick, 45_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
 
   useEffect(() => {
     if (currentUserId == null) return;
@@ -462,9 +488,49 @@ export function Home({
         
         {/* Header & Create Form */}
         <section className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight sf-text-primary">{APP_BRAND}</h1>
-            <p className="mt-2 sf-text-muted">创建和管理你的视频工程项目。</p>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight sf-text-primary">{APP_BRAND}</h1>
+              <p className="mt-2 sf-text-muted">创建和管理你的视频工程项目。</p>
+            </div>
+            <div
+              className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${
+                exportWorkerStatusErr || exportWorkerAlive === null
+                  ? 'border-zinc-600/50 bg-zinc-900/50 text-zinc-400 light:border-slate-300 light:bg-slate-100 light:text-slate-600'
+                  : exportWorkerAlive > 0
+                    ? 'border-emerald-500/35 bg-emerald-950/25 text-emerald-300/95 light:border-emerald-600/30 light:bg-emerald-50 light:text-emerald-800'
+                    : 'border-red-500/40 bg-red-950/25 text-red-200/95 light:border-red-300 light:bg-red-50 light:text-red-800'
+              }`}
+              title={
+                exportWorkerStatusErr
+                  ? '无法连接服务器获取导出 Worker 状态'
+                  : exportWorkerAlive === null
+                    ? '正在检测导出 Worker 状态'
+                    : exportWorkerAlive > 0
+                      ? '有在线导出 Worker，视频导出任务可排队处理'
+                      : '当前无在线导出 Worker，视频将无法导出'
+              }
+            >
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full ${
+                  exportWorkerStatusErr || exportWorkerAlive === null
+                    ? 'bg-zinc-500 light:bg-slate-400'
+                    : exportWorkerAlive > 0
+                      ? 'bg-emerald-400 light:bg-emerald-500'
+                      : 'bg-red-400 light:bg-red-500'
+                }`}
+                aria-hidden
+              />
+              <span>
+                {exportWorkerStatusErr
+                  ? 'Worker 状态未知'
+                  : exportWorkerAlive === null
+                    ? '正在检测 Worker状态…'
+                    : exportWorkerAlive > 0
+                      ? `有 ${exportWorkerAlive} 个在线 Worker`
+                      : '无在线 Worker（无法导出视频）'}
+              </span>
+            </div>
           </div>
           {currentUserId == null ? (
             <div className="rounded-2xl border border-zinc-800/80 light:border-slate-200 bg-zinc-900/40 light:bg-white px-6 py-14 text-center">

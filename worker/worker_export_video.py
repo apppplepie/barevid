@@ -71,6 +71,38 @@ def _empty_queue_log_enabled() -> bool:
     return raw in ("1", "true", "yes", "on")
 
 
+def _worker_slot_ids(worker_id_base: str, concurrency: int) -> list[str]:
+    base = (worker_id_base or "worker1").strip() or "worker1"
+    if concurrency <= 1:
+        return [base]
+    return [f"{base}-{i + 1}" for i in range(concurrency)]
+
+
+def _heartbeat_once(base: str, headers: dict[str, str], slot_ids: list[str]) -> None:
+    for wid in slot_ids:
+        try:
+            httpx.post(
+                f"{base}/internal/worker/heartbeat",
+                headers=headers,
+                params={"worker_id": wid},
+                timeout=30.0,
+            ).raise_for_status()
+        except httpx.HTTPError:
+            pass
+
+
+def _heartbeat_loop(
+    base: str,
+    headers: dict[str, str],
+    slot_ids: list[str],
+    interval: float,
+    stop: threading.Event,
+) -> None:
+    while not stop.is_set():
+        _heartbeat_once(base, headers, slot_ids)
+        _sleep_poll(interval, stop)
+
+
 def _sleep_poll(seconds: float, stop: threading.Event) -> None:
     end = time.monotonic() + max(0.0, seconds)
     while time.monotonic() < end:
@@ -415,6 +447,24 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     stop = threading.Event()
+    slot_ids = _worker_slot_ids(args.worker_id, args.concurrency)
+    hb_sec = _env_float(
+        "SLIDEFORGE_WORKER_HEARTBEAT_SECONDS", default=60.0, minimum=0.0
+    )
+    if hb_sec > 0:
+        hb_thread = threading.Thread(
+            target=_heartbeat_loop,
+            args=(base, headers, slot_ids, hb_sec, stop),
+            name="slideforge-worker-heartbeat",
+            daemon=True,
+        )
+        hb_thread.start()
+        print(
+            f"heartbeat every {hb_sec:.0f}s for: {', '.join(slot_ids)} "
+            f"(set SLIDEFORGE_WORKER_HEARTBEAT_SECONDS=0 to disable)",
+            flush=True,
+        )
+
     threads: list[threading.Thread] = []
     for slot in range(args.concurrency):
         thread = threading.Thread(

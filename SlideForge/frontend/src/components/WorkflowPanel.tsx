@@ -721,9 +721,24 @@ export function WorkflowPanel({
                 const nodeTo = steps.find((s) => s.id === to);
                 if (!nodeFrom || !nodeTo) return null;
                 const fromDone = nodeFrom.state === 'success';
-                const toActive = nodeTo.state === 'running' || nodeTo.state === 'success';
-                const isActive = fromDone && toActive;
-                const isFlowing = fromDone && nodeTo.state === 'running';
+                const toState = nodeTo.state;
+                const toDepsReady = workflowStepDependenciesSatisfied(
+                  nodeTo.id,
+                  steps,
+                  manualBlocked,
+                );
+                /** 指向「制作前沿」：进行中 / 等待操作 / 前置已齐的 pending（与卡片可点开始一致） */
+                const toIsPipelineFrontier =
+                  toState === 'running' ||
+                  toState === 'waiting' ||
+                  (toState === 'pending' && toDepsReady);
+                const isCompletedEdge = fromDone && toState === 'success';
+                const isProgressEdge =
+                  fromDone &&
+                  toState !== 'success' &&
+                  toState !== 'error' &&
+                  toState !== 'cancelled' &&
+                  toIsPipelineFrontier;
                 const edgeInRevertImpact =
                   revertImpactIds != null &&
                   revertImpactIds.has(from) &&
@@ -749,19 +764,24 @@ export function WorkflowPanel({
                         strokeLinecap="round"
                         opacity={0.95}
                       />
-                    ) : isActive ? (
-                      <path
-                        d={pathD}
-                        fill="none"
-                        className={
-                          isFlowing
-                            ? 'stroke-blue-500 light:stroke-blue-600 animate-flow'
-                            : 'stroke-emerald-500 light:stroke-emerald-600'
-                        }
-                        strokeWidth="0.6"
-                        strokeDasharray={isFlowing ? '4 4' : 'none'}
-                      />
-                    ) : null}
+                    ) : (
+                      <>
+                        {isProgressEdge ? (
+                          <path
+                            d={pathD}
+                            className="sf-workflow-edge-progress"
+                            strokeWidth="0.62"
+                          />
+                        ) : null}
+                        {isCompletedEdge ? (
+                          <path
+                            d={pathD}
+                            className="sf-workflow-edge-done"
+                            strokeWidth="0.55"
+                          />
+                        ) : null}
+                      </>
+                    )}
                   </g>
                 );
               })}
