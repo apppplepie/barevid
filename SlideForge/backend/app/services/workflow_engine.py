@@ -420,6 +420,7 @@ async def on_deck_pages_aggregate(
     *,
     failed_message: str | None = None,
     deck_user_cancelled: bool = False,
+    deck_generating: bool = False,
 ) -> None:
     """根据所有 page 的 deck 聚合结果更新 deck_render。"""
     project = await session.get(Project, project_id)
@@ -453,7 +454,7 @@ async def on_deck_pages_aggregate(
                 STEP_CANCELLED,
                 error_message=failed_message or "用户取消场景生成",
             )
-    else:
+    elif deck_generating:
         st = steps.get(STEP_DECK_RENDER)
         if st and st.status in (STEP_PENDING, STEP_READY):
             await set_step(session, project, STEP_DECK_RENDER, STEP_RUNNING)

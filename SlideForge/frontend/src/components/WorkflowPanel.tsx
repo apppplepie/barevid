@@ -23,6 +23,8 @@ import {
 
 type WorkflowPanelProps = {
   steps: WorkflowStep[];
+  /** 判断「回退准备态」是否应取消：须以服务端推导的 steps 为准，勿用含乐观 running 的 `steps` */
+  revertGuardSteps?: WorkflowStep[] | null;
   pipelineAutoAdvance?: boolean;
   manualOutlineConfirmed?: boolean;
   deckMasterSourceProjectId?: number | null;
@@ -178,8 +180,9 @@ function dependencyIds(step: WorkflowStep, steps: WorkflowStep[]): string[] {
 function dependenciesSatisfied(
   step: WorkflowStep,
   steps: WorkflowStep[],
+  manualBlocked: boolean,
 ): boolean {
-  return workflowStepDependenciesSatisfied(step.id, steps, false);
+  return workflowStepDependenciesSatisfied(step.id, steps, manualBlocked);
 }
 
 function recommendedActionText(
@@ -290,7 +293,7 @@ function PipelineNodeCard({
   const isPendingOnly = step.state === 'pending';
   const isError = step.state === 'error';
   const isCancelled = step.state === 'cancelled';
-  const depsOk = dependenciesSatisfied(step, steps);
+  const depsOk = dependenciesSatisfied(step, steps, manualBlocked);
   const canTryStart =
     (isPendingOnly || isWaiting) && depsOk;
   const isRetrying = retryingStepId === step.id;
@@ -601,6 +604,7 @@ function PipelineNodeCard({
 
 export function WorkflowPanel({
   steps,
+  revertGuardSteps = null,
   pipelineAutoAdvance = true,
   manualOutlineConfirmed = true,
   deckMasterSourceProjectId = null,
@@ -622,9 +626,10 @@ export function WorkflowPanel({
 
   useEffect(() => {
     if (!revertPrepStepId) return;
-    const src = steps.find((s) => s.id === revertPrepStepId);
+    const guard = revertGuardSteps ?? steps;
+    const src = guard.find((s) => s.id === revertPrepStepId);
     if (!src || src.state !== 'success') setRevertPrepStepId(null);
-  }, [steps, revertPrepStepId]);
+  }, [steps, revertGuardSteps, revertPrepStepId]);
 
   useEffect(() => {
     if (!revertPrepStepId) return;

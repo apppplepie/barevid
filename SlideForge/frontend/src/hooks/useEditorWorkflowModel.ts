@@ -22,6 +22,8 @@ type UseEditorWorkflowModelArgs = {
   currentProject?: Project;
   headerTextStructureKickoffPending: boolean;
   headerAudioRegenPending: boolean;
+  /** 点击启动场景页生成后、服务端尚未标 running 前，顶栏仅标进行中 */
+  headerDeckPagesKickoffPending: boolean;
   headerDeckRegenPending: boolean;
   headerExportStaleAfterRegen: boolean;
   exportFailed: boolean;
@@ -41,6 +43,7 @@ export function useEditorWorkflowModel({
   currentProject,
   headerTextStructureKickoffPending,
   headerAudioRegenPending,
+  headerDeckPagesKickoffPending,
   headerDeckRegenPending,
   headerExportStaleAfterRegen,
   exportFailed,
@@ -101,6 +104,10 @@ export function useEditorWorkflowModel({
         currentView === 'editor' &&
         Boolean(currentProject),
       audio: headerAudioRegenPending,
+      deck:
+        headerDeckPagesKickoffPending &&
+        currentView === 'editor' &&
+        Boolean(currentProject),
     });
     if (exportFailed) {
       base = base.map((s) =>
@@ -137,6 +144,7 @@ export function useEditorWorkflowModel({
     exportFailed,
     exportSubmitting,
     headerAudioRegenPending,
+    headerDeckPagesKickoffPending,
     headerDeckRegenPending,
     headerExportStaleAfterRegen,
     headerTextStructureKickoffPending,

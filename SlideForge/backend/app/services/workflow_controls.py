@@ -7,11 +7,19 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.models import Project, WorkflowExportRun, WorkflowStepRun, utc_now
 from app.services import workflow_engine as wf
-from app.services.deck import cancel_generating_deck_pages
+from app.services.deck import (
+    cancel_generating_deck_pages,
+    invalidate_all_page_decks_after_master_change,
+)
 from app.services.pipeline import clear_project_outline_nodes
 from app.services.workflow_state import reset_export_only
 
 _EXPORT = "export"
+
+
+def _switch_to_manual_after_reopen(project: Project) -> None:
+    """回退已完成步骤或取消运行中步骤后改为手动推进；自动模式仅在创建后、首次此类操作前有效。"""
+    project.pipeline_auto_advance = False
 
 
 async def _steps_map(session: AsyncSession, workflow_run_id: int) -> dict[str, WorkflowStepRun]:
@@ -28,6 +36,26 @@ async def _export_row(session: AsyncSession, workflow_run_id: int) -> WorkflowEx
         )
     )
     return r.first()
+
+
+async def _reopen_step_as(
+    session: AsyncSession, workflow_run_id: int, step_key: str, status: str
+) -> None:
+    """回退某步时清掉旧执行痕迹，并恢复为 ready/pending。"""
+    steps = await _steps_map(session, workflow_run_id)
+    row = steps.get(step_key)
+    if row is None:
+        return
+    now = utc_now()
+    row.status = status
+    row.error_message = None
+    row.output_snapshot = None
+    row.started_at = None
+    row.finished_at = None
+    row.cancelled_at = None
+    row.ready_at = now if status == wf.STEP_READY else None
+    row.updated_at = now
+    session.add(row)
 
 
 async def _invalidate_export_after_pipeline_step_cancel(
@@ -56,6 +84,9 @@ async def cancel_running_workflow_step(
             await wf.set_export_status(
                 session, project, wf.EXPORT_FAILED, error_message="用户取消"
             )
+            _switch_to_manual_after_reopen(project)
+            project.updated_at = utc_now()
+            session.add(project)
         return
 
     steps = await _steps_map(session, wid)
@@ -95,6 +126,7 @@ async def cancel_running_workflow_step(
             if tr is not None and tr.status == wf.STEP_SUCCEEDED
             else "draft"
         )
+    _switch_to_manual_after_reopen(project)
     project.updated_at = utc_now()
     session.add(project)
 
@@ -111,6 +143,7 @@ async def reopen_success_workflow_step(
     if step_key == _EXPORT:
         await reset_export_only(session, project)
         await wf.set_export_status(session, project, wf.EXPORT_NOT_EXPORTED)
+        _switch_to_manual_after_reopen(project)
         project.updated_at = utc_now()
         session.add(project)
         return
@@ -119,35 +152,45 @@ async def reopen_success_workflow_step(
         if project.id is None:
             return
         await clear_project_outline_nodes(session, int(project.id))
-        await wf.set_step(session, project, wf.STEP_TEXT, wf.STEP_PENDING)
+        await _reopen_step_as(session, wid, wf.STEP_TEXT, wf.STEP_READY)
         await wf.reset_downstream_for_text_retry(session, project)
         project.status = "draft"
+        _switch_to_manual_after_reopen(project)
         project.updated_at = utc_now()
         session.add(project)
         return
 
     if step_key == wf.STEP_AUDIO:
-        await wf.set_step(session, project, wf.STEP_AUDIO, wf.STEP_PENDING)
-        await wf.set_step(session, project, wf.STEP_DECK_RENDER, wf.STEP_PENDING)
+        await _reopen_step_as(session, wid, wf.STEP_AUDIO, wf.STEP_READY)
+        await _reopen_step_as(session, wid, wf.STEP_DECK_RENDER, wf.STEP_PENDING)
         await reset_export_only(session, project)
         await wf.set_export_status(session, project, wf.EXPORT_NOT_EXPORTED)
+        _switch_to_manual_after_reopen(project)
         project.updated_at = utc_now()
         session.add(project)
         return
 
     if step_key == wf.STEP_DECK_MASTER:
-        await wf.set_step(session, project, wf.STEP_DECK_MASTER, wf.STEP_PENDING)
-        await wf.set_step(session, project, wf.STEP_DECK_RENDER, wf.STEP_PENDING)
+        if project.id is None:
+            return
+        await invalidate_all_page_decks_after_master_change(session, int(project.id))
+        await _reopen_step_as(session, wid, wf.STEP_DECK_MASTER, wf.STEP_READY)
+        await _reopen_step_as(session, wid, wf.STEP_DECK_RENDER, wf.STEP_PENDING)
         await reset_export_only(session, project)
         await wf.set_export_status(session, project, wf.EXPORT_NOT_EXPORTED)
+        _switch_to_manual_after_reopen(project)
         project.updated_at = utc_now()
         session.add(project)
         return
 
     if step_key == wf.STEP_DECK_RENDER:
-        await wf.set_step(session, project, wf.STEP_DECK_RENDER, wf.STEP_PENDING)
+        if project.id is None:
+            return
+        await invalidate_all_page_decks_after_master_change(session, int(project.id))
+        await _reopen_step_as(session, wid, wf.STEP_DECK_RENDER, wf.STEP_READY)
         await reset_export_only(session, project)
         await wf.set_export_status(session, project, wf.EXPORT_NOT_EXPORTED)
+        _switch_to_manual_after_reopen(project)
         project.updated_at = utc_now()
         session.add(project)
         return

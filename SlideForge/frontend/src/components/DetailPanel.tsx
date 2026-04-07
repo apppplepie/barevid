@@ -202,11 +202,11 @@ function AudioDetails({
   }, [projectId, clip.id, playback?.steps, onAudioResynthSuccess, onNotify]);
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, x: -20 }} 
-      animate={{ opacity: 1, x: 0 }} 
-      exit={{ opacity: 0, x: 20 }} 
-      transition={{ duration: 0.2 }}
+    <motion.div
+      initial={false}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 12 }}
+      transition={{ duration: 0.15 }}
       className="absolute inset-0 flex min-h-0 min-w-0 flex-col gap-6 overflow-hidden p-4"
     >
       <div className="flex shrink-0 min-w-0 items-center gap-2">
@@ -387,11 +387,11 @@ function PageDetails({
   ]);
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, x: -20 }} 
-      animate={{ opacity: 1, x: 0 }} 
-      exit={{ opacity: 0, x: 20 }} 
-      transition={{ duration: 0.2 }}
+    <motion.div
+      initial={false}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 12 }}
+      transition={{ duration: 0.15 }}
       className="absolute inset-0 flex min-w-0 flex-col gap-6 overflow-y-auto p-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
     >
       <div className="flex shrink-0 min-w-0 items-center gap-2">

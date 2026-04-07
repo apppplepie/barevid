@@ -529,6 +529,7 @@ async def sync_demo_workflow_from_deck(session: AsyncSession, project_id: int) -
     pl = await compute_project_pipeline(session, project)
     deck_done = bool(pl.get("deck"))
     ds = await compute_project_deck_status(session, project_id)
+    deck_generating = ds == "generating"
     any_failed = ds == "failed"
     deck_user_cancelled = ds == "cancelled"
     failed_msg: str | None = None
@@ -549,6 +550,7 @@ async def sync_demo_workflow_from_deck(session: AsyncSession, project_id: int) -
             any_failed,
             failed_message=failed_msg,
             deck_user_cancelled=deck_user_cancelled,
+            deck_generating=deck_generating,
         )
         # projects.status 仅作 UI 辅助：失败则置 failed；成功则置 ready。
         if any_failed:

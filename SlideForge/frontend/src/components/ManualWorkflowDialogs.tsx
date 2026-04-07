@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { LayoutGrid, LayoutTemplate, Loader2, Sparkles, X } from 'lucide-react';
 import { ApiError, apiFetch } from '../api';
 import { TtsVoiceSelect } from './TtsVoiceSelect';
@@ -6,7 +6,10 @@ import {
   TTS_VOICE_PRESETS_FALLBACK,
   mergeTtsVoicePresetsFromServer,
 } from '../utils/ttsVoicePresets';
-import { type OutlineNodeApi, outlineToPages } from '../utils/outlineScriptPages';
+import {
+  type OutlineNodeApi,
+  outlineToPages,
+} from '../utils/outlineScriptPages';
 
 type ProjectDetailForManual = {
   project: {
@@ -14,12 +17,9 @@ type ProjectDetailForManual = {
     text_structure_mode?: string | null;
     deck_style_user_hint?: string | null;
     tts_voice_type?: string | null;
+    deck_style_prompt_text?: string | null;
   };
   outline: OutlineNodeApi[];
-};
-
-type ProjectDetailForDeckPages = {
-  project: { deck_style_prompt_text?: string | null };
 };
 
 export function ManualTextPrepDialog(props: {
@@ -38,6 +38,8 @@ export function ManualTextPrepDialog(props: {
   const [mode, setMode] = useState<'polish' | 'verbatim_split'>(initialMode);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  /** 打开时用 GET 详情拉 input_prompt；列表接口不带正文，父级往往几秒后才合并到 currentProject */
+  const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -45,6 +47,29 @@ export function ManualTextPrepDialog(props: {
     setMode(initialMode);
     setErr(null);
   }, [open, initialRaw, initialMode]);
+
+  useEffect(() => {
+    if (!open || !Number.isFinite(projectId) || projectId <= 0) return;
+    let cancelled = false;
+    setDetailLoading(true);
+    void apiFetch<ProjectDetailForManual>(`/api/projects/${projectId}`)
+      .then((d) => {
+        if (cancelled) return;
+        const ip = d.project?.input_prompt;
+        if (ip != null) setRaw(String(ip));
+        const tsm = (d.project?.text_structure_mode || '').trim().toLowerCase();
+        setMode(tsm === 'verbatim_split' ? 'verbatim_split' : 'polish');
+      })
+      .catch((e) => {
+        if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, projectId]);
 
   if (!open) return null;
 
@@ -103,17 +128,25 @@ export function ManualTextPrepDialog(props: {
           <p className="text-xs sf-text-muted leading-relaxed">
             可编辑下方原文。选择「AI 整理口播」会按播客风格改写；「仅分段」则尽量保留原文用字，只做标题、分段与概括（仍由模型切块，需人工在下一步核对）。
           </p>
-          <textarea
-            value={raw}
-            onChange={(e) => setRaw(e.target.value)}
-            disabled={busy}
-            rows={12}
-            className="sf-input-control w-full resize-y rounded-xl border px-3 py-2.5 text-sm placeholder:opacity-80"
-          />
+          <div className="relative">
+            {detailLoading && !raw.trim() ? (
+              <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--sf-border-base)] bg-[var(--sf-surface-elevated)]/80 py-16 text-sm sf-text-secondary">
+                <Loader2 className="h-8 w-8 animate-spin text-violet-400" aria-hidden />
+                <span>正在加载主题原文…</span>
+              </div>
+            ) : null}
+            <textarea
+              value={raw}
+              onChange={(e) => setRaw(e.target.value)}
+              disabled={busy || detailLoading}
+              rows={12}
+              className="sf-input-control w-full resize-y rounded-xl border px-3 py-2.5 text-sm placeholder:opacity-80 disabled:opacity-60"
+            />
+          </div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || detailLoading}
               onClick={() => setMode('polish')}
               className={`rounded-xl border px-3 py-2 text-sm font-medium ${
                 mode === 'polish'
@@ -125,7 +158,7 @@ export function ManualTextPrepDialog(props: {
             </button>
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || detailLoading}
               onClick={() => setMode('verbatim_split')}
               className={`rounded-xl border px-3 py-2 text-sm font-medium ${
                 mode === 'verbatim_split'
@@ -153,7 +186,7 @@ export function ManualTextPrepDialog(props: {
           </button>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || detailLoading}
             onClick={() => void submit()}
             className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
           >
@@ -209,6 +242,9 @@ function validateManualOutlinePages(
 export function ManualOutlineConfirmDialog(props: {
   open: boolean;
   projectId: number;
+  /** 来自父级已同步的 GET /api/projects/:id outline，有则打开即展示，无需再等请求 */
+  initialOutline?: OutlineNodeApi[] | null;
+  initialTtsVoiceType?: string | null;
   onClose: () => void;
   /** 口播分段已写入库后刷新（早于配音接口返回） */
   onConfirmed: () => void;
@@ -222,6 +258,8 @@ export function ManualOutlineConfirmDialog(props: {
   const {
     open,
     projectId,
+    initialOutline = null,
+    initialTtsVoiceType = null,
     onClose,
     onConfirmed,
     onAudioChainComplete,
@@ -237,18 +275,35 @@ export function ManualOutlineConfirmDialog(props: {
   >([]);
   const [voicePresetsLoading, setVoicePresetsLoading] = useState(false);
   const [selectedTtsVoice, setSelectedTtsVoice] = useState('');
+  const initialOutlineRef = useRef(initialOutline);
+  const initialTtsRef = useRef(initialTtsVoiceType);
+  initialOutlineRef.current = initialOutline;
+  initialTtsRef.current = initialTtsVoiceType;
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setLoading(true);
     setErr(null);
+    const vt0 = (initialTtsRef.current ?? '').trim();
+    setSelectedTtsVoice(vt0);
+    const seed = outlineToPages(initialOutlineRef.current ?? []);
+    if (seed.length > 0) {
+      setPages(seed);
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+    setPages([]);
+    setLoading(true);
     void apiFetch<ProjectDetailForManual>(`/api/projects/${projectId}`)
       .then((d) => {
         if (cancelled) return;
         setPages(outlineToPages(d.outline || []));
         const vt = d.project?.tts_voice_type;
-        setSelectedTtsVoice(typeof vt === 'string' && vt.trim() ? vt.trim() : '');
+        setSelectedTtsVoice(
+          typeof vt === 'string' && vt.trim() ? vt.trim() : vt0,
+        );
       })
       .catch((e) => {
         if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
@@ -260,6 +315,15 @@ export function ManualOutlineConfirmDialog(props: {
       cancelled = true;
     };
   }, [open, projectId]);
+
+  useEffect(() => {
+    if (!open || !loading) return;
+    const seed = outlineToPages(initialOutline ?? []);
+    if (seed.length === 0) return;
+    setPages(seed);
+    setSelectedTtsVoice((initialTtsVoiceType ?? '').trim());
+    setLoading(false);
+  }, [open, loading, initialOutline, initialTtsVoiceType]);
 
   useEffect(() => {
     if (!open) return;
@@ -803,7 +867,7 @@ export function ManualDeckMasterDialog(props: {
 export function ManualDeckPagesDialog(props: {
   open: boolean;
   projectId: number;
-  /** 工程详情已同步时的风格说明，打开瞬间预填，避免先空后闪 */
+  /** 父级已合并详情时的风格说明（列表接口无此字段）；弹窗打开后仍会 GET 详情拉取最新，避免空白等待 */
   initialDeckStylePromptText?: string | null;
   onClose: () => void;
   onDone: () => void;
@@ -827,25 +891,40 @@ export function ManualDeckPagesDialog(props: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [stylePromptText, setStylePromptText] = useState('');
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailErr, setDetailErr] = useState<string | null>(null);
+  const [styleDetailLoading, setStyleDetailLoading] = useState(false);
+  const initialPromptRef = useRef(initialDeckStylePromptText);
+  initialPromptRef.current = initialDeckStylePromptText;
+  const styleDirtyRef = useRef(false);
 
   useEffect(() => {
     if (!open) return;
     setErr(null);
-    setDetailErr(null);
-    // 仅在打开/切换工程时用父级已同步的文案预填；不把 initial 放进依赖，避免轮询更新工程时冲掉用户正在编辑的内容
-    setStylePromptText((initialDeckStylePromptText ?? '').trim());
-    setDetailLoading(true);
-    void apiFetch<ProjectDetailForDeckPages>(`/api/projects/${projectId}`)
-      .then((data) => {
-        setStylePromptText((data.project?.deck_style_prompt_text ?? '').trim());
+    styleDirtyRef.current = false;
+    // 父级若已合并详情则先显示；不把 initial 列入依赖，避免轮询刷新时冲掉正在编辑的内容
+    setStylePromptText((initialPromptRef.current ?? '').trim());
+  }, [open, projectId]);
+
+  useEffect(() => {
+    if (!open || !Number.isFinite(projectId) || projectId <= 0) return;
+    let cancelled = false;
+    setStyleDetailLoading(true);
+    void apiFetch<ProjectDetailForManual>(`/api/projects/${projectId}`)
+      .then((d) => {
+        if (cancelled) return;
+        if (!styleDirtyRef.current) {
+          const t = d.project?.deck_style_prompt_text;
+          setStylePromptText(t != null ? String(t).trim() : '');
+        }
       })
       .catch((e) => {
-        setDetailErr(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
       })
-      .finally(() => setDetailLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 预填只在 open/projectId 变化时采用当时的 initial
+      .finally(() => {
+        if (!cancelled) setStyleDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [open, projectId]);
 
   if (!open) return null;
@@ -919,12 +998,6 @@ export function ManualDeckPagesDialog(props: {
             <label className="flex items-center gap-2 text-sm font-medium sf-text-primary">
               <Sparkles className="h-3.5 w-3.5 text-purple-400/90 light:text-purple-600" />
               AI 风格说明（生成大页前可改）
-              {detailLoading ? (
-                <span className="inline-flex items-center gap-1 text-xs font-normal sf-text-muted">
-                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
-                  同步中
-                </span>
-              ) : null}
             </label>
             <p className="text-xs leading-relaxed sf-text-muted">
               以下内容来自风格表中的{' '}
@@ -939,30 +1012,26 @@ export function ManualDeckPagesDialog(props: {
                 风格说明正文
               </label>
               <div className="relative min-h-[14rem]">
+                {styleDetailLoading && !stylePromptText.trim() ? (
+                  <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--sf-border-base)] bg-[var(--sf-surface-elevated)]/80 py-16 text-sm sf-text-secondary">
+                    <Loader2 className="h-8 w-8 animate-spin text-violet-400" aria-hidden />
+                    <span>正在加载风格说明…</span>
+                  </div>
+                ) : null}
                 <textarea
                   id="manual-deck-pages-style-prompt"
                   rows={10}
                   value={stylePromptText}
-                  onChange={(e) => setStylePromptText(e.target.value)}
-                  disabled={busy || detailLoading || Boolean(detailErr)}
+                  onChange={(e) => {
+                    styleDirtyRef.current = true;
+                    setStylePromptText(e.target.value);
+                  }}
+                  disabled={busy || (styleDetailLoading && !stylePromptText.trim())}
                   placeholder="若母版刚生成完毕，说明会显示在此处；也可自行补充或粘贴风格要求。"
                   className="sf-input-control min-h-[14rem] w-full resize-y rounded-xl border px-3 py-2.5 text-sm leading-relaxed shadow-inner placeholder:opacity-80 focus:border-purple-500/45 focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:cursor-wait disabled:opacity-60"
                 />
-                {detailLoading ? (
-                  <div
-                    className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-[var(--sf-bg-panel)]/80 backdrop-blur-[1px] light:bg-white/75"
-                    aria-hidden
-                  >
-                    <Loader2 className="h-8 w-8 animate-spin text-purple-400/80 light:text-purple-600" />
-                  </div>
-                ) : null}
               </div>
             </div>
-            {detailErr ? (
-              <p className="text-sm text-amber-200/95 light:text-amber-900" role="alert">
-                无法加载项目详情：{detailErr}
-              </p>
-            ) : null}
             <label className="flex items-center gap-2 pt-1 text-sm font-medium sf-text-primary">
               <LayoutGrid className="h-3.5 w-3.5 text-purple-400/90 light:text-purple-600" />
               批量生成各页 HTML
@@ -993,7 +1062,7 @@ export function ManualDeckPagesDialog(props: {
           </button>
           <button
             type="button"
-            disabled={busy || detailLoading || Boolean(detailErr)}
+            disabled={busy || styleDetailLoading}
             onClick={() => void submit()}
             className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
           >

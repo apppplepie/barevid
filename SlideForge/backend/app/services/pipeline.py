@@ -573,13 +573,17 @@ async def _run_audio_and_deck_parallel(project_id: int) -> None:
 
 async def run_text_rebuild_job(project_id: int) -> None:
     """
-    清空大纲并重跑结构化 → 并行配音 + 演示。
+    清空大纲并重跑结构化。
+    自动模式：文本完成后继续并行母版 / 配音 / 演示。
+    手动模式：仅完成文本步骤，后续由用户手动触发。
     由 POST .../workflow/text/run 触发。
     """
+    auto_advance = False
     async with async_session_maker() as session:
         project = await session.get(Project, project_id)
         if project is None:
             return
+        auto_advance = bool(getattr(project, "pipeline_auto_advance", True))
         await reset_downstream_after_text_retry(session, project)
         await clear_project_outline_nodes(session, project_id)
         await mark_text_running(session, project)
@@ -589,14 +593,17 @@ async def run_text_rebuild_job(project_id: int) -> None:
         await session.commit()
 
     structured: StructuredPodcast | None = None
-    deck_master_task = asyncio.create_task(
-        _run_deck_master_entry_parallel(project_id)
+    deck_master_task = (
+        asyncio.create_task(_run_deck_master_entry_parallel(project_id))
+        if auto_advance
+        else None
     )
     try:
         async with async_session_maker() as session:
             project = await session.get(Project, project_id)
             if project is None or project.status != "structuring":
-                await deck_master_task
+                if deck_master_task is not None:
+                    await deck_master_task
                 return
             raw = (project.input_prompt or "").strip()
             if not raw:
@@ -610,11 +617,12 @@ async def run_text_rebuild_job(project_id: int) -> None:
         async with async_session_maker() as session:
             project = await session.get(Project, project_id)
             if project is None or project.status != "structuring":
-                await deck_master_task
+                if deck_master_task is not None:
+                    await deck_master_task
                 return
             assert structured is not None
             await _persist_structured_outline(
-                session, project, structured, advance_parallel=True
+                session, project, structured, advance_parallel=auto_advance
             )
     except Exception:
         async with async_session_maker() as session:
@@ -624,11 +632,13 @@ async def run_text_rebuild_job(project_id: int) -> None:
                 p.status = "failed"
                 session.add(p)
                 await session.commit()
-        await deck_master_task
+        if deck_master_task is not None:
+            await deck_master_task
         return
 
-    await deck_master_task
-    await _run_audio_and_deck_parallel(project_id)
+    if deck_master_task is not None:
+        await deck_master_task
+        await _run_audio_and_deck_parallel(project_id)
 
 
 async def run_queued_project_pipeline_job(project_id: int) -> None:

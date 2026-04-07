@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Play,
   Pause,
+  Clock,
 } from 'lucide-react';
 import { WorkflowStep } from './WorkflowProgressBar';
 
@@ -219,6 +220,9 @@ export function MainWorkspace({
   if (showInitialPipelineGate) {
     const isError = activeGateStep.state === 'error';
     const isCancelled = activeGateStep.state === 'cancelled';
+    const isRunning = activeGateStep.state === 'running';
+    const needsUserAction =
+      activeGateStep.state === 'waiting' || activeGateStep.state === 'pending';
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center bg-zinc-950 light:bg-slate-50 relative">
         <div className="flex flex-col items-center gap-4">
@@ -232,8 +236,14 @@ export function MainWorkspace({
                 —
               </span>
             </div>
+          ) : isRunning ? (
+            <Loader2 className="w-8 h-8 animate-spin text-blue-500" aria-hidden />
+          ) : needsUserAction ? (
+            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-cyan-500/35 bg-cyan-500/10">
+              <Clock className="h-7 w-7 text-cyan-400 light:text-cyan-700" strokeWidth={2} aria-hidden />
+            </div>
           ) : (
-            <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+            <Loader2 className="w-8 h-8 animate-spin text-blue-500" aria-hidden />
           )}
           <div className="text-center">
             <h3 className="text-lg font-medium text-zinc-200 light:text-slate-800">
@@ -241,14 +251,22 @@ export function MainWorkspace({
                 ? `${activeGateStep.label} 出错`
                 : isCancelled
                   ? `${activeGateStep.label} 已取消`
-                  : `正在处理：${activeGateStep.label}…`}
+                  : isRunning
+                    ? `正在处理：${activeGateStep.label}…`
+                    : needsUserAction
+                      ? `等待操作：${activeGateStep.label}`
+                      : `正在处理：${activeGateStep.label}…`}
             </h3>
-            <p className="text-sm text-zinc-500 light:text-slate-500 mt-1">
+            <p className="text-sm text-zinc-500 light:text-slate-500 mt-1 max-w-sm">
               {isError
                 ? '可在顶部进度条该步骤上点击重试。'
                 : isCancelled
                   ? '可在顶部进度条该步骤上点击重新开始。'
-                  : '可能需要一点时间。'}
+                  : isRunning
+                    ? '后台任务进行中，请稍候。'
+                    : needsUserAction
+                      ? '请在顶部制作进度条或「制作流程」面板中点击该步骤开始（手动流程不会自动执行）。'
+                      : '可能需要一点时间。'}
             </p>
           </div>
         </div>

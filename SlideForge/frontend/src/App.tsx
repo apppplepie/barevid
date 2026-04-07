@@ -14,9 +14,13 @@ import { EditorRightSidebar } from './components/EditorRightSidebar';
 import { Home, Project, type CreateProjectInput } from './components/Home';
 import { ClipData, PageData } from './types';
 import { type ServerWorkflow } from './utils/workflowFromPipeline';
-import { buildWorkflowStepsForProject } from './utils/workflowProject';
+import {
+  buildWorkflowStepsForProject,
+  mergeProjectWorkflowState,
+} from './utils/workflowProject';
 import { useEditorWorkflowModel } from './hooks/useEditorWorkflowModel';
 import { WorkflowPanel } from './components/WorkflowPanel';
+import type { WorkflowStep } from './components/WorkflowProgressBar';
 import {
   CancelRunningPipelineStepDialog,
   ReopenSuccessPipelineStepDialog,
@@ -36,6 +40,7 @@ import {
 } from './data/playManifest';
 import { useStepPlayer } from './hooks/useStepPlayer';
 import { findClipAtTime } from './utils/timelineHit';
+import type { OutlineNodeApi } from './utils/outlineScriptPages';
 
 function parsePageNodeIdFromPageId(pageId?: string | null): number {
   const pm = /^page-(\d+)$/.exec((pageId || '').trim());
@@ -114,6 +119,8 @@ type ProjectDetailApi = {
   pipeline: { outline: boolean; audio: boolean; deck: boolean; video: boolean };
   workflow?: ServerWorkflow | null;
   video_export_job?: unknown;
+  /** 与后端 GET /api/projects/:id 顶层 outline 一致 */
+  outline?: OutlineNodeApi[] | null;
   project: {
     id: number;
     name: string;
@@ -124,6 +131,8 @@ type ProjectDetailApi = {
     input_prompt?: string | null;
     deck_style_user_hint?: string | null;
     deck_style_prompt_text?: string | null;
+    tts_voice_type?: string | null;
+    pipeline_auto_advance?: boolean;
   };
 };
 
@@ -137,6 +146,13 @@ function mergeProjectFromDetailApi(p: Project, data: ProjectDetailApi): Project 
   const ds = data.project.deck_status || 'idle';
   const wf = data.workflow ?? null;
   const vej = mapVideoExportJob(data.video_export_job);
+  const outlineNodes =
+    data.outline != null && Array.isArray(data.outline) ? data.outline : p.outlineNodes;
+  const ttsVt = data.project.tts_voice_type;
+  const nextPipelineAutoAdvance =
+    typeof data.project.pipeline_auto_advance === 'boolean'
+      ? data.project.pipeline_auto_advance
+      : p.pipelineAutoAdvance !== false;
   return {
     ...p,
     name: data.project.name,
@@ -145,6 +161,11 @@ function mergeProjectFromDetailApi(p: Project, data: ProjectDetailApi): Project 
     pipeline: pl,
     serverWorkflow: wf,
     videoExportJob: vej,
+    outlineNodes: outlineNodes ?? null,
+    ttsVoiceType:
+      ttsVt != null
+        ? String(ttsVt).trim() || null
+        : p.ttsVoiceType,
     screenSize: (data.project.deck_page_size || p.screenSize || '16:9').trim() || '16:9',
     style:
       DECK_STYLE_DISPLAY[
@@ -155,6 +176,7 @@ function mergeProjectFromDetailApi(p: Project, data: ProjectDetailApi): Project 
     workflowSteps: buildWorkflowStepsForProject({
       ...p,
       pipeline: pl,
+      pipelineAutoAdvance: nextPipelineAutoAdvance,
       serverStatus: data.project.status,
       deckStatus: ds,
       serverWorkflow: wf,
@@ -175,6 +197,7 @@ function mergeProjectFromDetailApi(p: Project, data: ProjectDetailApi): Project 
       const raw = (data.project.deck_style_preset || p.deckStylePreset || 'aurora_glass').trim();
       return raw || 'aurora_glass';
     })(),
+    pipelineAutoAdvance: nextPipelineAutoAdvance,
   };
 }
 
@@ -414,6 +437,12 @@ export default function App() {
     [projects, currentProjectId],
   );
   const [headerTextKickoffPending, setHeaderTextKickoffPending] = useState(false);
+  /** 点击启动场景页生成后、轮询到 running/pending 等之前，顶栏仅标进行中（不写 success） */
+  const [headerDeckPagesKickoffPending, setHeaderDeckPagesKickoffPending] =
+    useState(false);
+  const prevDeckSceneStateRef = useRef<WorkflowStep['state'] | undefined>(
+    undefined,
+  );
   /** 口播助理「按草稿重新合成」进行中，顶栏导出步可标为待处理 */
   const [headerAudioRegenPending, setHeaderAudioRegenPending] = useState(false);
   const [workflowPanelOpen, setWorkflowPanelOpen] = useState(false);
@@ -427,6 +456,7 @@ export default function App() {
     currentProject,
     headerTextStructureKickoffPending: headerTextKickoffPending,
     headerAudioRegenPending,
+    headerDeckPagesKickoffPending,
     headerDeckRegenPending: deckRegenWatchActive,
     headerExportStaleAfterRegen: false,
     exportFailed,
@@ -444,12 +474,40 @@ export default function App() {
   } = workflowModel;
   const editorTimelineUnlocked = workflowModel.timelineUnlocked;
 
+  /** 仅当服务端步骤已 running/success 时收起乐观态；勿用 displayWorkflowSteps（含乐观覆盖，会立刻把 pending 清掉）。 */
   useEffect(() => {
-    const t = displayWorkflowSteps.find((s) => s.id === 'text');
+    const t = currentProject?.workflowSteps?.find((s) => s.id === 'text');
     if (t?.state === 'running' || t?.state === 'success') {
       setHeaderTextKickoffPending(false);
     }
-  }, [displayWorkflowSteps]);
+  }, [currentProject?.workflowSteps]);
+
+  useEffect(() => {
+    prevDeckSceneStateRef.current = undefined;
+    setHeaderDeckPagesKickoffPending(false);
+  }, [currentProjectId]);
+
+  useEffect(() => {
+    const dr = currentProject?.workflowSteps?.find(
+      (s) => s.id === 'deck_render' || s.id === 'pages',
+    );
+    const st = dr?.state;
+    const prev = prevDeckSceneStateRef.current;
+    if (headerDeckPagesKickoffPending) {
+      if (
+        st === 'running' ||
+        st === 'pending' ||
+        st === 'waiting' ||
+        st === 'error' ||
+        st === 'cancelled'
+      ) {
+        setHeaderDeckPagesKickoffPending(false);
+      } else if (st === 'success' && prev === 'running') {
+        setHeaderDeckPagesKickoffPending(false);
+      }
+    }
+    prevDeckSceneStateRef.current = st;
+  }, [currentProject?.workflowSteps, headerDeckPagesKickoffPending]);
 
   const isDraggingSidebar = useRef(false);
   const isDraggingTimeline = useRef(false);
@@ -674,6 +732,7 @@ export default function App() {
         };
         const deckStatus = item.deck_status || 'idle';
         const wf = item.workflow ?? null;
+        const pipelineAutoAdvance = item.pipeline_auto_advance !== false;
         return {
           id: String(item.id),
           name: item.name,
@@ -689,6 +748,7 @@ export default function App() {
             serverStatus: item.status,
             deckStatus,
             serverWorkflow: wf,
+            pipelineAutoAdvance,
           }),
           author,
           isShared: item.is_shared,
@@ -697,7 +757,7 @@ export default function App() {
             item.deck_master_source_project_id,
           ),
           videoExportJob: mapVideoExportJob(item.video_export_job),
-          pipelineAutoAdvance: item.pipeline_auto_advance !== false,
+          pipelineAutoAdvance,
         };
       });
       setProjects(mapped);
@@ -1742,6 +1802,10 @@ export default function App() {
         setExportChoiceOpen(true);
         return;
       }
+      if (stepId === 'pages' || stepId === 'deck_render') {
+        openManualDialogForStep(stepId);
+        return;
+      }
       if (!currentProjectId) return;
       const pid = Number(currentProjectId);
       if (!Number.isFinite(pid)) return;
@@ -1758,6 +1822,7 @@ export default function App() {
       try {
         const jsonHeaders = { 'Content-Type': 'application/json' };
         if (stepId === 'text') {
+          setHeaderTextKickoffPending(true);
           await apiFetch(`/api/projects/${pid}/workflow/text/run`, {
             method: 'POST',
             headers: jsonHeaders,
@@ -1772,6 +1837,7 @@ export default function App() {
           });
           setEditorFlashMessage('配音任务已提交。');
         } else if (stepId === 'pages' || stepId === 'deck_render') {
+          setHeaderDeckPagesKickoffPending(true);
           await apiFetch(`/api/projects/${pid}/workflow/demo/run`, {
             method: 'POST',
             headers: jsonHeaders,
@@ -1793,6 +1859,10 @@ export default function App() {
           await fetchProjects(userId, username);
         }
       } catch (e) {
+        if (stepId === 'text') setHeaderTextKickoffPending(false);
+        if (stepId === 'pages' || stepId === 'deck_render') {
+          setHeaderDeckPagesKickoffPending(false);
+        }
         setEditorFlashMessage(e instanceof Error ? e.message : String(e));
       } finally {
         setRetryingWorkflowStepId((cur) => (cur === stepId ? null : cur));
@@ -1828,11 +1898,25 @@ export default function App() {
     setCancellingRunningWorkflowStepId(stepId);
     setEditorFlashDownloadUrl(null);
     try {
-      await apiFetch(`/api/projects/${pid}/workflow/step/cancel-running`, {
+      const cancelRes = await apiFetch<{
+        ok?: boolean;
+        pipeline_auto_advance?: boolean;
+      }>(`/api/projects/${pid}/workflow/step/cancel-running`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ step: stepId }),
       });
+      if (typeof cancelRes.pipeline_auto_advance === 'boolean') {
+        setProjects((prev) =>
+          prev.map((p) =>
+            p.id === String(pid)
+              ? mergeProjectWorkflowState(p, {
+                  pipelineAutoAdvance: cancelRes.pipeline_auto_advance,
+                })
+              : p,
+          ),
+        );
+      }
       closeConfirmDialog();
       if (stepId === 'pages' || stepId === 'deck_render') {
         clearDeckWatch();
@@ -1869,11 +1953,25 @@ export default function App() {
       if (!Number.isFinite(pid)) return;
       setReopeningWorkflowStepId(stepId);
       try {
-        await apiFetch(`/api/projects/${pid}/workflow/step/reopen-success`, {
+        const reopenRes = await apiFetch<{
+          ok?: boolean;
+          pipeline_auto_advance?: boolean;
+        }>(`/api/projects/${pid}/workflow/step/reopen-success`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ step: stepId }),
         });
+        if (typeof reopenRes.pipeline_auto_advance === 'boolean') {
+          setProjects((prev) =>
+            prev.map((p) =>
+              p.id === String(pid)
+                ? mergeProjectWorkflowState(p, {
+                    pipelineAutoAdvance: reopenRes.pipeline_auto_advance,
+                  })
+                : p,
+            ),
+          );
+        }
         setWorkflowPanelOpen(false);
         closeConfirmDialog();
         setRetryPollBoostUntil(Date.now() + 15_000);
@@ -2295,6 +2393,7 @@ export default function App() {
       {workflowPanelOpen ? (
         <WorkflowPanel
           steps={editorDisplaySteps}
+          revertGuardSteps={currentProject?.workflowSteps ?? null}
           pipelineAutoAdvance={currentProject?.pipelineAutoAdvance !== false}
           manualOutlineConfirmed={currentProject?.manualOutlineConfirmed !== false}
           deckMasterSourceProjectId={currentProject?.deckMasterSourceProjectId ?? null}
@@ -2321,6 +2420,8 @@ export default function App() {
         }
         onClose={closeManualDialog}
         onQueued={() => {
+          /** 后端写 workflow 有间隔；先乐观标为 running，直到轮询看到真实态 */
+          setHeaderTextKickoffPending(true);
           setRetryPollBoostUntil(Date.now() + 20_000);
         }}
         onConfirmHandoff={() => setWorkflowPanelOpen(false)}
@@ -2328,6 +2429,8 @@ export default function App() {
       <ManualOutlineConfirmDialog
         open={activeManualDialog === 'outline'}
         projectId={currentProjectId != null ? Number(currentProjectId) : 0}
+        initialOutline={currentProject?.outlineNodes ?? null}
+        initialTtsVoiceType={currentProject?.ttsVoiceType ?? null}
         onClose={closeManualDialog}
         onConfirmed={() => {
           if (userId !== null) void fetchProjects(userId, username);
@@ -2362,7 +2465,10 @@ export default function App() {
           if (userId !== null) void fetchProjects(userId, username);
         }}
         onConfirmHandoff={() => setWorkflowPanelOpen(false)}
-        onGenerationStarted={() => setRetryPollBoostUntil(Date.now() + 20_000)}
+        onGenerationStarted={() => {
+          setHeaderDeckPagesKickoffPending(true);
+          setRetryPollBoostUntil(Date.now() + 20_000);
+        }}
       />
       <ProjectDetailsModal
         open={projectDetailsOpen}

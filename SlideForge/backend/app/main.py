@@ -452,7 +452,7 @@ async def create_project(
     session: AsyncSession = Depends(get_session),
     me: User = Depends(get_current_user),
 ) -> dict:
-    """立即创建项目（queued），后台跑结构化 → 配音 → 演示页。"""
+    """立即创建项目：自动模式为 queued 并由后台跑全流程；手动模式为 draft，由用户在工程内触发各步。"""
     name = body.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="项目名称不能为空")
@@ -545,7 +545,7 @@ async def create_project(
         name=name,
         description=desc,
         input_prompt=raw,
-        status="queued",
+        status="queued" if auto_run else "draft",
         aspect_ratio=page_size,
         deck_width=default_w,
         deck_height=default_h,
@@ -714,7 +714,12 @@ async def workflow_step_cancel_running(
         await session.rollback()
         raise HTTPException(status_code=400, detail=str(e)) from e
     await session.refresh(project)
-    return {"ok": True}
+    return {
+        "ok": True,
+        "pipeline_auto_advance": bool(
+            getattr(project, "pipeline_auto_advance", True)
+        ),
+    }
 
 
 @app.post("/api/projects/{project_id}/workflow/step/reopen-success")
@@ -737,7 +742,12 @@ async def workflow_step_reopen_success(
         await session.rollback()
         raise HTTPException(status_code=400, detail=str(e)) from e
     await session.refresh(project)
-    return {"ok": True}
+    return {
+        "ok": True,
+        "pipeline_auto_advance": bool(
+            getattr(project, "pipeline_auto_advance", True)
+        ),
+    }
 
 
 @app.delete("/api/projects/{project_id}")
@@ -826,6 +836,7 @@ async def get_project(
             "input_prompt": project.input_prompt,
             "target_narration_seconds": project.target_narration_seconds,
             "text_structure_mode": (getattr(project, "text_structure_mode", None) or "polish"),
+            "pipeline_auto_advance": bool(getattr(project, "pipeline_auto_advance", True)),
             "tts_voice_type": (project.tts_voice_type or "").strip() or None,
             "tts_voice_effective": resolve_tts_voice_type(project.tts_voice_type),
             # "include_intro": include_intro_from_description(project.description),
@@ -1137,7 +1148,10 @@ async def workflow_run_text(
     project = await _get_accessible_project(session, project_id, int(me.id))
     if not _can_manage_project(project, int(me.id)):
         raise HTTPException(status_code=403, detail="无权限修改该项目")
-    if project.status == "queued":
+    # 仅自动流水线：queued 表示后台 run_queued_project_pipeline_job 将接管
+    if project.status == "queued" and bool(
+        getattr(project, "pipeline_auto_advance", True)
+    ):
         raise HTTPException(status_code=409, detail="文本正在生成中")
     if project.status == "structuring":
         text_st = await get_workflow_text_step_status(session, project)

@@ -37,6 +37,7 @@ import { apiFetch } from '../api';
 import { TtsVoiceSelect } from './TtsVoiceSelect';
 import type { VideoExportJobInfo } from './ExportVideoStatusDialog';
 import { APP_BRAND } from '../brand';
+import type { OutlineNodeApi } from '../utils/outlineScriptPages';
 import { projectPipelineTagTone } from '../utils/projectPipelineTagTone';
 import { SfTag } from './ui/SfTag';
 
@@ -71,7 +72,7 @@ export interface Project {
   ttsVoiceType?: string | null;
   /** 解析后的实际 voice_type（展示用） */
   ttsVoiceEffective?: string;
-  /** 后端 pipeline_auto_advance：失败一步后会变为 false */
+  /** 后端 pipeline_auto_advance：创建时可开自动；任一步「回退已完成」后服务端会置为 false */
   pipelineAutoAdvance?: boolean;
   textStructureMode?: 'polish' | 'verbatim_split';
   /** false 时需用户在表单中确认口播分段后才可配音/演示 */
@@ -84,6 +85,8 @@ export interface Project {
   deckStylePreset?: string;
   /** 详情同步：ProjectStyle.style_prompt_text，供「生成场景页」弹窗预填 */
   deckStylePromptText?: string | null;
+  /** 最近一次 GET /api/projects/:id 的 outline 树，供口播确认弹窗首屏即用 */
+  outlineNodes?: OutlineNodeApi[] | null;
 }
 
 /** 提交创建表单时传入；母版源与列表字段 deckMasterSourceProjectId 不同 */

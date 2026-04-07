@@ -102,13 +102,52 @@ export function WorkflowProgressBar({
               step.id !== 'export' &&
               isPending &&
               workflowStepDependenciesSatisfied(step.id, steps, manualBlocked);
+            /** 与下方圆钮一致：整行（含步骤名）可点，避免用户只点到文字却不触发打开手动面板 / 开始步骤 */
+            const startRowClickable =
+              canStartFromGraph ||
+              (isWaiting &&
+                Boolean(onRetryStep) &&
+                step.id !== 'export' &&
+                (step.id === 'audio' ||
+                  workflowStepDependenciesSatisfied(
+                    step.id,
+                    steps,
+                    manualBlocked,
+                  )));
 
             return (
               <div key={step.id} className="flex items-center">
                 <div className="flex min-w-0 items-center gap-1 sm:gap-1.5">
                   <div
                     role="listitem"
-                    className="flex min-w-0 items-center gap-1.5 rounded-full px-1.5 py-0.5 sm:gap-2 sm:px-2 sm:py-1"
+                    tabIndex={startRowClickable ? 0 : undefined}
+                    onClick={
+                      startRowClickable
+                        ? (e) => {
+                            if ((e.target as HTMLElement).closest('button')) return;
+                            if (retryingStepId === step.id) return;
+                            onRetryStep?.(step.id);
+                          }
+                        : undefined
+                    }
+                    onKeyDown={
+                      startRowClickable
+                        ? (e) => {
+                            if (e.key !== 'Enter' && e.key !== ' ') return;
+                            e.preventDefault();
+                            if (retryingStepId === step.id) return;
+                            onRetryStep?.(step.id);
+                          }
+                        : undefined
+                    }
+                    className={[
+                      'flex min-w-0 items-center gap-1.5 rounded-full px-1.5 py-0.5 sm:gap-2 sm:px-2 sm:py-1',
+                      startRowClickable
+                        ? 'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50'
+                        : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
                     title={`${step.label} · ${stepStateLabelZh(step.state)}`}
                   >
                     <div
