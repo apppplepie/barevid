@@ -379,9 +379,10 @@ async def ensure_style_base(project_id: int) -> str:
             return prompt_text.strip()
 
 
-async def collect_deck_page_node_ids(session: AsyncSession, project_id: int) -> list[int]:
-    """有大纲子节点（step/pause）的 page 节点 id，顺序与大纲一致。"""
-    _, children_by_parent, _ = await _load_nodes_and_contents(session, project_id)
+def deck_page_node_ids_from_loaded_tree(
+    children_by_parent: dict[int | None, list[OutlineNode]],
+) -> list[int]:
+    """有大纲子节点（step/pause）的 page 节点 id，顺序与大纲一致（与 collect_deck_page_node_ids 同规则）。"""
     roots = sorted(
         children_by_parent.get(None, []),
         key=lambda n: n.sort_order,
@@ -393,8 +394,14 @@ async def collect_deck_page_node_ids(session: AsyncSession, project_id: int) -> 
         kids = children_by_parent.get(node.id, [])
         if not kids:
             continue
-        out.append(node.id)
+        out.append(int(node.id))
     return out
+
+
+async def collect_deck_page_node_ids(session: AsyncSession, project_id: int) -> list[int]:
+    """有大纲子节点（step/pause）的 page 节点 id，顺序与大纲一致。"""
+    _, children_by_parent, _ = await _load_nodes_and_contents(session, project_id)
+    return deck_page_node_ids_from_loaded_tree(children_by_parent)
 
 
 def deck_page_is_complete(nc: NodeContent) -> bool:
@@ -430,13 +437,20 @@ async def invalidate_all_page_decks_after_master_change(
     母版或全局演示风格变更后，既有页面 HTML 与新母版不一致；
     清空各页演示产物，使 deck 步骤需重做，并失效导出状态。
     """
-    page_ids = await collect_deck_page_node_ids(session, project_id)
+    nodes, children_by_parent, content_by_node = await _load_nodes_and_contents(
+        session, project_id
+    )
+    page_ids = deck_page_node_ids_from_loaded_tree(children_by_parent)
+    nodes_by_id = {int(n.id): n for n in nodes if n.id is not None}
     now = utc_now()
     for nid in page_ids:
-        node = await session.get(OutlineNode, nid)
+        node = nodes_by_id.get(nid)
         if node is None:
             continue
-        nc = await _get_or_create_page_node_content(session, node)
+        nc = content_by_node.get(nid)
+        if nc is None:
+            nc = await _get_or_create_page_node_content(session, node)
+            content_by_node[nid] = nc
         pst = (nc.page_deck_status or "").strip().lower()
         if pst == "generating":
             nc.page_deck_status = "failed"
@@ -459,10 +473,11 @@ async def _first_failed_page_deck_error(
     session: AsyncSession, project_id: int
 ) -> str | None:
     """任一 page 节点 failed 时的首条 page_deck_error（用于项目级汇总）。"""
-    page_ids = await collect_deck_page_node_ids(session, project_id)
-    for nid in page_ids:
-        res = await session.exec(select(NodeContent).where(NodeContent.node_id == nid))
-        nc = res.first()
+    _, children_by_parent, content_by_node = await _load_nodes_and_contents(
+        session, project_id
+    )
+    for nid in deck_page_node_ids_from_loaded_tree(children_by_parent):
+        nc = content_by_node.get(nid)
         if nc is None:
             continue
         st = (nc.page_deck_status or "").strip().lower()
@@ -477,45 +492,45 @@ async def compute_project_deck_status(
     session: AsyncSession, project_id: int
 ) -> str:
     """聚合 page 节点的 deck 状态，返回 idle/generating/failed/ready。"""
-    page_ids = await collect_deck_page_node_ids(session, project_id)
+    _, children_by_parent, content_by_node = await _load_nodes_and_contents(
+        session, project_id
+    )
+    page_ids = deck_page_node_ids_from_loaded_tree(children_by_parent)
     if not page_ids:
         return "idle"
-    else:
-        states: list[str] = []
-        all_ready = True
-        now = utc_now()
-        timeout_s = max(60, int(settings.deck_page_generating_timeout_seconds or 600))
-        for nid in page_ids:
-            res = await session.exec(select(NodeContent).where(NodeContent.node_id == nid))
-            nc = res.first()
-            st = (nc.page_deck_status or "").strip().lower() if nc else ""
-            if st == "generating" and nc is not None and nc.updated_at is not None:
-                elapsed_s = (
-                    _as_utc_aware(now) - _as_utc_aware(nc.updated_at)
-                ).total_seconds()
-                if elapsed_s >= timeout_s:
-                    nc.page_deck_status = "failed"
-                    nc.page_deck_error = (
-                        f"页面生成超时（>{timeout_s}s）：请重试；若频繁出现可检查模型接口连通性/限流。"
-                    )
-                    nc.updated_at = now
-                    session.add(nc)
-                    st = "failed"
-            code = (nc.page_code or "").strip() if nc else ""
-            states.append(st)
-            if st != "ready" or not code:
-                all_ready = False
+    states: list[str] = []
+    all_ready = True
+    now = utc_now()
+    timeout_s = max(60, int(settings.deck_page_generating_timeout_seconds or 600))
+    for nid in page_ids:
+        nc = content_by_node.get(nid)
+        st = (nc.page_deck_status or "").strip().lower() if nc else ""
+        if st == "generating" and nc is not None and nc.updated_at is not None:
+            elapsed_s = (
+                _as_utc_aware(now) - _as_utc_aware(nc.updated_at)
+            ).total_seconds()
+            if elapsed_s >= timeout_s:
+                nc.page_deck_status = "failed"
+                nc.page_deck_error = (
+                    f"页面生成超时（>{timeout_s}s）：请重试；若频繁出现可检查模型接口连通性/限流。"
+                )
+                nc.updated_at = now
+                session.add(nc)
+                st = "failed"
+        code = (nc.page_code or "").strip() if nc else ""
+        states.append(st)
+        if st != "ready" or not code:
+            all_ready = False
 
-        if any(st == "generating" for st in states):
-            return "generating"
-        elif any(st == "failed" for st in states):
-            return "failed"
-        elif any(st == "cancelled" for st in states):
-            return "cancelled"
-        elif all_ready:
-            return "ready"
-        else:
-            return "idle"
+    if any(st == "generating" for st in states):
+        return "generating"
+    if any(st == "failed" for st in states):
+        return "failed"
+    if any(st == "cancelled" for st in states):
+        return "cancelled"
+    if all_ready:
+        return "ready"
+    return "idle"
 
 
 async def sync_demo_workflow_from_deck(session: AsyncSession, project_id: int) -> None:

@@ -437,6 +437,12 @@ export default function App() {
     [projects, currentProjectId],
   );
   const [headerTextKickoffPending, setHeaderTextKickoffPending] = useState(false);
+  /** 口播分段确认后、workflow 尚未标音频 running 前的乐观态 */
+  const [headerAudioWorkflowKickoffPending, setHeaderAudioWorkflowKickoffPending] =
+    useState(false);
+  /** 母版弹窗确认后、workflow 尚未标母版 running 前的乐观态 */
+  const [headerDeckMasterKickoffPending, setHeaderDeckMasterKickoffPending] =
+    useState(false);
   /** 点击启动场景页生成后、轮询到 running/pending 等之前，顶栏仅标进行中（不写 success） */
   const [headerDeckPagesKickoffPending, setHeaderDeckPagesKickoffPending] =
     useState(false);
@@ -456,6 +462,8 @@ export default function App() {
     currentProject,
     headerTextStructureKickoffPending: headerTextKickoffPending,
     headerAudioRegenPending,
+    headerAudioWorkflowKickoffPending,
+    headerDeckMasterKickoffPending,
     headerDeckPagesKickoffPending,
     headerDeckRegenPending: deckRegenWatchActive,
     headerExportStaleAfterRegen: false,
@@ -485,7 +493,23 @@ export default function App() {
   useEffect(() => {
     prevDeckSceneStateRef.current = undefined;
     setHeaderDeckPagesKickoffPending(false);
+    setHeaderAudioWorkflowKickoffPending(false);
+    setHeaderDeckMasterKickoffPending(false);
   }, [currentProjectId]);
+
+  useEffect(() => {
+    const a = currentProject?.workflowSteps?.find((s) => s.id === 'audio');
+    if (a?.state === 'running' || a?.state === 'success') {
+      setHeaderAudioWorkflowKickoffPending(false);
+    }
+  }, [currentProject?.workflowSteps]);
+
+  useEffect(() => {
+    const m = currentProject?.workflowSteps?.find((s) => s.id === 'deck_master');
+    if (m?.state === 'running' || m?.state === 'success') {
+      setHeaderDeckMasterKickoffPending(false);
+    }
+  }, [currentProject?.workflowSteps]);
 
   useEffect(() => {
     const dr = currentProject?.workflowSteps?.find(
@@ -2424,6 +2448,7 @@ export default function App() {
           setHeaderTextKickoffPending(true);
           setRetryPollBoostUntil(Date.now() + 20_000);
         }}
+        onKickoffFailed={() => setHeaderTextKickoffPending(false)}
         onConfirmHandoff={() => setWorkflowPanelOpen(false)}
       />
       <ManualOutlineConfirmDialog
@@ -2432,6 +2457,11 @@ export default function App() {
         initialOutline={currentProject?.outlineNodes ?? null}
         initialTtsVoiceType={currentProject?.ttsVoiceType ?? null}
         onClose={closeManualDialog}
+        onAudioWorkflowKickoff={() => {
+          setHeaderAudioWorkflowKickoffPending(true);
+          setRetryPollBoostUntil(Date.now() + 20_000);
+        }}
+        onAudioWorkflowKickoffFailed={() => setHeaderAudioWorkflowKickoffPending(false)}
         onConfirmed={() => {
           if (userId !== null) void fetchProjects(userId, username);
         }}
@@ -2448,11 +2478,12 @@ export default function App() {
         initialDeckStylePreset={(currentProject?.deckStylePreset ?? 'aurora_glass').trim() || 'aurora_glass'}
         initialDeckMasterSourceProjectId={currentProject?.deckMasterSourceProjectId ?? null}
         onClose={closeManualDialog}
-        onDone={() => {
-          if (userId !== null) void fetchProjects(userId, username);
+        onKickoffOptimistic={() => {
+          setHeaderDeckMasterKickoffPending(true);
+          setRetryPollBoostUntil(Date.now() + 20_000);
         }}
-        onProceedToDeckPages={() => {
-          /* 由 hook 在下一步打开 deck_pages；此处仅刷新列表 */
+        onKickoffFailed={() => setHeaderDeckMasterKickoffPending(false)}
+        onDone={() => {
           if (userId !== null) void fetchProjects(userId, username);
         }}
       />
@@ -2469,6 +2500,7 @@ export default function App() {
           setHeaderDeckPagesKickoffPending(true);
           setRetryPollBoostUntil(Date.now() + 20_000);
         }}
+        onGenerationKickoffFailed={() => setHeaderDeckPagesKickoffPending(false)}
       />
       <ProjectDetailsModal
         open={projectDetailsOpen}

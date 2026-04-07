@@ -202,13 +202,21 @@ export function deriveWorkflowSteps(
 /** 编辑内：点击后仅将对应步标为 running；成功态必须来自服务端轮询，不得在此写 success。 */
 export function applyEditorPendingToSteps(
   steps: WorkflowStep[],
-  pending: { audio?: boolean; text?: boolean; deck?: boolean },
+  pending: {
+    audio?: boolean;
+    text?: boolean;
+    deck?: boolean;
+    deckMaster?: boolean;
+  },
 ): WorkflowStep[] {
   return steps.map((s) => {
     if (pending.text && s.id === 'text') {
       return { ...s, state: 'running' as const };
     }
-    if (pending.audio && s.id === 'audio' && s.state === 'success') {
+    if (pending.audio && s.id === 'audio') {
+      return { ...s, state: 'running' as const };
+    }
+    if (pending.deckMaster && s.id === 'deck_master') {
       return { ...s, state: 'running' as const };
     }
     if (pending.deck && (s.id === 'deck_render' || s.id === 'pages')) {

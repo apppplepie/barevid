@@ -28,18 +28,37 @@ export function ManualTextPrepDialog(props: {
   initialRaw: string;
   initialMode: 'polish' | 'verbatim_split';
   onClose: () => void;
+  /** 点击确认后立刻调用（乐观标文本步为进行中）；请求失败时配合 onKickoffFailed */
   onQueued: () => void;
+  /** PATCH/排队失败时收回乐观态 */
+  onKickoffFailed?: () => void;
   /** 已确认并交由后台执行时（本弹窗不负责跑流程），用于收起工作流面板等 */
   onConfirmHandoff?: () => void;
 }) {
-  const { open, projectId, initialRaw, initialMode, onClose, onQueued, onConfirmHandoff } =
-    props;
+  const {
+    open,
+    projectId,
+    initialRaw,
+    initialMode,
+    onClose,
+    onQueued,
+    onKickoffFailed,
+    onConfirmHandoff,
+  } = props;
   const [raw, setRaw] = useState(initialRaw);
   const [mode, setMode] = useState<'polish' | 'verbatim_split'>(initialMode);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   /** 打开时用 GET 详情拉 input_prompt；列表接口不带正文，父级往往几秒后才合并到 currentProject */
   const [detailLoading, setDetailLoading] = useState(false);
+  const textKickoffInFlightRef = useRef(false);
+
+  useEffect(() => {
+    if (open) return;
+    if (!textKickoffInFlightRef.current) return;
+    textKickoffInFlightRef.current = false;
+    onKickoffFailed?.();
+  }, [open, onKickoffFailed]);
 
   useEffect(() => {
     if (!open) return;
@@ -81,6 +100,8 @@ export function ManualTextPrepDialog(props: {
     }
     setBusy(true);
     setErr(null);
+    onQueued();
+    textKickoffInFlightRef.current = true;
     try {
       await apiFetch(`/api/projects/${projectId}`, {
         method: 'PATCH',
@@ -93,10 +114,12 @@ export function ManualTextPrepDialog(props: {
         headers: { 'Content-Type': 'application/json' },
         body: '{}',
       });
+      textKickoffInFlightRef.current = false;
       onConfirmHandoff?.();
-      onQueued();
       onClose();
     } catch (e) {
+      textKickoffInFlightRef.current = false;
+      onKickoffFailed?.();
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
@@ -117,7 +140,7 @@ export function ManualTextPrepDialog(props: {
           </h2>
           <button
             type="button"
-            onClick={() => !busy && onClose()}
+            onClick={onClose}
             className="rounded-md p-2 sf-text-secondary transition-colors hover:bg-[var(--sf-chip-neutral-hover-bg)] hover:text-[var(--sf-text-primary)]"
             aria-label="关闭"
           >
@@ -246,6 +269,10 @@ export function ManualOutlineConfirmDialog(props: {
   initialOutline?: OutlineNodeApi[] | null;
   initialTtsVoiceType?: string | null;
   onClose: () => void;
+  /** 点击确认后立刻乐观标音频步为进行中 */
+  onAudioWorkflowKickoff?: () => void;
+  /** 保存分段或后续配音请求失败时收回乐观态 */
+  onAudioWorkflowKickoffFailed?: () => void;
   /** 口播分段已写入库后刷新（早于配音接口返回） */
   onConfirmed: () => void;
   /** 自动调用整稿配音接口且成功返回后（与 onConfirmed 配合） */
@@ -261,6 +288,8 @@ export function ManualOutlineConfirmDialog(props: {
     initialOutline = null,
     initialTtsVoiceType = null,
     onClose,
+    onAudioWorkflowKickoff,
+    onAudioWorkflowKickoffFailed,
     onConfirmed,
     onAudioChainComplete,
     onNextStepError,
@@ -279,6 +308,14 @@ export function ManualOutlineConfirmDialog(props: {
   const initialTtsRef = useRef(initialTtsVoiceType);
   initialOutlineRef.current = initialOutline;
   initialTtsRef.current = initialTtsVoiceType;
+  const audioKickoffInFlightRef = useRef(false);
+
+  useEffect(() => {
+    if (open) return;
+    if (!audioKickoffInFlightRef.current) return;
+    audioKickoffInFlightRef.current = false;
+    onAudioWorkflowKickoffFailed?.();
+  }, [open, onAudioWorkflowKickoffFailed]);
 
   useEffect(() => {
     if (!open) return;
@@ -361,6 +398,8 @@ export function ManualOutlineConfirmDialog(props: {
       return;
     }
     setBusy(true);
+    onAudioWorkflowKickoff?.();
+    audioKickoffInFlightRef.current = true;
     setErr(null);
     try {
       const pagesPayload = pages.map((p) => ({
@@ -385,21 +424,28 @@ export function ManualOutlineConfirmDialog(props: {
       });
       onConfirmHandoff?.();
       onConfirmed();
-      try {
-        await apiFetch(`/api/projects/${projectId}/workflow/audio/run`, {
-          method: 'POST',
-          headers: jsonPost(),
-          body: '{}',
-        });
-        onAudioChainComplete?.();
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        onNextStepError?.(`分段已保存，但自动开始配音失败：${msg}`);
-      }
+      setBusy(false);
+      audioKickoffInFlightRef.current = false;
       onClose();
+      // 配音接口可能耗时很长；先关弹窗，避免确定后长时间无法点叉关闭。
+      void (async () => {
+        try {
+          await apiFetch(`/api/projects/${projectId}/workflow/audio/run`, {
+            method: 'POST',
+            headers: jsonPost(),
+            body: '{}',
+          });
+          onAudioChainComplete?.();
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          onAudioWorkflowKickoffFailed?.();
+          onNextStepError?.(`分段已保存，但自动开始配音失败：${msg}`);
+        }
+      })();
     } catch (e) {
+      audioKickoffInFlightRef.current = false;
+      onAudioWorkflowKickoffFailed?.();
       setErr(e instanceof Error ? e.message : String(e));
-    } finally {
       setBusy(false);
     }
   };
@@ -418,7 +464,7 @@ export function ManualOutlineConfirmDialog(props: {
           </h2>
           <button
             type="button"
-            onClick={() => !busy && onClose()}
+            onClick={onClose}
             className="rounded-md p-2 sf-text-secondary transition-colors hover:bg-[var(--sf-chip-neutral-hover-bg)] hover:text-[var(--sf-text-primary)]"
             aria-label="关闭"
           >
@@ -566,10 +612,12 @@ export function ManualDeckMasterDialog(props: {
   initialDeckStylePreset: string;
   initialDeckMasterSourceProjectId: number | null;
   onClose: () => void;
+  /** 点击确认后立刻乐观标母版步为进行中 */
+  onKickoffOptimistic?: () => void;
+  /** 请求失败时收回乐观态 */
+  onKickoffFailed?: () => void;
   /** 刷新列表/工程状态 */
   onDone: () => void;
-  /** 母版已成功写入后：打开「生成场景页」弹窗（不自动启动页面生成） */
-  onProceedToDeckPages?: () => void;
 }) {
   const {
     open,
@@ -578,8 +626,9 @@ export function ManualDeckMasterDialog(props: {
     initialDeckStylePreset,
     initialDeckMasterSourceProjectId,
     onClose,
+    onKickoffOptimistic,
+    onKickoffFailed,
     onDone,
-    onProceedToDeckPages,
   } = props;
   const [deckMasterMode, setDeckMasterMode] = useState<'self' | 'reuse'>('self');
   const [selectedStyle, setSelectedStyle] = useState<string>('none');
@@ -587,6 +636,14 @@ export function ManualDeckMasterDialog(props: {
   const [deckMasterSourceRaw, setDeckMasterSourceRaw] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const deckMasterKickoffInFlightRef = useRef(false);
+
+  useEffect(() => {
+    if (open) return;
+    if (!deckMasterKickoffInFlightRef.current) return;
+    deckMasterKickoffInFlightRef.current = false;
+    onKickoffFailed?.();
+  }, [open, onKickoffFailed]);
 
   useEffect(() => {
     if (!open) return;
@@ -630,15 +687,11 @@ export function ManualDeckMasterDialog(props: {
     !copyMasterInvalid &&
     (deckMasterMode === 'self' || (!reuseMasterNeedsId && !reuseSameAsCurrent));
 
-  const finishMasterSuccess = () => {
-    // 先打开「确认风格 / 生成场景页」弹窗，再刷新列表；不在此处收起流程面板（母版与下游场景页解耦）。
-    onProceedToDeckPages?.();
-    onDone();
-  };
-
   const submit = async () => {
     if (!canSubmit) return;
     setBusy(true);
+    onKickoffOptimistic?.();
+    deckMasterKickoffInFlightRef.current = true;
     setErr(null);
     try {
       if (deckMasterMode === 'reuse') {
@@ -648,7 +701,6 @@ export function ManualDeckMasterDialog(props: {
           headers: jsonPost(),
           body: JSON.stringify({ source_project_id: srcId }),
         });
-        finishMasterSuccess();
       } else {
         const preset = selectedStyle === 'none' ? 'none' : selectedStyle;
         const hintTrim = deckStyleUserHint.trim();
@@ -664,11 +716,16 @@ export function ManualDeckMasterDialog(props: {
           headers: jsonPost(),
           body: '{}',
         });
-        finishMasterSuccess();
       }
+      // 仅刷新工程状态；不自动打开「生成场景页」弹窗（避免回退重做母版时被带到下游步骤）。
+      onDone();
+      deckMasterKickoffInFlightRef.current = false;
+      setBusy(false);
+      onClose();
     } catch (e) {
+      deckMasterKickoffInFlightRef.current = false;
+      onKickoffFailed?.();
       setErr(e instanceof Error ? e.message : String(e));
-    } finally {
       setBusy(false);
     }
   };
@@ -690,7 +747,7 @@ export function ManualDeckMasterDialog(props: {
           </h2>
           <button
             type="button"
-            onClick={() => !busy && onClose()}
+            onClick={onClose}
             className="rounded-md p-2 sf-text-secondary transition-colors hover:bg-[var(--sf-chip-neutral-hover-bg)] hover:text-[var(--sf-text-primary)]"
             aria-label="关闭"
           >
@@ -795,7 +852,7 @@ export function ManualDeckMasterDialog(props: {
             ) : (
               <>
                 <p className="text-xs sf-text-muted">
-                  从已有工程复制演示母版，不再为母版调用模型。须填写源项目的数字 ID，且该项目已有就绪母版。
+                  从已有工程引用已就绪的演示母版（与源项目共用同一条样式记录，不另存副本），不再调用模型。须填写源项目数字 ID，且源项目母版已就绪。
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-medium sf-text-secondary">源项目 ID</span>
@@ -843,7 +900,6 @@ export function ManualDeckMasterDialog(props: {
         <div className="flex justify-end gap-2 border-t border-[var(--sf-border-base)] px-4 py-3">
           <button
             type="button"
-            disabled={busy}
             onClick={onClose}
             className="rounded-xl border border-[var(--sf-border-base)] px-4 py-2 text-sm sf-text-secondary transition-colors hover:bg-[var(--sf-chip-neutral-hover-bg)] hover:text-[var(--sf-text-primary)]"
           >
@@ -875,8 +931,10 @@ export function ManualDeckPagesDialog(props: {
   onConfirmHandoff?: () => void;
   /** 后端判定各页已就绪、未新启动作业时（避免误报「已启动」） */
   onAlreadyComplete?: () => void;
-  /** 已成功启动批量场景生成后立刻调用（顶栏将场景页标为进行中，防重复点击） */
+  /** 点击确认后立刻调用（顶栏将场景页标为进行中，防重复点击） */
   onGenerationStarted?: () => void;
+  /** 保存或启动失败、或 409 无需生成时收回乐观态 */
+  onGenerationKickoffFailed?: () => void;
 }) {
   const {
     open,
@@ -887,6 +945,7 @@ export function ManualDeckPagesDialog(props: {
     onConfirmHandoff,
     onAlreadyComplete,
     onGenerationStarted,
+    onGenerationKickoffFailed,
   } = props;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -895,6 +954,14 @@ export function ManualDeckPagesDialog(props: {
   const initialPromptRef = useRef(initialDeckStylePromptText);
   initialPromptRef.current = initialDeckStylePromptText;
   const styleDirtyRef = useRef(false);
+  const deckPagesKickoffInFlightRef = useRef(false);
+
+  useEffect(() => {
+    if (open) return;
+    if (!deckPagesKickoffInFlightRef.current) return;
+    deckPagesKickoffInFlightRef.current = false;
+    onGenerationKickoffFailed?.();
+  }, [open, onGenerationKickoffFailed]);
 
   useEffect(() => {
     if (!open) return;
@@ -931,6 +998,8 @@ export function ManualDeckPagesDialog(props: {
 
   const submit = async () => {
     setBusy(true);
+    onGenerationStarted?.();
+    deckPagesKickoffInFlightRef.current = true;
     setErr(null);
     try {
       await apiFetch(`/api/projects/${projectId}/deck-style-prompt-text`, {
@@ -945,7 +1014,7 @@ export function ManualDeckPagesDialog(props: {
         headers: jsonPost(),
         body: '{}',
       });
-      onGenerationStarted?.();
+      deckPagesKickoffInFlightRef.current = false;
       onConfirmHandoff?.();
       onDone();
       onClose();
@@ -953,6 +1022,8 @@ export function ManualDeckPagesDialog(props: {
       if (e instanceof ApiError && e.status === 409) {
         const d = typeof e.detail === 'string' ? e.detail : '';
         if (d.includes('所有演示页均已生成成功') || d.includes('无需重新生成')) {
+          deckPagesKickoffInFlightRef.current = false;
+          onGenerationKickoffFailed?.();
           onConfirmHandoff?.();
           if (onAlreadyComplete) {
             onAlreadyComplete();
@@ -963,6 +1034,8 @@ export function ManualDeckPagesDialog(props: {
           return;
         }
       }
+      deckPagesKickoffInFlightRef.current = false;
+      onGenerationKickoffFailed?.();
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
@@ -986,7 +1059,7 @@ export function ManualDeckPagesDialog(props: {
           </h2>
           <button
             type="button"
-            onClick={() => !busy && onClose()}
+            onClick={onClose}
             className="rounded-md p-2 sf-text-secondary transition-colors hover:bg-[var(--sf-chip-neutral-hover-bg)] hover:text-[var(--sf-text-primary)]"
             aria-label="关闭"
           >

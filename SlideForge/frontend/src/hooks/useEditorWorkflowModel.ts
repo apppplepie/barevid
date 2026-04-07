@@ -22,6 +22,10 @@ type UseEditorWorkflowModelArgs = {
   currentProject?: Project;
   headerTextStructureKickoffPending: boolean;
   headerAudioRegenPending: boolean;
+  /** 口播分段确认后、整稿配音尚未在 workflow 中标 running 前的乐观态 */
+  headerAudioWorkflowKickoffPending: boolean;
+  /** 母版弹窗确认后、服务端尚未标 running 前的乐观态 */
+  headerDeckMasterKickoffPending: boolean;
   /** 点击启动场景页生成后、服务端尚未标 running 前，顶栏仅标进行中 */
   headerDeckPagesKickoffPending: boolean;
   headerDeckRegenPending: boolean;
@@ -43,6 +47,8 @@ export function useEditorWorkflowModel({
   currentProject,
   headerTextStructureKickoffPending,
   headerAudioRegenPending,
+  headerAudioWorkflowKickoffPending,
+  headerDeckMasterKickoffPending,
   headerDeckPagesKickoffPending,
   headerDeckRegenPending,
   headerExportStaleAfterRegen,
@@ -103,7 +109,14 @@ export function useEditorWorkflowModel({
         headerTextStructureKickoffPending &&
         currentView === 'editor' &&
         Boolean(currentProject),
-      audio: headerAudioRegenPending,
+      audio:
+        (headerAudioRegenPending || headerAudioWorkflowKickoffPending) &&
+        currentView === 'editor' &&
+        Boolean(currentProject),
+      deckMaster:
+        headerDeckMasterKickoffPending &&
+        currentView === 'editor' &&
+        Boolean(currentProject),
       deck:
         headerDeckPagesKickoffPending &&
         currentView === 'editor' &&
@@ -118,6 +131,7 @@ export function useEditorWorkflowModel({
     }
     if (
       headerAudioRegenPending ||
+      headerAudioWorkflowKickoffPending ||
       headerDeckRegenPending ||
       headerExportStaleAfterRegen
     ) {
@@ -144,6 +158,8 @@ export function useEditorWorkflowModel({
     exportFailed,
     exportSubmitting,
     headerAudioRegenPending,
+    headerAudioWorkflowKickoffPending,
+    headerDeckMasterKickoffPending,
     headerDeckPagesKickoffPending,
     headerDeckRegenPending,
     headerExportStaleAfterRegen,
@@ -187,6 +203,7 @@ export function useEditorWorkflowModel({
   const videoReady =
     Boolean(currentProject?.pipeline?.video) &&
     !headerAudioRegenPending &&
+    !headerAudioWorkflowKickoffPending &&
     !headerDeckRegenPending &&
     !headerExportStaleAfterRegen;
 
