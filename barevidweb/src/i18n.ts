@@ -54,7 +54,8 @@ const resources = {
         stat3Value: "Tweak every page",
         noVideos: "No showcase clips yet. Drop .mp4 files into public/vidsrc and run npm run vidsrc:manifest.",
         manifestError: "Could not load /vidsrc/manifest.json. Run npm run vidsrc:manifest after adding videos.",
-        loadingShowcase: "Loading showcase…"
+        loadingShowcase: "Loading showcase…",
+        clipBadge: "SHOWCASE_CLIP"
       },
       pricing: {
         openSourceProtocol: "Open Source Protocol",
@@ -165,7 +166,8 @@ const resources = {
         stat3Value: "逐页微调",
         noVideos: "暂无展示视频。把 .mp4 放进 public/vidsrc 后执行 npm run vidsrc:manifest。",
         manifestError: "无法加载 /vidsrc/manifest.json。添加视频后请执行 npm run vidsrc:manifest。",
-        loadingShowcase: "加载展示视频…"
+        loadingShowcase: "加载展示视频…",
+        clipBadge: "展示片段"
       },
       pricing: {
         openSourceProtocol: "开源协议",

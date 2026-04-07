@@ -39,6 +39,7 @@ function ratioLabelFromPixels(w: number, h: number): string {
 }
 
 function WorkCard({ work, onOpen }: { work: WorkEntry; onOpen: () => void }) {
+  const { t } = useTranslation();
   const [pixelAspect, setPixelAspect] = useState<{ w: number; h: number } | null>(null);
 
   return (
@@ -81,7 +82,7 @@ function WorkCard({ work, onOpen }: { work: WorkEntry; onOpen: () => void }) {
             <div className="min-w-0">
               <span className="font-black text-white tracking-wide text-base md:text-lg block mb-1 break-words">{work.title}</span>
               <span className="text-xs text-primary font-mono bg-primary/10 px-2 py-1 border border-primary/30">
-                {(pixelAspect ? ratioLabelFromPixels(pixelAspect.w, pixelAspect.h) : work.ratio)} • NEURAL_RENDER
+                {(pixelAspect ? ratioLabelFromPixels(pixelAspect.w, pixelAspect.h) : work.ratio)} • {t('works.clipBadge')}
               </span>
             </div>
             <span className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white backdrop-blur-md border border-white/30 group-hover:bg-primary group-hover:border-primary transition-colors">

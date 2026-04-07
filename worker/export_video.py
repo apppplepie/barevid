@@ -43,6 +43,17 @@ def _ffmpeg_timeout_seconds() -> float:
     return max(30.0, value)
 
 
+def _export_done_wait_buffer_ms() -> int:
+    """等待前端写入 __SLIDEFORGE_EXPORT_DONE_AT_MS 时在「剩余时间轴」上追加的余量（毫秒）。"""
+    raw = (os.environ.get("SLIDEFORGE_EXPORT_DONE_WAIT_BUFFER_MS") or "").strip()
+    if not raw:
+        return 120_000
+    try:
+        return max(0, min(3_600_000, int(raw)))
+    except ValueError:
+        return 120_000
+
+
 def _run(cmd: list[str], *, timeout_seconds: float | None = None) -> None:
     try:
         proc = subprocess.run(cmd, check=False, timeout=timeout_seconds)
@@ -461,9 +472,12 @@ async def _record_video(
         remain_ms = max(1200, duration_ms - elapsed_since_start_ms)
         try:
             # 由前端在播放自然结束时写入 done 标记；优先按真实完成时刻收尾。
+            # 勿对 remain_ms 做固定上限（例如曾误用 min(..., 120000)）：长片会在约 2 分钟内
+            # 超时关页，画面远短于音轨，-shortest 截断音频与字幕，表现为后段口播/「下文」丢失。
+            done_timeout_ms = max(6000, remain_ms + _export_done_wait_buffer_ms())
             await page.wait_for_function(
                 "() => typeof window.__SLIDEFORGE_EXPORT_DONE_AT_MS === 'number'",
-                timeout=max(6000, min(120000, remain_ms + 6000)),
+                timeout=done_timeout_ms,
             )
             await page.wait_for_timeout(300)
         except Exception:
