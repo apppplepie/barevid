@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import re
@@ -17,6 +18,7 @@ from fastapi import (
     File,
     HTTPException,
     Header,
+    Query,
     UploadFile,
 )
 from fastapi.responses import RedirectResponse
@@ -127,6 +129,8 @@ from app.services.pipeline import (
 from app.services.export_worker_registry import (
     export_worker_alive_count,
     record_export_worker_heartbeat,
+    register_barevid_stats_waiter,
+    unregister_barevid_stats_waiter,
 )
 from app.services.video_export_jobs import (
     abort_stale_project_export_jobs,
@@ -155,6 +159,8 @@ from app.services.project_pipeline import compute_project_pipeline
 from app.services.workflow_engine import (
     get_workflow_text_step_status,
     notify_deck_master_success_if_pending,
+    set_step as wf_set_step,
+    STEP_DECK_MASTER as WF_STEP_DECK_MASTER,
     STEP_RUNNING as WF_STEP_RUNNING,
     STEP_SUCCEEDED as WF_STEP_SUCCEEDED,
     workflow_public_dict_async,
@@ -303,11 +309,8 @@ async def video_export_workers_status() -> VideoExportWorkersStatus:
     return VideoExportWorkersStatus(alive=n)
 
 
-@app.get("/api/public/barevid-stats", response_model=BarevidPublicStatsResponse)
-async def barevid_public_stats(
-    session: AsyncSession = Depends(get_session),
-) -> BarevidPublicStatsResponse:
-    """宣传页轮询：用户/项目计数 + Worker 在线数；DeepSeek 余额优先官方 balance 接口（需 DEEPSEEK_API_KEY）。"""
+async def _build_barevid_public_stats(session: AsyncSession) -> BarevidPublicStatsResponse:
+    """宣传页统计快照（与长轮询 / 即时 GET 共用）。"""
     users_n = (await session.exec(select(func.count(User.id)))).one()
     projects_n = (await session.exec(select(func.count(Project.id)))).one()
     workers_n = await export_worker_alive_count()
@@ -324,6 +327,37 @@ async def barevid_public_stats(
         user_count=int(users_n or 0),
         project_count=int(projects_n or 0),
     )
+
+
+@app.get("/api/public/barevid-stats", response_model=BarevidPublicStatsResponse)
+async def barevid_public_stats(
+    session: AsyncSession = Depends(get_session),
+) -> BarevidPublicStatsResponse:
+    """宣传页即时快照（DeepSeek/豆包展示字段见 BarevidPublicStatsResponse）。"""
+    return await _build_barevid_public_stats(session)
+
+
+@app.get("/api/public/barevid-stats/wait", response_model=BarevidPublicStatsResponse)
+async def barevid_public_stats_wait(
+    session: AsyncSession = Depends(get_session),
+    timeout: int = Query(
+        55,
+        ge=10,
+        le=180,
+        description="最长阻塞秒数；默认 55 以避开常见 nginx proxy_read_timeout 60s。期间若有 worker 心跳则提前返回",
+    ),
+) -> BarevidPublicStatsResponse:
+    """长轮询：有导出 worker 心跳时立刻返回最新统计；否则最多阻塞 timeout 秒再返回（仍会刷新在线数，含 180s 过期清理）。"""
+    ev = asyncio.Event()
+    await register_barevid_stats_waiter(ev)
+    try:
+        await asyncio.wait_for(ev.wait(), timeout=float(timeout))
+    except asyncio.TimeoutError:
+        pass
+    finally:
+        ev.clear()
+        await unregister_barevid_stats_waiter(ev)
+    return await _build_barevid_public_stats(session)
 
 
 @app.post("/api/auth/register", response_model=AuthResponse)
@@ -1277,6 +1311,8 @@ async def workflow_run_deck_master(
     if not _can_manage_project(project, int(me.id)):
         raise HTTPException(status_code=403, detail="无权限修改该项目")
     try:
+        await wf_set_step(session, project, WF_STEP_DECK_MASTER, WF_STEP_RUNNING)
+        await session.commit()
         await ensure_style_base(project_id)
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -1726,6 +1762,8 @@ async def generate_project_deck_style(
     if not _can_manage_project(project, int(me.id)):
         raise HTTPException(status_code=403, detail="无权限修改该项目")
     try:
+        await wf_set_step(session, project, WF_STEP_DECK_MASTER, WF_STEP_RUNNING)
+        await session.commit()
         await ensure_style_base(project_id)
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

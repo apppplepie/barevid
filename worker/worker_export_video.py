@@ -80,15 +80,21 @@ def _worker_slot_ids(worker_id_base: str, concurrency: int) -> list[str]:
 
 def _heartbeat_once(base: str, headers: dict[str, str], slot_ids: list[str]) -> None:
     for wid in slot_ids:
+        url = f"{base}/internal/worker/heartbeat"
         try:
             httpx.post(
-                f"{base}/internal/worker/heartbeat",
+                url,
                 headers=headers,
                 params={"worker_id": wid},
                 timeout=30.0,
             ).raise_for_status()
-        except httpx.HTTPError:
-            pass
+        except httpx.HTTPError as e:
+            # 原先静默吞掉，线上会像「时断时续」；打出原因便于查 TLS/超时/401
+            print(
+                f"[heartbeat] POST failed worker_id={wid!r}: {e!s}",
+                file=sys.stderr,
+                flush=True,
+            )
 
 
 def _heartbeat_loop(

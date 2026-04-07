@@ -340,13 +340,23 @@ export default function App() {
     'deck' | 'narration'
   >('deck');
   const [aiPanelClipId, setAiPanelClipId] = useState<string | null>(null);
-  const [aiGenerating, setAiGenerating] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
+  /** 按「项目:pageId」隔离，避免多页共用一个「生成中 / 错误」状态 */
+  const [deckAiGeneratingByKey, setDeckAiGeneratingByKey] = useState<Record<string, boolean>>(
+    {},
+  );
+  const [deckAiErrorByKey, setDeckAiErrorByKey] = useState<Record<string, string | null>>({});
   const [deckDraftMap, setDeckDraftMap] = useState<Record<string, DeckDraftEntry>>({});
   const [narrationPanelClipId, setNarrationPanelClipId] = useState<string | null>(null);
-  const [narrationPanelError, setNarrationPanelError] = useState<string | null>(null);
-  const [narrationResynthBusy, setNarrationResynthBusy] = useState(false);
-  const [narrationApplyBusy, setNarrationApplyBusy] = useState(false);
+  /** 按「项目:stepNodeId」隔离口播助理的生成中 / 应用中 / 错误（与草稿 map 一致） */
+  const [narrationErrorByKey, setNarrationErrorByKey] = useState<Record<string, string | null>>(
+    {},
+  );
+  const [narrationResynthBusyByKey, setNarrationResynthBusyByKey] = useState<
+    Record<string, boolean>
+  >({});
+  const [narrationApplyBusyByKey, setNarrationApplyBusyByKey] = useState<Record<string, boolean>>(
+    {},
+  );
   const [narrationDraftMap, setNarrationDraftMap] = useState<
     Record<string, NarrationDraftEntry>
   >({});
@@ -449,8 +459,9 @@ export default function App() {
   const prevDeckSceneStateRef = useRef<WorkflowStep['state'] | undefined>(
     undefined,
   );
-  /** 口播助理「按草稿重新合成」进行中，顶栏导出步可标为待处理 */
+  /** 口播助理「按草稿重新合成」进行中，顶栏导出步可标为待处理（多段并发时用计数） */
   const [headerAudioRegenPending, setHeaderAudioRegenPending] = useState(false);
+  const narrationResynthInflightRef = useRef(0);
   const [workflowPanelOpen, setWorkflowPanelOpen] = useState(false);
   const [projectDetailsOpen, setProjectDetailsOpen] = useState(false);
   const [reopeningWorkflowStepId, setReopeningWorkflowStepId] = useState<
@@ -580,6 +591,8 @@ export default function App() {
       ? `${aiPanelProjectIdNum}:${aiPanelPageId}`
       : '';
   const aiDraft = aiDraftKey ? deckDraftMap[aiDraftKey] : undefined;
+  const aiGenerating = aiDraftKey ? Boolean(deckAiGeneratingByKey[aiDraftKey]) : false;
+  const aiError = aiDraftKey ? (deckAiErrorByKey[aiDraftKey] ?? null) : null;
   const aiContextPage = workspacePages.find((p) => p.id === aiPanelPageId);
   const aiCurrentDraftHtml = (aiDraft?.draftHtml || aiContextPage?.html || '').trim();
   /** 发给后端的上下文（含 html），面板内单独展示原始 HTML */
@@ -627,6 +640,15 @@ export default function App() {
   const narrationDraftTextForPanel = narrationKeyForPanel
     ? narrationDraftMap[narrationKeyForPanel]?.draftText ?? narrationBaselineForPanel
     : '';
+  const narrationPanelError = narrationKeyForPanel
+    ? (narrationErrorByKey[narrationKeyForPanel] ?? null)
+    : null;
+  const narrationResynthBusy = narrationKeyForPanel
+    ? Boolean(narrationResynthBusyByKey[narrationKeyForPanel])
+    : false;
+  const narrationApplyBusy = narrationKeyForPanel
+    ? Boolean(narrationApplyBusyByKey[narrationKeyForPanel])
+    : false;
 
   const parseServerIso = (iso: string) => {
     const raw = (iso || '').trim();
@@ -920,7 +942,10 @@ export default function App() {
     setAiPanelClipId(clip.id);
     setEditorRightSidebarModule('deck');
     setEditorRightSidebarOpen(true);
-    setAiError(null);
+    if (Number.isFinite(pid) && pageId) {
+      const k = `${pid}:${pageId}`;
+      setDeckAiErrorByKey((prev) => ({ ...prev, [k]: null }));
+    }
   }, [currentProjectId, workspacePages]);
 
   const handleOpenNarrationPanelForAudioClip = useCallback(
@@ -944,13 +969,13 @@ export default function App() {
       setNarrationPanelClipId(clip.id);
       setEditorRightSidebarModule('narration');
       setEditorRightSidebarOpen(true);
-      setNarrationPanelError(null);
       const baseline = (
         playSteps.find((s) => s.clip_id === clip.id)?.narration_text ??
         clip.content ??
         ''
       ).trim();
       const key = `${pid}:${stepNodeId}`;
+      setNarrationErrorByKey((prev) => ({ ...prev, [key]: null }));
       setNarrationDraftMap((prev) => {
         if (prev[key]) return prev;
         return {
@@ -990,7 +1015,7 @@ export default function App() {
       delete next[key];
       return next;
     });
-    setNarrationPanelError(null);
+    setNarrationErrorByKey((prev) => ({ ...prev, [key]: null }));
   }, [narrationPanelClip, currentProjectId]);
 
   const handleResynthesizeNarrationDraft = useCallback(async () => {
@@ -1002,12 +1027,18 @@ export default function App() {
     const key = `${pid}:${sid}`;
     const text = (narrationDraftMap[key]?.draftText ?? '').trim();
     if (!text) {
-      setNarrationPanelError('口播草稿为空，无法合成。');
+      setNarrationErrorByKey((prev) => ({
+        ...prev,
+        [key]: '口播草稿为空，无法合成。',
+      }));
       return;
     }
-    setNarrationResynthBusy(true);
-    setNarrationPanelError(null);
-    setHeaderAudioRegenPending(true);
+    setNarrationResynthBusyByKey((prev) => ({ ...prev, [key]: true }));
+    setNarrationErrorByKey((prev) => ({ ...prev, [key]: null }));
+    narrationResynthInflightRef.current += 1;
+    if (narrationResynthInflightRef.current === 1) {
+      setHeaderAudioRegenPending(true);
+    }
     try {
       const resp = await apiFetch<{ reused_existing?: boolean; message?: string }>(
         `/api/projects/${pid}/outline-nodes/${sid}/resynthesize-audio`,
@@ -1033,10 +1064,16 @@ export default function App() {
         );
       }
     } catch (e) {
-      setNarrationPanelError(e instanceof Error ? e.message : String(e));
+      setNarrationErrorByKey((prev) => ({
+        ...prev,
+        [key]: e instanceof Error ? e.message : String(e),
+      }));
     } finally {
-      setNarrationResynthBusy(false);
-      setHeaderAudioRegenPending(false);
+      setNarrationResynthBusyByKey((prev) => ({ ...prev, [key]: false }));
+      narrationResynthInflightRef.current = Math.max(0, narrationResynthInflightRef.current - 1);
+      if (narrationResynthInflightRef.current === 0) {
+        setHeaderAudioRegenPending(false);
+      }
     }
   }, [narrationPanelClip, currentProjectId, narrationDraftMap, reloadEditorWithMessage]);
 
@@ -1052,11 +1089,14 @@ export default function App() {
       playSteps.find((s) => s.clip_id === c.id)?.narration_text ?? c.content ?? ''
     ).trim();
     if (text.trim() === baseline) {
-      setNarrationPanelError('草稿与已保存台词一致，无需应用。');
+      setNarrationErrorByKey((prev) => ({
+        ...prev,
+        [key]: '草稿与已保存台词一致，无需应用。',
+      }));
       return;
     }
-    setNarrationApplyBusy(true);
-    setNarrationPanelError(null);
+    setNarrationApplyBusyByKey((prev) => ({ ...prev, [key]: true }));
+    setNarrationErrorByKey((prev) => ({ ...prev, [key]: null }));
     try {
       await apiFetch(`/api/projects/${pid}/outline-nodes/${sid}/narration-text`, {
         method: 'PATCH',
@@ -1070,9 +1110,12 @@ export default function App() {
       });
       reloadEditorWithMessage('口播正文已保存。');
     } catch (e) {
-      setNarrationPanelError(e instanceof Error ? e.message : String(e));
+      setNarrationErrorByKey((prev) => ({
+        ...prev,
+        [key]: e instanceof Error ? e.message : String(e),
+      }));
     } finally {
-      setNarrationApplyBusy(false);
+      setNarrationApplyBusyByKey((prev) => ({ ...prev, [key]: false }));
     }
   }, [narrationPanelClip, currentProjectId, narrationDraftMap, playSteps, reloadEditorWithMessage]);
 
@@ -1081,13 +1124,18 @@ export default function App() {
       if (!aiPanelClip || aiPanelClip.type !== 'video') return;
       const pid = Number(currentProjectId);
       if (!Number.isFinite(pid)) return;
+      const pageId = (aiPanelClip.pageId || '').trim();
+      const draftKey = `${pid}:${pageId}`;
       const pageNodeId = parsePageNodeIdFromPageId(aiPanelClip.pageId);
       if (!Number.isFinite(pageNodeId)) {
-        setAiError('无法解析当前页面节点。');
+        setDeckAiErrorByKey((prev) => ({
+          ...prev,
+          [draftKey]: '无法解析当前页面节点。',
+        }));
         return;
       }
-      setAiGenerating(true);
-      setAiError(null);
+      setDeckAiGeneratingByKey((prev) => ({ ...prev, [draftKey]: true }));
+      setDeckAiErrorByKey((prev) => ({ ...prev, [draftKey]: null }));
       try {
         const resp = await apiFetch<{
           draft_json: Record<string, unknown>;
@@ -1100,10 +1148,12 @@ export default function App() {
         });
         const draftHtml = String(resp.draft_html || '').trim();
         if (!draftHtml) {
-          setAiError('AI 返回结果缺少 html。');
+          setDeckAiErrorByKey((prev) => ({
+            ...prev,
+            [draftKey]: 'AI 返回结果缺少 html。',
+          }));
           return;
         }
-        const pageId = aiPanelClip.pageId || '';
         const key = `${pid}:${pageId}`;
         setDeckDraftMap((prev) => ({
           ...prev,
@@ -1116,9 +1166,12 @@ export default function App() {
           },
         }));
       } catch (e) {
-        setAiError(e instanceof Error ? e.message : String(e));
+        setDeckAiErrorByKey((prev) => ({
+          ...prev,
+          [draftKey]: e instanceof Error ? e.message : String(e),
+        }));
       } finally {
-        setAiGenerating(false);
+        setDeckAiGeneratingByKey((prev) => ({ ...prev, [draftKey]: false }));
       }
     },
     [aiPanelClip, aiContextPayloadForApi, currentProjectId],
@@ -1127,8 +1180,9 @@ export default function App() {
   const handleApplyAiDraft = useCallback(async () => {
     const draft = aiDraft;
     if (!draft) return;
-    setAiGenerating(true);
-    setAiError(null);
+    const applyKey = `${draft.projectId}:${draft.pageId}`;
+    setDeckAiGeneratingByKey((prev) => ({ ...prev, [applyKey]: true }));
+    setDeckAiErrorByKey((prev) => ({ ...prev, [applyKey]: null }));
     try {
       await apiFetch(`/api/projects/${draft.projectId}/outline-nodes/${draft.pageNodeId}/contextual-ai/apply`, {
         method: 'POST',
@@ -1147,9 +1201,12 @@ export default function App() {
       });
       reloadEditorWithMessage('AI 草稿已应用并保存。');
     } catch (e) {
-      setAiError(e instanceof Error ? e.message : String(e));
+      setDeckAiErrorByKey((prev) => ({
+        ...prev,
+        [applyKey]: e instanceof Error ? e.message : String(e),
+      }));
     } finally {
-      setAiGenerating(false);
+      setDeckAiGeneratingByKey((prev) => ({ ...prev, [applyKey]: false }));
     }
   }, [aiDraft, reloadEditorWithMessage]);
 
@@ -1365,12 +1422,13 @@ export default function App() {
     setEditorRightSidebarOpen(false);
     setEditorRightSidebarModule('deck');
     setAiPanelClipId(null);
-    setAiGenerating(false);
-    setAiError(null);
+    setDeckAiGeneratingByKey({});
+    setDeckAiErrorByKey({});
     setNarrationPanelClipId(null);
-    setNarrationPanelError(null);
-    setNarrationResynthBusy(false);
-    setNarrationApplyBusy(false);
+    setNarrationErrorByKey({});
+    setNarrationResynthBusyByKey({});
+    setNarrationApplyBusyByKey({});
+    narrationResynthInflightRef.current = 0;
     setHeaderAudioRegenPending(false);
     setLeftDetailCollapsed(false);
   }, [currentProjectId, clearDeckWatch]);

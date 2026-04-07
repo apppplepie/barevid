@@ -94,6 +94,14 @@ export function deriveWorkflowSteps(
       ) {
         render = 'waiting';
       }
+      // 自动模式：文案结构化进行中时，母版与后台并行生成；服务端若仍报 pending/ready，勿显示「等待」
+      if (
+        auto &&
+        outline === 'running' &&
+        (master === 'pending' || master === 'waiting')
+      ) {
+        master = 'running';
+      }
       return [
         { id: 'deck_master', label: '演示母版', state: master, icon: Palette },
         { id: 'text', label: '文本结构化', state: outline, icon: FileText },

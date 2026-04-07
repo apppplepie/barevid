@@ -160,10 +160,14 @@ export function EditorRightSidebar({
 
           <div className="relative min-h-0 flex-1">
             <div className={layerClass(activeModule === 'deck')}>
-              <DeckAssistantModule {...deck} />
+              <React.Fragment key={deck.clip?.id ?? 'deck-none'}>
+                <DeckAssistantModule {...deck} />
+              </React.Fragment>
             </div>
             <div className={layerClass(activeModule === 'narration')}>
-              <NarrationAssistantModule {...narration} />
+              <React.Fragment key={narration.clip?.id ?? 'narration-none'}>
+                <NarrationAssistantModule {...narration} />
+              </React.Fragment>
             </div>
           </div>
         </motion.div>

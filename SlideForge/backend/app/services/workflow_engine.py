@@ -332,10 +332,33 @@ async def record_export_artifact(
     )
 
 
+async def _maybe_promote_deck_render_when_master_done(
+    session: AsyncSession,
+    project: Project,
+    steps: dict[str, WorkflowStepRun],
+) -> None:
+    """deck_master 已是 succeeded 且 text 已成功时，把仍停在 pending 的 deck_render 标为 ready。
+
+    与 notify 首段解耦：避免「母版已是 succeeded 时提前 return」导致 DAG 永远不推进（克隆/迁移/竞态后易出现）。
+    """
+    text_row = steps.get(STEP_TEXT)
+    dr_row = steps.get(STEP_DECK_RENDER)
+    dm_row = steps.get(STEP_DECK_MASTER)
+    if (
+        text_row
+        and text_row.status == STEP_SUCCEEDED
+        and dr_row
+        and dr_row.status == STEP_PENDING
+        and dm_row
+        and dm_row.status == STEP_SUCCEEDED
+    ):
+        await set_step(session, project, STEP_DECK_RENDER, STEP_READY)
+
+
 async def notify_deck_master_success_if_pending(
     session: AsyncSession, project_id: int
 ) -> None:
-    """单页生成路径在 ensure_style_base 成功后调用，将母版标为 succeeded。"""
+    """母版生成/就绪后调用：将 deck_master 标 succeeded，并在 text 已就绪时把 deck_render 置 ready。"""
     project = await session.get(Project, project_id)
     if project is None:
         return
@@ -344,19 +367,12 @@ async def notify_deck_master_success_if_pending(
         return
     steps = await _load_steps_map(session, int(run.id))
     row = steps.get(STEP_DECK_MASTER)
-    if row is None or row.status == STEP_SUCCEEDED:
+    if row is None:
         return
-    await set_step(session, project, STEP_DECK_MASTER, STEP_SUCCEEDED)
-    # deck_master 成功后：若 text 也已 succeeded，则 deck_render 依赖已满足 → ready
-    text_row = steps.get(STEP_TEXT)
-    dr_row = steps.get(STEP_DECK_RENDER)
-    if (
-        text_row
-        and text_row.status == STEP_SUCCEEDED
-        and dr_row
-        and dr_row.status == STEP_PENDING
-    ):
-        await set_step(session, project, STEP_DECK_RENDER, STEP_READY)
+    if row.status != STEP_SUCCEEDED:
+        await set_step(session, project, STEP_DECK_MASTER, STEP_SUCCEEDED)
+        steps = await _load_steps_map(session, int(run.id))
+    await _maybe_promote_deck_render_when_master_done(session, project, steps)
 
 
 async def after_text_success_parallel_ready(

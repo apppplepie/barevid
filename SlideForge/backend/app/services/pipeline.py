@@ -465,6 +465,17 @@ async def _run_deck_master_entry_parallel(project_id: int) -> None:
     from app.services.deck import ensure_style_base, sync_demo_workflow_from_deck
 
     try:
+        # 立刻标 running，避免前端在 ensure_style_base 整段耗时内仍显示 pending→waiting（闹钟）
+        async with async_session_maker() as session:
+            project = await session.get(Project, project_id)
+            if project:
+                await wf_engine.set_step(
+                    session,
+                    project,
+                    wf_engine.STEP_DECK_MASTER,
+                    wf_engine.STEP_RUNNING,
+                )
+                await session.commit()
         await ensure_style_base(project_id)
         async with async_session_maker() as session:
             await wf_engine.notify_deck_master_success_if_pending(session, project_id)

@@ -52,8 +52,13 @@ class Settings(BaseSettings):
     deepseek_request_timeout_seconds: int = 180
     deepseek_style_timeout_seconds: int = 180
     deepseek_deck_timeout_seconds: int = 420
-    # 放映页 HTML（JSON 包一大段字符串）易触顶截断，适当加大；0 表示交给 API 默认
+    # chat/completions 的 max_tokens：deepseek-chat（V3）单次输出 API 上限 8192，超过无效；不传时服务端默认约 4096，长 JSON/HTML 易截断。
+    # 放映页 / 单页 AI 草稿 / JSON 修复等共用此上限（程序化调用时在请求体显式传入）。
     deepseek_deck_max_tokens: int = 8192
+    # 文本结构化（大纲 JSON）输出；建议与 deck 同为 8192，避免长素材被截断。
+    deepseek_structure_max_tokens: int = 8192
+    # 风格母版纯文本；通常短于放映页 HTML。
+    deepseek_style_max_tokens: int = 4096
     deepseek_fim_enabled: bool = True
     # FIM 单次 max_tokens 上限（官方说明约 4K）
     deepseek_fim_max_tokens: int = 4096

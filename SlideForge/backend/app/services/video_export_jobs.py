@@ -154,6 +154,11 @@ async def claim_next_video_export_job(
     *,
     stale_after_seconds: int = 7200,
 ) -> VideoExportJob | None:
+    """全局 FIFO 领取：不按 worker_id / 队列名过滤。
+
+    ``worker_label`` 仅在成功将任务从 queued 改为 running 时写入 ``VideoExportJob.worker_id``，
+    用于排查与统计，**不参与**「哪台 worker 能领哪条任务」的调度。
+    """
     await recycle_stale_running_video_export_jobs(
         session,
         stale_after_seconds=stale_after_seconds,

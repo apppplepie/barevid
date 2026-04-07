@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { Users, Database, Clock, Cpu, Video, Briefcase, ShoppingCart, QrCode, Mail, ExternalLink, Heart } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-const POLL_MS = 5 * 60 * 1000;
+/** 与后端默认一致；须小于边缘 nginx 的 proxy_read_timeout（常见 60s） */
+const STATS_WAIT_TIMEOUT_SEC = 55;
 
 type BarevidPublicStats = {
   deepseek_balance_display: string;
@@ -13,9 +14,16 @@ type BarevidPublicStats = {
   project_count: number;
 };
 
+function apiBase(): string {
+  return (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
+}
+
 function statsUrl(): string {
-  const base = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
-  return `${base}/api/public/barevid-stats`;
+  return `${apiBase()}/api/public/barevid-stats`;
+}
+
+function statsWaitUrl(): string {
+  return `${apiBase()}/api/public/barevid-stats/wait?timeout=${STATS_WAIT_TIMEOUT_SEC}`;
 }
 
 const CyberCard = ({ children, className = "", delay = 0, themeColor = "primary" }: { children: ReactNode, className?: string, delay?: number, themeColor?: "secondary" | "primary" | "muted" }) => {
@@ -78,22 +86,41 @@ export function ServerStatus() {
   const { t, i18n } = useTranslation();
   const [stats, setStats] = useState<BarevidPublicStats | null>(null);
 
-  const fetchStats = useCallback(async () => {
-    try {
-      const res = await fetch(statsUrl());
-      if (!res.ok) return;
-      const data = (await res.json()) as BarevidPublicStats;
-      setStats(data);
-    } catch {
-      /* 保持上次成功值或占位 */
-    }
-  }, []);
-
   useEffect(() => {
-    void fetchStats();
-    const id = window.setInterval(() => void fetchStats(), POLL_MS);
-    return () => window.clearInterval(id);
-  }, [fetchStats]);
+    let cancelled = false;
+
+    const loadOnce = async () => {
+      try {
+        const res = await fetch(statsUrl(), { cache: 'no-store' });
+        if (!res.ok || cancelled) return;
+        setStats((await res.json()) as BarevidPublicStats);
+      } catch {
+        /* 保持占位 */
+      }
+    };
+
+    const waitLoop = async () => {
+      await loadOnce();
+      while (!cancelled) {
+        try {
+          const res = await fetch(statsWaitUrl(), { cache: 'no-store' });
+          if (!res.ok) {
+            await new Promise((r) => window.setTimeout(r, 5000));
+            continue;
+          }
+          const data = (await res.json()) as BarevidPublicStats;
+          if (!cancelled) setStats(data);
+        } catch {
+          if (!cancelled) await new Promise((r) => window.setTimeout(r, 5000));
+        }
+      }
+    };
+
+    void waitLoop();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const fmt = (n: number) =>
     new Intl.NumberFormat(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US').format(n);
