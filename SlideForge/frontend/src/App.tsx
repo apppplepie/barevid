@@ -596,15 +596,12 @@ export default function App() {
   const aiContextPage = workspacePages.find((p) => p.id === aiPanelPageId);
   const aiCurrentDraftHtml = (aiDraft?.draftHtml || aiContextPage?.html || '').trim();
   /** 发给后端的上下文（含 html），面板内单独展示原始 HTML */
-  const aiContextPayloadForApi = JSON.stringify(
-    {
-      page_id: aiPanelPageId,
-      main_title: aiContextPage?.title || aiPanelClip?.label || '',
-      html: aiCurrentDraftHtml,
-    },
-    null,
-    2,
-  );
+  /** 紧凑 JSON：避免带缩进的 current_json 诱导模型在返回的 html 字符串里写裸换行（非法 JSON） */
+  const aiContextPayloadForApi = JSON.stringify({
+    page_id: aiPanelPageId,
+    main_title: aiContextPage?.title || aiPanelClip?.label || '',
+    html: aiCurrentDraftHtml,
+  });
   const aiContextHtmlText = (aiContextPage?.html || '').trim();
   const workspacePagesWithDraft = useMemo(
     () =>
