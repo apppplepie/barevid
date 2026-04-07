@@ -490,6 +490,11 @@ def _mux_video_audio(
     video_preroll_ms: int = 0,
 ) -> None:
     cmd = [ffmpeg_path, "-y"]
+    # 解码 VP8 + 字幕滤镜 + x264 在 1080p 下可能吃满内存；限制线程可降低峰值（尤其 Windows）。
+    # 例：SLIDEFORGE_FFMPEG_THREADS=1
+    ff_threads = (os.environ.get("SLIDEFORGE_FFMPEG_THREADS") or "").strip()
+    if ff_threads:
+        cmd += ["-threads", ff_threads]
     x264_preset = (os.environ.get("SLIDEFORGE_EXPORT_X264_PRESET") or "").strip() or "veryfast"
     x264_crf = (os.environ.get("SLIDEFORGE_EXPORT_X264_CRF") or "").strip() or "18"
     trim_s = max(0.0, video_preroll_ms / 1000.0)

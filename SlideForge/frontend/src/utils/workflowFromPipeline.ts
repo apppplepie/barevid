@@ -60,6 +60,22 @@ export type DeriveWorkflowOptions = {
   pipelineAutoAdvance?: boolean;
 };
 
+/**
+ * `projects.status === synthesizing` 时配音任务正在进行；若 workflow 分步字段短暂缺省或与 pipeline 不一致，
+ * 不应把音频显示成「等待操作」的 waiting（手动模式会把 pending 提升为 waiting）。
+ */
+function audioStepWhenSynthesizing(
+  outline: StepState,
+  audio: StepState,
+  projectStatus: string | undefined,
+): StepState {
+  const st = (projectStatus || '').trim().toLowerCase();
+  if (st !== 'synthesizing') return audio;
+  if (outline !== 'success') return audio;
+  if (audio === 'success' || audio === 'error' || audio === 'cancelled') return audio;
+  return 'running';
+}
+
 /** 根据后端 `compute_project_pipeline` + `projects.status` + `deck_status` 推导 UI 步骤态 */
 export function deriveWorkflowSteps(
   pipeline: Partial<ServerPipeline> | undefined,
@@ -94,6 +110,7 @@ export function deriveWorkflowSteps(
       ) {
         render = 'waiting';
       }
+      audio = audioStepWhenSynthesizing(outline, audio, projectStatus);
       // 自动模式：文案结构化进行中时，母版与后台并行生成；服务端若仍报 pending/ready，勿显示「等待」
       if (
         auto &&
@@ -123,6 +140,7 @@ export function deriveWorkflowSteps(
     ) {
       deck = 'waiting';
     }
+    audio = audioStepWhenSynthesizing(outline, audio, projectStatus);
     return [
       { id: 'text', label: '文本结构化', state: outline, icon: FileText },
       { id: 'audio', label: '音频生成', state: audio, icon: Mic },

@@ -60,11 +60,11 @@ export function TerminalSimulator() {
         transition={{ y: { repeat: Infinity, duration: 4, ease: "easeInOut" }, opacity: { duration: 0.6 } }}
         className="absolute -top-4 left-4 right-4 md:top-8 md:-left-24 lg:-left-32 md:right-auto z-30 bg-background/80 backdrop-blur-xl border border-secondary/40 p-4 rounded-lg shadow-[0_8px_32px_rgba(0,243,255,0.15)] md:max-w-[280px]"
       >
-        <div className="flex items-center gap-2 text-xs text-secondary mb-2 font-mono uppercase tracking-wider">
-          <Sparkles size={14} className="animate-pulse" />
+        <div className="flex items-center gap-2 text-sm text-secondary mb-2 font-mono uppercase tracking-wider">
+          <Sparkles size={16} className="animate-pulse" />
           {t('terminal.targetPrompt')}
         </div>
-        <div className="text-white text-sm font-medium leading-relaxed">
+        <div className="text-white text-base font-medium leading-relaxed">
           "{t('terminal.promptText')}"
         </div>
       </motion.div>
@@ -106,11 +106,11 @@ export function TerminalSimulator() {
                       strokeLinecap="round"
                     />
                   </svg>
-                  <div className="absolute text-2xl font-bold font-mono text-white">
+                  <div className="absolute text-3xl font-bold font-mono text-white">
                     {Math.round(progress)}%
                   </div>
                 </div>
-                <div className="mt-4 flex items-center gap-2 text-primary font-mono text-sm uppercase tracking-widest animate-pulse">
+                <div className="mt-4 flex items-center gap-2 text-primary font-mono text-base uppercase tracking-widest animate-pulse">
                   <Cpu size={16} />
                   {t('terminal.rendering')}
                 </div>
@@ -139,7 +139,7 @@ export function TerminalSimulator() {
                   <Play size={40} fill="currentColor" className="ml-2" />
                 </motion.button>
               </div>
-              <div className="absolute top-4 right-4 px-3 py-1.5 bg-background/80 backdrop-blur-md rounded-sm text-xs font-mono text-secondary border border-secondary/30">
+              <div className="absolute top-4 right-4 px-3 py-1.5 bg-background/80 backdrop-blur-md rounded-sm text-sm font-mono text-secondary border border-secondary/30">
                 16:9 • 4K
               </div>
             </motion.div>
@@ -152,13 +152,13 @@ export function TerminalSimulator() {
         initial={{ opacity: 0, x: 20, y: 20 }}
         animate={{ opacity: 1, x: 0, y: [0, 8, 0] }}
         transition={{ y: { repeat: Infinity, duration: 5, ease: "easeInOut" }, opacity: { duration: 0.6, delay: 0.2 } }}
-        className="absolute -bottom-4 left-4 right-4 md:-bottom-12 md:-right-8 md:left-auto z-30 bg-background/90 backdrop-blur-xl border border-primary/40 rounded-lg p-4 shadow-[0_8px_32px_rgba(176,38,255,0.15)] md:w-[320px] h-[140px] flex flex-col"
+        className="absolute -bottom-4 left-4 right-4 md:-bottom-12 md:-right-8 md:left-auto z-30 bg-background/90 backdrop-blur-xl border border-primary/40 rounded-lg p-4 shadow-[0_8px_32px_rgba(176,38,255,0.15)] md:w-[340px] h-[160px] flex flex-col"
       >
-        <div className="flex items-center gap-2 text-xs text-primary mb-3 font-mono border-b border-primary/20 pb-2">
-          <Terminal size={14} />
+        <div className="flex items-center gap-2 text-sm text-primary mb-3 font-mono border-b border-primary/20 pb-2">
+          <Terminal size={16} />
           agent-terminal.exe
         </div>
-        <div className="flex-1 overflow-hidden flex flex-col justify-end gap-1.5 font-mono text-xs">
+        <div className="flex-1 overflow-hidden flex flex-col justify-end gap-1.5 font-mono text-sm">
           <AnimatePresence initial={false}>
             {logs.map((log, i) => (
               <motion.div

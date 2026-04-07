@@ -36,5 +36,8 @@ worker/worker_tasks.db-shm
 # IDE / OS
 .idea/
 .vscode/
+
+# Claude Code: local permissions + git worktrees for parallel sessions (large duplicate trees)
+.claude/
 .DS_Store
 Thumbs.db

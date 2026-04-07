@@ -55,7 +55,7 @@ export function Header() {
             <Globe size={18} />
           </a>
 
-          <button className="ml-2 px-6 py-2 bg-primary/10 border border-primary/50 text-white hover:bg-primary hover:border-primary transition-all rounded text-xs font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(176,38,255,0.15)] hover:shadow-[0_0_25px_rgba(176,38,255,0.5)] relative overflow-hidden group">
+          <button className="ml-2 px-6 py-2 bg-primary/10 border border-primary/50 text-white hover:bg-primary hover:border-primary transition-all rounded text-sm font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(176,38,255,0.15)] hover:shadow-[0_0_25px_rgba(176,38,255,0.5)] relative overflow-hidden group">
             <span className="relative z-10">{t('hero.freeTrial')}</span>
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-[200%] transition-transform duration-700 ease-in-out" />
           </button>

@@ -1,6 +1,6 @@
-import { Fragment } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Play } from 'lucide-react';
+import { Play, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 type WorkEntry = { id: number; ratio: string; video: string; title: string };
@@ -13,16 +13,25 @@ function cssAspectRatioFromLabel(ratio: string): string {
   return '4 / 5';
 }
 
-function WorkCard({ work }: { work: WorkEntry }) {
+function WorkCard({ work, onOpen }: { work: WorkEntry; onOpen: () => void }) {
   return (
     <div
-      className="relative w-full group overflow-hidden bg-white/5 border border-white/10 p-2 shrink-0"
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className="relative w-full group overflow-hidden bg-white/5 border border-white/10 p-2 shrink-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black rounded-sm"
       style={{ aspectRatio: cssAspectRatioFromLabel(work.ratio) }}
     >
       <div className="w-full h-full relative overflow-hidden">
         <video
           src={work.video}
-          className="w-full h-full object-cover filter grayscale opacity-40 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700 group-hover:scale-110"
+          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
           muted
           loop
           playsInline
@@ -30,15 +39,15 @@ function WorkCard({ work }: { work: WorkEntry }) {
           preload="metadata"
           aria-label={work.title}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-5">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-5 pointer-events-none">
           <div className="flex justify-between items-end">
             <div>
               <span className="font-black text-white tracking-widest uppercase text-lg block mb-1">{work.title}</span>
-              <span className="text-[10px] text-primary font-mono bg-primary/10 px-2 py-1 border border-primary/30">{work.ratio} • NEURAL_RENDER</span>
+              <span className="text-xs text-primary font-mono bg-primary/10 px-2 py-1 border border-primary/30">{work.ratio} • NEURAL_RENDER</span>
             </div>
-            <button type="button" className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white backdrop-blur-md border border-white/30 hover:bg-primary hover:border-primary transition-colors">
+            <span className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white backdrop-blur-md border border-white/30 group-hover:bg-primary group-hover:border-primary transition-colors">
               <Play size={16} fill="currentColor" className="ml-1" />
-            </button>
+            </span>
           </div>
         </div>
       </div>
@@ -50,6 +59,21 @@ function WorkCard({ work }: { work: WorkEntry }) {
 
 export function WorksGrid() {
   const { t } = useTranslation();
+  const [lightbox, setLightbox] = useState<WorkEntry | null>(null);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightbox(null);
+    };
+    window.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [lightbox]);
 
   const works: WorkEntry[] = [
     { id: 1, ratio: '9:16', video: '/vidsrc/1.mp4', title: t('works.videos.neonRain') },
@@ -66,100 +90,139 @@ export function WorksGrid() {
   return (
     <section id="works" className="h-screen w-full snap-start snap-always relative overflow-hidden flex items-center border-y border-white/5">
       {/* Vertical Side Text */}
-      <div className="absolute right-4 top-1/2 -translate-y-1/2 rotate-90 origin-right text-[10px] font-mono text-white/20 tracking-[0.5em] uppercase whitespace-nowrap hidden lg:block z-0">
+      <div className="absolute right-4 top-1/2 -translate-y-1/2 rotate-90 origin-right text-xs font-mono text-white/20 tracking-[0.5em] uppercase whitespace-nowrap hidden lg:block z-0">
         {t('works.sideText')}
       </div>
 
       <div className="max-w-7xl mx-auto w-full h-full px-6 flex flex-col md:flex-row items-center gap-12 relative z-10 py-20">
-        
+
         {/* Left: Scrolling Gallery */}
         <div className="w-full md:w-7/12 h-[60vh] md:h-[85vh] relative overflow-hidden flex gap-4 md:gap-6 mask-image-vertical">
-           {/* Column 1 (Scrolls Up) */}
-           <div className="flex-1 overflow-hidden">
-             <div className="flex flex-col animate-marquee-up hover:[animation-play-state:paused]">
-                <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
-                  {col1Works.map((work) => (
-                    <Fragment key={`col1-a-${work.id}`}>
-                      <WorkCard work={work} />
-                    </Fragment>
-                  ))}
-                </div>
-                <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
-                  {col1Works.map((work) => (
-                    <Fragment key={`col1-b-${work.id}`}>
-                      <WorkCard work={work} />
-                    </Fragment>
-                  ))}
-                </div>
-             </div>
-           </div>
-           
-           {/* Column 2 (Scrolls Down) */}
-           <div className="flex-1 overflow-hidden">
-             <div className="flex flex-col animate-marquee-down hover:[animation-play-state:paused]">
-                <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
-                  {col2Works.map((work) => (
-                    <Fragment key={`col2-a-${work.id}`}>
-                      <WorkCard work={work} />
-                    </Fragment>
-                  ))}
-                </div>
-                <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
-                  {col2Works.map((work) => (
-                    <Fragment key={`col2-b-${work.id}`}>
-                      <WorkCard work={work} />
-                    </Fragment>
-                  ))}
-                </div>
-             </div>
-           </div>
+          {/* Column 1 (Scrolls Up) */}
+          <div className="flex-1 overflow-hidden">
+            <div className="flex flex-col animate-marquee-up hover:[animation-play-state:paused]">
+              <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
+                {col1Works.map((work) => (
+                  <Fragment key={`col1-a-${work.id}`}>
+                    <WorkCard work={work} onOpen={() => setLightbox(work)} />
+                  </Fragment>
+                ))}
+              </div>
+              <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
+                {col1Works.map((work) => (
+                  <Fragment key={`col1-b-${work.id}`}>
+                    <WorkCard work={work} onOpen={() => setLightbox(work)} />
+                  </Fragment>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Column 2 (Scrolls Down) */}
+          <div className="flex-1 overflow-hidden">
+            <div className="flex flex-col animate-marquee-down hover:[animation-play-state:paused]">
+              <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
+                {col2Works.map((work) => (
+                  <Fragment key={`col2-a-${work.id}`}>
+                    <WorkCard work={work} onOpen={() => setLightbox(work)} />
+                  </Fragment>
+                ))}
+              </div>
+              <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
+                {col2Works.map((work) => (
+                  <Fragment key={`col2-b-${work.id}`}>
+                    <WorkCard work={work} onOpen={() => setLightbox(work)} />
+                  </Fragment>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Right: Text & Typography */}
         <div className="w-full md:w-5/12 flex flex-col justify-center relative">
-           <div className="absolute -right-10 -top-10 w-40 h-40 bg-primary/20 blur-[80px] rounded-full pointer-events-none" />
-           
-           <motion.div
-             initial={{ opacity: 0, x: 30 }}
-             whileInView={{ opacity: 1, x: 0 }}
-             viewport={{ once: true }}
-             transition={{ duration: 0.6 }}
-           >
-             <div className="font-mono text-primary text-xs tracking-[0.3em] mb-6 flex items-center gap-3">
-               <span className="w-12 h-[1px] bg-primary"></span>
-               {t('works.archiveRecords')}
-             </div>
-             
-             <h2 className="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-[0.85] mb-8">
-               <span className="text-transparent bg-clip-text bg-gradient-to-b from-white to-white/40">{t('works.title1')}</span><br/>
-               <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">{t('works.title2')}</span>
-             </h2>
-             
-             <div className="text-white/60 font-mono text-sm leading-relaxed mb-10 border-l-2 border-primary/30 pl-5 relative">
-               <div className="absolute -left-[2px] top-0 w-[2px] h-8 bg-primary" />
-               {t('works.subtitle')}
-               <br/><br/>
-               <span className="text-white/40">{t('works.description')}</span>
-             </div>
-             
-             {/* Decorative stats */}
-             <div className="flex gap-10 font-mono text-xs text-white/40 border-t border-white/10 pt-6">
-               <div>
-                 <div className="text-white/80 mb-1 tracking-widest">{t('works.totalRendered')}</div>
-                 <div className="text-lg text-white font-bold">89,412</div>
-               </div>
-               <div>
-                 <div className="text-white/80 mb-1 tracking-widest">{t('works.avgGenTime')}</div>
-                 <div className="text-lg text-primary font-bold">1.42s</div>
-               </div>
-               <div className="hidden sm:block">
-                 <div className="text-white/80 mb-1 tracking-widest">{t('works.resolution')}</div>
-                 <div className="text-lg text-secondary font-bold">4K_UHD</div>
-               </div>
-             </div>
-           </motion.div>
+          <div className="absolute -right-10 -top-10 w-40 h-40 bg-primary/20 blur-[80px] rounded-full pointer-events-none" />
+
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <div className="font-mono text-primary text-sm tracking-[0.3em] mb-6 flex items-center gap-3">
+              <span className="w-12 h-[1px] bg-primary"></span>
+              {t('works.archiveRecords')}
+            </div>
+
+            <h2 className="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-[0.85] mb-8">
+              <span className="text-transparent bg-clip-text bg-gradient-to-b from-white to-white/40">{t('works.title1')}</span><br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">{t('works.title2')}</span>
+            </h2>
+
+            <div className="text-white/60 font-mono text-base leading-relaxed mb-10 border-l-2 border-primary/30 pl-5 relative">
+              <div className="absolute -left-[2px] top-0 w-[2px] h-8 bg-primary" />
+              {t('works.subtitle')}
+              <br /><br />
+              <span className="text-white/40">{t('works.description')}</span>
+            </div>
+
+            {/* Workflow highlights */}
+            <div className="flex flex-wrap gap-x-10 gap-y-6 font-mono text-sm text-white/40 border-t border-white/10 pt-6">
+              <div className="min-w-[10rem] max-w-[14rem]">
+                <div className="text-white/80 mb-1 tracking-widest">{t('works.stat1Label')}</div>
+                <div className="text-base text-white font-bold leading-snug">{t('works.stat1Value')}</div>
+              </div>
+              <div className="min-w-[10rem] max-w-[14rem]">
+                <div className="text-white/80 mb-1 tracking-widest">{t('works.stat2Label')}</div>
+                <div className="text-base text-primary font-bold leading-snug">{t('works.stat2Value')}</div>
+              </div>
+              <div className="min-w-[10rem] max-w-[14rem]">
+                <div className="text-white/80 mb-1 tracking-widest">{t('works.stat3Label')}</div>
+                <div className="text-base text-secondary font-bold leading-snug">{t('works.stat3Value')}</div>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </div>
+
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/92 p-4 md:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="works-lightbox-title"
+          onClick={() => setLightbox(null)}
+        >
+          <div
+            className="relative w-full max-w-5xl max-h-[90vh] flex flex-col gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <h3 id="works-lightbox-title" className="text-lg font-black uppercase tracking-widest text-white truncate pr-2">
+                {lightbox.title}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setLightbox(null)}
+                className="shrink-0 w-10 h-10 rounded-sm border border-white/20 flex items-center justify-center text-white hover:bg-white/10 hover:border-white/40 transition-colors"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="rounded-sm overflow-hidden border border-white/10 bg-black w-full max-h-[min(80vh,calc(100vw-2rem))] flex items-center justify-center min-h-[12rem]">
+              <video
+                key={lightbox.video}
+                src={lightbox.video}
+                className="max-h-[min(80vh,calc(100vw-2rem))] max-w-full w-auto h-auto object-contain"
+                controls
+                playsInline
+                autoPlay
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         .mask-image-vertical {

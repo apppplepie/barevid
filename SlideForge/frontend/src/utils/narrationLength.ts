@@ -8,7 +8,7 @@ export const NARRATION_SECONDS_MAX = 3600;
 
 /** 自定义口播体量：填分钟 */
 export const NARRATION_CUSTOM_MINUTES_MIN = 1;
-export const NARRATION_CUSTOM_MINUTES_MAX = 60;
+export const NARRATION_CUSTOM_MINUTES_MAX = 15;
 
 const MIN_CPM = 200;
 const MAX_CPM = 260;

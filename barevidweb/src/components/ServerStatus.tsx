@@ -26,6 +26,17 @@ function statsWaitUrl(): string {
   return `${apiBase()}/api/public/barevid-stats/wait?timeout=${STATS_WAIT_TIMEOUT_SEC}`;
 }
 
+/** 后端 DeepSeek 余额常为 `USD 0.00 · CNY 14.63`；中文只展示人民币一段为 `14.63元` */
+function formatDeepseekBalanceZh(raw: string): string {
+  const parts = raw.split(/\s*·\s*/);
+  for (const p of parts) {
+    const m = p.trim().match(/^CNY\s+(.+)$/i);
+    if (m) return `${m[1].trim()}元`;
+  }
+  if (/^\d+(\.\d+)?$/.test(raw.trim())) return `${raw.trim()}元`;
+  return raw;
+}
+
 const CyberCard = ({ children, className = "", delay = 0, themeColor = "primary" }: { children: ReactNode, className?: string, delay?: number, themeColor?: "secondary" | "primary" | "muted" }) => {
   const themeMap = {
     primary: {
@@ -74,11 +85,11 @@ const StatBox = ({ title, value, sub, icon: Icon, colorClass }: any) => (
   <div className="bg-white/5 border border-white/10 p-4 rounded-sm relative overflow-hidden group hover:border-white/30 transition-colors">
     <div className={`absolute top-0 left-0 w-1 h-full ${colorClass} opacity-50 group-hover:opacity-100 transition-opacity`} />
     <div className="flex justify-between items-start mb-2">
-      <span className="text-white/50 font-mono text-[10px] uppercase tracking-widest">{title}</span>
-      <Icon size={14} className="text-white/30 group-hover:text-white/80 transition-colors" />
+      <span className="text-white/50 font-mono text-xs uppercase tracking-widest">{title}</span>
+      <Icon size={16} className="text-white/30 group-hover:text-white/80 transition-colors" />
     </div>
-    <div className="text-2xl font-black text-white tracking-tighter">{value}</div>
-    <div className="text-[10px] font-mono text-white/40 mt-1">{sub}</div>
+    <div className="text-3xl font-black text-white tracking-tighter">{value}</div>
+    {sub ? <div className="text-xs font-mono text-white/40 mt-1">{sub}</div> : null}
   </div>
 );
 
@@ -125,8 +136,13 @@ export function ServerStatus() {
   const fmt = (n: number) =>
     new Intl.NumberFormat(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US').format(n);
 
-  const deepseekVal =
-    (stats?.deepseek_balance_display || '').trim() || '—';
+  const deepseekRaw = (stats?.deepseek_balance_display || '').trim();
+  const deepseekDisplay =
+    !deepseekRaw
+      ? '—'
+      : i18n.language?.startsWith('zh')
+        ? formatDeepseekBalanceZh(deepseekRaw)
+        : deepseekRaw;
   const doubaoVal =
     (stats?.doubao_trial_display || '').trim() || t('status.doubaoTrialPlaceholder');
   const workersVal = stats !== null ? fmt(stats.workers_online) : '—';
@@ -146,7 +162,7 @@ export function ServerStatus() {
               </span>
             </h2>
           </div>
-          <div className="hidden md:flex flex-col items-end font-mono text-[10px] text-secondary/70">
+          <div className="hidden md:flex flex-col items-end font-mono text-xs text-secondary/70">
             <span>{t('status.indieDevMode')}</span>
             <span>{t('status.coffeeLevel')}</span>
           </div>
@@ -156,15 +172,15 @@ export function ServerStatus() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
           <StatBox
             title={t('status.deepseekBalance')}
-            value={deepseekVal}
-            sub={t('status.deepseekStatSub')}
+            value={deepseekDisplay}
+            sub={t('status.deepseekGpuNote')}
             icon={Database}
             colorClass="bg-primary"
           />
           <StatBox
             title={t('status.doubaoBalance')}
             value={doubaoVal}
-            sub={t('status.doubaoTrialSub')}
+            sub={t('status.doubaoCoquiNote')}
             icon={Cpu}
             colorClass="bg-secondary"
           />
@@ -173,21 +189,21 @@ export function ServerStatus() {
             value={workersVal}
             sub={t('status.workersOnlineSub')}
             icon={Clock}
-            colorClass="bg-white/50"
+            colorClass="bg-primary"
           />
           <StatBox
             title={t('status.registeredUsers')}
             value={usersVal}
             sub={t('status.dbAuthRecords')}
             icon={Users}
-            colorClass="bg-primary/70"
+            colorClass="bg-secondary"
           />
           <StatBox
             title={t('status.totalProjects')}
             value={projectsVal}
             sub={t('status.renderedVideos')}
             icon={Video}
-            colorClass="bg-secondary/70"
+            colorClass="bg-primary"
           />
         </div>
 
@@ -200,12 +216,12 @@ export function ServerStatus() {
               <ShoppingCart size={24} />
               <h3 className="font-black tracking-widest uppercase text-lg">{t('status.proxyService')}</h3>
             </div>
-            <p className="text-sm text-white/70 font-mono mb-4 flex-1">
+            <p className="text-base text-white/70 font-mono mb-4 flex-1">
               {t('status.proxyDesc1')} 
               <br/><br/>
-              <span className="text-white/50 text-xs">{t('status.proxyDesc2')}</span>
+              <span className="text-white/50 text-sm">{t('status.proxyDesc2')}</span>
             </p>
-            <a href="#" className="flex items-center justify-center gap-2 w-full py-3 bg-secondary/10 border border-secondary/50 text-secondary hover:bg-secondary hover:text-black transition-all font-bold uppercase tracking-widest text-xs">
+            <a href="#" className="flex items-center justify-center gap-2 w-full py-3 bg-secondary/10 border border-secondary/50 text-secondary hover:bg-secondary hover:text-black transition-all font-bold uppercase tracking-widest text-sm">
               {t('status.visitStore')} <ExternalLink size={14} />
             </a>
           </CyberCard>
@@ -216,12 +232,12 @@ export function ServerStatus() {
               <Briefcase size={24} />
               <h3 className="font-black tracking-widest uppercase text-lg">{t('status.hireDev')}</h3>
             </div>
-            <p className="text-sm text-white/70 font-mono mb-4 flex-1">
+            <p className="text-base text-white/70 font-mono mb-4 flex-1">
               {t('status.hireDesc1')}
               <br/><br/>
-              <span className="text-white/50 text-xs">{t('status.hireDesc2')}</span>
+              <span className="text-white/50 text-sm">{t('status.hireDesc2')}</span>
             </p>
-            <a href="mailto:necromancerappplepie@gmail.com" className="flex items-center justify-center gap-2 w-full py-3 bg-primary/10 border border-primary/50 text-primary hover:bg-primary hover:text-black transition-all font-bold uppercase tracking-widest text-xs">
+            <a href="mailto:necromancerappplepie@gmail.com" className="flex items-center justify-center gap-2 w-full py-3 bg-primary/10 border border-primary/50 text-primary hover:bg-primary hover:text-black transition-all font-bold uppercase tracking-widest text-sm">
               <Mail size={14} /> necromancerappplepie@gmail.com
             </a>
           </CyberCard>
@@ -232,18 +248,18 @@ export function ServerStatus() {
               <Heart size={24} />
               <h3 className="font-black tracking-widest uppercase text-lg">{t('status.systemFunding')}</h3>
             </div>
-            <p className="text-sm text-white/70 font-mono mb-4 flex-1">
+            <p className="text-base text-white/70 font-mono mb-4 flex-1">
               {t('status.fundingDesc1')}
               <br/><br/>
-              <span className="text-secondary/80 text-xs font-bold">{t('status.totalSupported')}</span>
+              <span className="text-secondary/80 text-sm font-bold">{t('status.totalSupported')}</span>
               <br/>
-              <span className="text-white/50 text-xs">{t('status.fundingDesc2')}</span>
+              <span className="text-white/50 text-sm">{t('status.fundingDesc2')}</span>
             </p>
             <div className="flex gap-2">
-              <button className="flex-1 flex items-center justify-center gap-2 py-3 bg-secondary/10 border border-secondary/50 text-secondary hover:bg-secondary hover:text-black transition-all font-bold uppercase tracking-widest text-xs">
-                <QrCode size={14} /> {t('status.scan')}
+              <button className="flex-1 flex items-center justify-center gap-2 py-3 bg-secondary/10 border border-secondary/50 text-secondary hover:bg-secondary hover:text-black transition-all font-bold uppercase tracking-widest text-sm">
+                <QrCode size={16} /> {t('status.scan')}
               </button>
-              <a href="#" className="flex-1 flex items-center justify-center gap-2 py-3 bg-secondary/10 border border-secondary/50 text-secondary hover:bg-secondary hover:text-black transition-all font-bold uppercase tracking-widest text-xs">
+              <a href="#" className="flex-1 flex items-center justify-center gap-2 py-3 bg-secondary/10 border border-secondary/50 text-secondary hover:bg-secondary hover:text-black transition-all font-bold uppercase tracking-widest text-sm">
                 {t('status.donate')} <ExternalLink size={14} />
               </a>
             </div>

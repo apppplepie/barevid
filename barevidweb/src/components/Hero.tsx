@@ -15,18 +15,18 @@ export function Hero() {
           transition={{ duration: 0.6 }}
           className="flex flex-col gap-6"
         >
-          <div className="inline-block px-3 py-1 border border-white/10 bg-white/5 text-white/70 text-xs font-mono w-fit rounded-sm uppercase tracking-widest">
+          <div className="inline-block px-3 py-1 border border-white/10 bg-white/5 text-white/70 text-sm font-mono w-fit rounded-sm uppercase tracking-widest">
             {t('hero.badge')}
           </div>
           
           <h1 className="text-5xl md:text-7xl font-bold leading-tight">
             <span className="glitch-text block" data-text={t('hero.title1')}>{t('hero.title1')}</span>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-white/50">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">
               {t('hero.title2')}
             </span>
           </h1>
           
-          <p className="text-lg text-muted max-w-lg">
+          <p className="text-xl text-muted max-w-lg leading-relaxed">
             {t('hero.description')}
           </p>
           
@@ -35,7 +35,7 @@ export function Hero() {
               <Play size={18} fill="currentColor" />
               {t('hero.initSequence')}
             </button>
-            <button className="px-6 py-3 border border-muted text-muted hover:text-white hover:border-white transition-colors font-mono text-sm uppercase tracking-wider rounded-sm">
+            <button className="px-6 py-3 border border-muted text-muted hover:text-white hover:border-white transition-colors font-mono text-base uppercase tracking-wider rounded-sm">
               {t('hero.viewDocs')}
             </button>
           </div>

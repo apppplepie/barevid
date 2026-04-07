@@ -19,7 +19,7 @@ export function Pricing() {
               {/* Decorative corner */}
               <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-primary/50"></div>
               
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/30 text-primary text-[10px] font-mono tracking-widest uppercase w-fit mb-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/30 text-primary text-sm font-mono tracking-widest uppercase w-fit mb-6">
                 <span className="w-1.5 h-1.5 bg-primary animate-pulse"></span>
                 {t('pricing.openSourceProtocol')}
               </div>
@@ -29,32 +29,32 @@ export function Pricing() {
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">{t('pricing.rawCompute')}</span>
               </h3>
               
-              <p className="text-white/50 text-sm mb-8 font-mono leading-relaxed">
+              <p className="text-white/50 text-lg mb-8 font-mono leading-relaxed">
                 {t('pricing.notCommercial')}
               </p>
               
-              <div className="space-y-3 mb-8 font-mono text-xs">
+              <div className="space-y-3 mb-8 font-mono text-base">
                 <div className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-sm">
-                  <span className="text-white/70 flex items-center gap-2"><Cpu size={14} className="text-primary"/> {t('pricing.llmInference')}</span>
+                  <span className="text-white/70 flex items-center gap-2"><Cpu size={16} className="text-primary"/> {t('pricing.llmInference')}</span>
                   <span className="text-secondary font-bold">{t('pricing.atCost')}</span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-sm">
-                  <span className="text-white/70 flex items-center gap-2"><Cpu size={14} className="text-primary"/> {t('pricing.visionGen')}</span>
+                  <span className="text-white/70 flex items-center gap-2"><Cpu size={16} className="text-primary"/> {t('pricing.visionGen')}</span>
                   <span className="text-secondary font-bold">{t('pricing.atCost')}</span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-primary/10 border border-primary/20 rounded-sm">
                   <span className="text-primary flex items-center gap-2">{t('pricing.platformFee')}</span>
-                  <span className="text-primary font-bold text-sm">$0.00</span>
+                  <span className="text-primary font-bold text-lg">$0.00</span>
                 </div>
               </div>
 
               <div className="flex gap-4 mt-auto">
-                <a href="https://github.com" target="_blank" rel="noreferrer" className="flex-1 py-3 bg-white/5 border border-white/10 text-white text-center font-bold font-mono text-xs uppercase tracking-wider hover:bg-white/10 transition-colors flex items-center justify-center gap-2">
-                  <Github size={14} />
+                <a href="https://github.com" target="_blank" rel="noreferrer" className="flex-1 py-3 bg-white/5 border border-white/10 text-white text-center font-bold font-mono text-base uppercase tracking-wider hover:bg-white/10 transition-colors flex items-center justify-center gap-2">
+                  <Github size={16} />
                   {t('pricing.sourceCode')}
                 </a>
-                <a href="#" className="flex-1 py-3 bg-primary/10 border border-primary/50 text-primary text-center font-bold font-mono text-xs uppercase tracking-wider hover:bg-primary hover:text-white transition-all shadow-[0_0_15px_rgba(176,38,255,0.2)] hover:shadow-[0_0_25px_rgba(176,38,255,0.5)] flex items-center justify-center gap-2">
-                  <Terminal size={14} />
+                <a href="#" className="flex-1 py-3 bg-primary/10 border border-primary/50 text-primary text-center font-bold font-mono text-base uppercase tracking-wider hover:bg-primary hover:text-white transition-all shadow-[0_0_15px_rgba(176,38,255,0.2)] hover:shadow-[0_0_25px_rgba(176,38,255,0.5)] flex items-center justify-center gap-2">
+                  <Terminal size={16} />
                   {t('pricing.selfHost')}
                 </a>
               </div>
@@ -66,8 +66,8 @@ export function Pricing() {
               
               <div className="relative w-full aspect-[4/3] bg-background/80 backdrop-blur-sm border border-primary/30 rounded-lg p-4 md:p-6 flex flex-col shadow-[0_0_30px_rgba(0,243,255,0.1)]">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
-                  <div className="text-xs font-mono text-primary uppercase tracking-wider">{t('pricing.costVsDuration')}</div>
-                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 text-[10px] font-mono uppercase">
+                  <div className="text-base font-mono text-primary uppercase tracking-wider">{t('pricing.costVsDuration')}</div>
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 text-sm font-mono uppercase">
                     <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500/80"></span> {t('pricing.industryStandard')}</div>
                     <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_#00f3ff]"></span> {t('pricing.bareVid')}</div>
                   </div>
@@ -108,8 +108,8 @@ export function Pricing() {
                     </g>
 
                     {/* Labels */}
-                    <text x="210" y="290" fill="currentColor" className="text-muted text-[10px] font-mono" textAnchor="middle">{t('pricing.videoLength')}</text>
-                    <text x="15" y="140" fill="currentColor" className="text-muted text-[10px] font-mono" textAnchor="middle" transform="rotate(-90 15 140)">{t('pricing.cost')}</text>
+                    <text x="210" y="290" fill="currentColor" className="text-muted text-sm font-mono" textAnchor="middle">{t('pricing.videoLength')}</text>
+                    <text x="15" y="140" fill="currentColor" className="text-muted text-sm font-mono" textAnchor="middle" transform="rotate(-90 15 140)">{t('pricing.cost')}</text>
 
                     {/* Competitor Line (Exponential) */}
                     <motion.path 
@@ -171,8 +171,8 @@ export function Pricing() {
                 <div className="flex items-start gap-3 p-3 bg-black/40 border border-red-500/20 rounded-sm">
                   <TrendingUp className="text-red-500 shrink-0 mt-0.5" size={16} />
                   <div>
-                    <div className="text-xs font-bold text-red-400 mb-1 uppercase tracking-wider">{t('pricing.industryTrap')}</div>
-                    <div className="text-[10px] text-white/50 font-mono leading-relaxed">
+                    <div className="text-base font-bold text-red-400 mb-1 uppercase tracking-wider">{t('pricing.industryTrap')}</div>
+                    <div className="text-sm text-white/50 font-mono leading-relaxed">
                       {t('pricing.industryTrapDesc')}
                     </div>
                   </div>
@@ -180,8 +180,8 @@ export function Pricing() {
                 <div className="flex items-start gap-3 p-3 bg-primary/10 border border-primary/30 rounded-sm shadow-[0_0_15px_rgba(0,243,255,0.1)]">
                   <InfinityIcon className="text-primary shrink-0 mt-0.5" size={16} />
                   <div>
-                    <div className="text-xs font-bold text-primary mb-1 uppercase tracking-wider">{t('pricing.trueLinearScaling')}</div>
-                    <div className="text-[10px] text-primary/70 font-mono leading-relaxed">
+                    <div className="text-base font-bold text-primary mb-1 uppercase tracking-wider">{t('pricing.trueLinearScaling')}</div>
+                    <div className="text-sm text-primary/70 font-mono leading-relaxed">
                       {t('pricing.trueLinearScalingDesc')} <span className="text-white/30 hover:text-white/80 transition-colors cursor-help" title={t('pricing.softCappedTooltip')}>{t('pricing.softCapped')}</span>
                     </div>
                   </div>
