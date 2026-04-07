@@ -1,6 +1,6 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { Users, Database, Clock, Cpu, Video, Briefcase, ShoppingCart, QrCode, Mail, ExternalLink, Heart } from 'lucide-react';
+import { Users, Database, Clock, Cpu, Video, Briefcase, ShoppingCart, QrCode, ExternalLink, Heart, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 /** 与后端默认一致；须小于边缘 nginx 的 proxy_read_timeout（常见 60s） */
@@ -93,9 +93,12 @@ const StatBox = ({ title, value, sub, icon: Icon, colorClass }: any) => (
   </div>
 );
 
+const PAY_QR_SRC = '/pic/pay.png';
+
 export function ServerStatus() {
   const { t, i18n } = useTranslation();
   const [stats, setStats] = useState<BarevidPublicStats | null>(null);
+  const [payModalOpen, setPayModalOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -150,7 +153,7 @@ export function ServerStatus() {
   const projectsVal = stats !== null ? fmt(stats.project_count) : '—';
 
   return (
-    <section id="status" className="min-h-screen w-full snap-start snap-always pt-20 pb-12 px-4 md:px-6 relative overflow-hidden flex flex-col justify-center">
+    <section id="status" className="min-h-screen w-full snap-start pt-20 pb-12 px-4 md:px-6 relative overflow-hidden flex flex-col justify-center">
       <div className="max-w-6xl mx-auto w-full relative z-10 flex flex-col h-full">
         
         {/* Header */}
@@ -237,8 +240,8 @@ export function ServerStatus() {
               <br/><br/>
               <span className="text-white/50 text-sm">{t('status.hireDesc2')}</span>
             </p>
-            <a href="mailto:necromancerappplepie@gmail.com" className="flex items-center justify-center gap-2 w-full py-3 bg-primary/10 border border-primary/50 text-primary hover:bg-primary hover:text-black transition-all font-bold uppercase tracking-widest text-sm">
-              <Mail size={14} /> necromancerappplepie@gmail.com
+            <a href="mailto:necromancerappplepie@gmail.com" className="flex items-center justify-center w-full py-3 bg-primary/10 border border-primary/50 text-primary hover:bg-primary hover:text-black transition-all font-bold uppercase tracking-widest text-sm">
+              <span className="break-all text-center">necromancerappplepie@gmail.com</span>
             </a>
           </CyberCard>
 
@@ -255,19 +258,50 @@ export function ServerStatus() {
               <br/>
               <span className="text-white/50 text-sm">{t('status.fundingDesc2')}</span>
             </p>
-            <div className="flex gap-2">
-              <button className="flex-1 flex items-center justify-center gap-2 py-3 bg-secondary/10 border border-secondary/50 text-secondary hover:bg-secondary hover:text-black transition-all font-bold uppercase tracking-widest text-sm">
-                <QrCode size={16} /> {t('status.scan')}
-              </button>
-              <a href="#" className="flex-1 flex items-center justify-center gap-2 py-3 bg-secondary/10 border border-secondary/50 text-secondary hover:bg-secondary hover:text-black transition-all font-bold uppercase tracking-widest text-sm">
-                {t('status.donate')} <ExternalLink size={14} />
-              </a>
-            </div>
+            <button
+              type="button"
+              onClick={() => setPayModalOpen(true)}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-secondary/10 border border-secondary/50 text-secondary hover:bg-secondary hover:text-black transition-all font-bold uppercase tracking-widest text-sm"
+            >
+              <QrCode size={16} /> {t('status.scan')}
+            </button>
           </CyberCard>
 
         </div>
 
       </div>
+
+      {payModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/92 p-4 md:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pay-modal-title"
+          onClick={() => setPayModalOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-sm flex flex-col gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <h3 id="pay-modal-title" className="text-lg font-black tracking-wide text-white">
+                {t('status.scan')}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPayModalOpen(false)}
+                className="shrink-0 w-10 h-10 rounded-sm border border-white/20 flex items-center justify-center text-white hover:bg-white/10 hover:border-white/40 transition-colors"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="rounded-sm overflow-hidden border border-white/10 bg-black">
+              <img src={PAY_QR_SRC} alt="" className="w-full h-auto object-contain max-h-[min(70vh,512px)]" />
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes scan {

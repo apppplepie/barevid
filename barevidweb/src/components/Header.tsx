@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import { Github, Terminal, Globe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { BAREVID_APP_URL, BAREVID_REPO_URL, CREEPENDER_BLOG_URL } from '../externalLinks';
 
 export function Header() {
   const { t } = useTranslation();
@@ -36,29 +37,34 @@ export function Header() {
           <div className="h-4 w-px bg-white/10 mx-2 hidden sm:block"></div>
 
           <a 
-            href="https://github.com" 
+            href={BAREVID_REPO_URL}
             target="_blank" 
             rel="noreferrer"
             className="flex items-center justify-center p-2 text-white/60 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 rounded transition-all"
-            title="GitHub"
+            title={t('header.githubTitle')}
           >
             <Github size={18} />
           </a>
 
           <a 
-            href="https://blog.example.com" 
+            href={CREEPENDER_BLOG_URL}
             target="_blank" 
             rel="noreferrer"
             className="flex items-center justify-center p-2 text-white/60 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 rounded transition-all"
-            title="Blog"
+            title={t('header.blogTitle')}
           >
             <Globe size={18} />
           </a>
 
-          <button className="ml-2 px-6 py-2 bg-primary/10 border border-primary/50 text-white hover:bg-primary hover:border-primary transition-all rounded text-sm font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(176,38,255,0.15)] hover:shadow-[0_0_25px_rgba(176,38,255,0.5)] relative overflow-hidden group">
+          <a
+            href={BAREVID_APP_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="ml-2 inline-flex px-6 py-2 bg-primary/10 border border-primary/50 text-white hover:bg-primary hover:border-primary transition-all rounded text-sm font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(176,38,255,0.15)] hover:shadow-[0_0_25px_rgba(176,38,255,0.5)] relative overflow-hidden group"
+          >
             <span className="relative z-10">{t('hero.freeTrial')}</span>
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-[200%] transition-transform duration-700 ease-in-out" />
-          </button>
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-[200%] transition-transform duration-700 ease-in-out pointer-events-none" />
+          </a>
         </motion.div>
       </div>
     </header>

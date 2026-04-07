@@ -11,7 +11,7 @@ import { ServerStatus } from './components/ServerStatus';
 
 export default function App() {
   return (
-    <div className="h-screen w-full overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth selection:bg-primary/30 selection:text-white text-white no-scrollbar relative">
+    <div className="h-screen w-full overflow-y-auto overflow-x-hidden snap-y snap-mandatory selection:bg-primary/30 selection:text-white text-white no-scrollbar relative">
       
       {/* Global Background */}
       <div className="fixed inset-0 z-[-1] pointer-events-none overflow-hidden bg-[#050505]">

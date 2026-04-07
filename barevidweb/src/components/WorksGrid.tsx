@@ -150,7 +150,7 @@ export function WorksGrid() {
   }
 
   return (
-    <section id="works" className="h-screen w-full snap-start snap-always relative overflow-hidden flex items-center border-y border-white/5">
+    <section id="works" className="h-screen w-full snap-start relative overflow-hidden flex items-center border-y border-white/5">
       {/* Vertical Side Text */}
       <div className="absolute right-4 top-1/2 -translate-y-1/2 rotate-90 origin-right text-xs font-mono text-white/20 tracking-[0.5em] uppercase whitespace-nowrap hidden lg:block z-0">
         {t('works.sideText')}
@@ -249,10 +249,6 @@ export function WorksGrid() {
 
             {/* Workflow highlights */}
             <div className="flex flex-wrap gap-x-10 gap-y-6 font-mono text-sm text-white/40 border-t border-white/10 pt-6">
-              <div className="min-w-[10rem] max-w-[14rem]">
-                <div className="text-white/80 mb-1 tracking-widest">{t('works.stat1Label')}</div>
-                <div className="text-base text-white font-bold leading-snug">{t('works.stat1Value')}</div>
-              </div>
               <div className="min-w-[10rem] max-w-[14rem]">
                 <div className="text-white/80 mb-1 tracking-widest">{t('works.stat2Label')}</div>
                 <div className="text-base text-primary font-bold leading-snug">{t('works.stat2Value')}</div>

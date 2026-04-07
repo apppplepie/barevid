@@ -1,12 +1,12 @@
 import { motion } from 'motion/react';
 import { useTranslation } from 'react-i18next';
-import { Github, Terminal, Cpu, TrendingUp, Infinity as InfinityIcon } from 'lucide-react';
+import { Cpu, TrendingUp, Infinity as InfinityIcon } from 'lucide-react';
 
 export function Pricing() {
   const { t } = useTranslation();
 
   return (
-    <section id="pricing" className="h-screen w-full snap-start snap-always pt-16 px-6 relative flex flex-col justify-center">
+    <section id="pricing" className="h-screen w-full snap-start pt-16 px-6 relative flex flex-col justify-center">
       <div className="max-w-5xl mx-auto w-full">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
@@ -24,7 +24,7 @@ export function Pricing() {
                 {t('pricing.openSourceProtocol')}
               </div>
 
-              <h3 className="text-3xl font-black mb-4 uppercase tracking-tighter text-white">
+              <h3 className="text-4xl md:text-5xl font-black mb-4 uppercase tracking-tighter text-white">
                 {t('pricing.zeroMarkup')}<br/>
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">{t('pricing.rawCompute')}</span>
               </h3>
@@ -54,17 +54,6 @@ export function Pricing() {
                     {t('pricing.costHighlightNote')}
                   </p>
                 </div>
-              </div>
-
-              <div className="flex gap-4 mt-auto">
-                <a href="https://github.com" target="_blank" rel="noreferrer" className="flex-1 py-3 bg-white/5 border border-white/10 text-white text-center font-bold font-mono text-base uppercase tracking-wider hover:bg-white/10 transition-colors flex items-center justify-center gap-2">
-                  <Github size={16} />
-                  {t('pricing.sourceCode')}
-                </a>
-                <a href="#" className="flex-1 py-3 bg-primary/10 border border-primary/50 text-primary text-center font-bold font-mono text-base uppercase tracking-wider hover:bg-primary hover:text-white transition-all shadow-[0_0_15px_rgba(176,38,255,0.2)] hover:shadow-[0_0_25px_rgba(176,38,255,0.5)] flex items-center justify-center gap-2">
-                  <Terminal size={16} />
-                  {t('pricing.selfHost')}
-                </a>
               </div>
             </div>
             
@@ -189,7 +178,7 @@ export function Pricing() {
                   <InfinityIcon className="text-primary shrink-0 mt-0.5" size={16} />
                   <div>
                     <div className="text-base font-bold text-primary mb-1 uppercase tracking-wider">{t('pricing.trueLinearScaling')}</div>
-                    <div className="text-sm text-primary/70 font-mono leading-relaxed">
+                    <div className="text-sm text-white font-mono leading-relaxed">
                       {t('pricing.trueLinearScalingDesc')} <span className="text-white/30 hover:text-white/80 transition-colors cursor-help" title={t('pricing.softCappedTooltip')}>{t('pricing.softCapped')}</span>
                     </div>
                   </div>
