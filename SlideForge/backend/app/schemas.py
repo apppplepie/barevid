@@ -109,6 +109,22 @@ class VideoExportWorkersStatus(BaseModel):
     alive: int
 
 
+class BarevidPublicStatsResponse(BaseModel):
+    """宣传页 /api/public/barevid-stats：仅聚合计数与展示字段，无鉴权。"""
+
+    deepseek_balance_display: str = Field(
+        default="",
+        description="展示用余额：优先 DEEPSEEK_API_KEY 拉取官方 /user/balance，失败则用 barevid_deepseek_balance_display",
+    )
+    doubao_trial_display: str = Field(
+        default="",
+        description="豆包语音 2.0 试用字数：优先 VOLCENGINE_ACCESS_KEY+SECRET 调 ResourcePacksStatus，失败则用 barevid_doubao_trial_display",
+    )
+    workers_online: int = Field(ge=0, description="导出 Worker 内存心跳在线数（单 API 进程）")
+    user_count: int = Field(ge=0)
+    project_count: int = Field(ge=0)
+
+
 class AudioPart(BaseModel):
     index: int
     filename: str

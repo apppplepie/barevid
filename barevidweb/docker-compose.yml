@@ -1,0 +1,21 @@
+# 可选：仅本机调试（例如 127.0.0.1:9080），不装整条 SlideForge。
+# 生产环境请用 SlideForge/docker-compose.yml 里的 barevidweb 服务 + 边缘 nginx。
+#
+# 从本目录：docker compose up -d --build
+# 后端默认宿主机 8000；视频默认挂载本仓库 public/vidsrc
+services:
+  barevidweb:
+    build:
+      context: ..
+      dockerfile: barevidweb/Dockerfile
+      args:
+        VITE_API_BASE_URL: ""
+    ports:
+      - "${BAREVIDWEB_BIND:-127.0.0.1}:9080:80"
+    environment:
+      SLIDEFORGE_API_UPSTREAM: ${SLIDEFORGE_API_UPSTREAM:-http://host.docker.internal:8000}
+    volumes:
+      - ${BAREVIDWEB_VIDSRC_HOST:-./public/vidsrc}:/usr/share/nginx/html/vidsrc:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

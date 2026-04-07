@@ -1,7 +1,22 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { Users, Database, Clock, Terminal, ShieldAlert, Cpu, Video, Briefcase, ShoppingCart, QrCode, Mail, ExternalLink, Heart } from 'lucide-react';
+import { Users, Database, Clock, Cpu, Video, Briefcase, ShoppingCart, QrCode, Mail, ExternalLink, Heart } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+
+const POLL_MS = 5 * 60 * 1000;
+
+type BarevidPublicStats = {
+  deepseek_balance_display: string;
+  doubao_trial_display: string;
+  workers_online: number;
+  user_count: number;
+  project_count: number;
+};
+
+function statsUrl(): string {
+  const base = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
+  return `${base}/api/public/barevid-stats`;
+}
 
 const CyberCard = ({ children, className = "", delay = 0, themeColor = "primary" }: { children: ReactNode, className?: string, delay?: number, themeColor?: "secondary" | "primary" | "muted" }) => {
   const themeMap = {
@@ -60,15 +75,36 @@ const StatBox = ({ title, value, sub, icon: Icon, colorClass }: any) => (
 );
 
 export function ServerStatus() {
-  const { t } = useTranslation();
-  const [tasks, setTasks] = useState(3);
+  const { t, i18n } = useTranslation();
+  const [stats, setStats] = useState<BarevidPublicStats | null>(null);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await fetch(statsUrl());
+      if (!res.ok) return;
+      const data = (await res.json()) as BarevidPublicStats;
+      setStats(data);
+    } catch {
+      /* 保持上次成功值或占位 */
+    }
+  }, []);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setTasks(prev => Math.max(0, prev + (Math.random() > 0.5 ? 1 : -1)));
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    void fetchStats();
+    const id = window.setInterval(() => void fetchStats(), POLL_MS);
+    return () => window.clearInterval(id);
+  }, [fetchStats]);
+
+  const fmt = (n: number) =>
+    new Intl.NumberFormat(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US').format(n);
+
+  const deepseekVal =
+    (stats?.deepseek_balance_display || '').trim() || '—';
+  const doubaoVal =
+    (stats?.doubao_trial_display || '').trim() || t('status.doubaoTrialPlaceholder');
+  const workersVal = stats !== null ? fmt(stats.workers_online) : '—';
+  const usersVal = stats !== null ? fmt(stats.user_count) : '—';
+  const projectsVal = stats !== null ? fmt(stats.project_count) : '—';
 
   return (
     <section id="status" className="min-h-screen w-full snap-start snap-always pt-20 pb-12 px-4 md:px-6 relative overflow-hidden flex flex-col justify-center">
@@ -91,11 +127,41 @@ export function ServerStatus() {
 
         {/* Telemetry Data (No Charts, Just Hard Data) */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
-          <StatBox title={t('status.deepseekBalance')} value="$1.42" sub={t('status.apiKeyActive')} icon={Database} colorClass="bg-primary" />
-          <StatBox title={t('status.doubaoBalance')} value="¥34.50" sub={t('status.volcengineActive')} icon={Cpu} colorClass="bg-secondary" />
-          <StatBox title={t('status.pendingTasks')} value={tasks} sub={t('status.serverQueue')} icon={Clock} colorClass="bg-white/50" />
-          <StatBox title={t('status.registeredUsers')} value="14,203" sub={t('status.dbAuthRecords')} icon={Users} colorClass="bg-primary/70" />
-          <StatBox title={t('status.totalProjects')} value="89,412" sub={t('status.renderedVideos')} icon={Video} colorClass="bg-secondary/70" />
+          <StatBox
+            title={t('status.deepseekBalance')}
+            value={deepseekVal}
+            sub={t('status.deepseekStatSub')}
+            icon={Database}
+            colorClass="bg-primary"
+          />
+          <StatBox
+            title={t('status.doubaoBalance')}
+            value={doubaoVal}
+            sub={t('status.doubaoTrialSub')}
+            icon={Cpu}
+            colorClass="bg-secondary"
+          />
+          <StatBox
+            title={t('status.workersOnline')}
+            value={workersVal}
+            sub={t('status.workersOnlineSub')}
+            icon={Clock}
+            colorClass="bg-white/50"
+          />
+          <StatBox
+            title={t('status.registeredUsers')}
+            value={usersVal}
+            sub={t('status.dbAuthRecords')}
+            icon={Users}
+            colorClass="bg-primary/70"
+          />
+          <StatBox
+            title={t('status.totalProjects')}
+            value={projectsVal}
+            sub={t('status.renderedVideos')}
+            icon={Video}
+            colorClass="bg-secondary/70"
+          />
         </div>
 
         {/* The "Real Talk" Indie Dev Section */}

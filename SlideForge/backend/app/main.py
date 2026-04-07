@@ -55,11 +55,14 @@ from app.db.models import (
 )
 from app.integrations.deepseek import (
     generate_contextual_page_draft,
+    get_barevid_deepseek_balance_display,
     list_deck_style_presets,
     resolve_deck_style_preset,
 )
+from app.integrations.volc_speech_resource_packs import get_barevid_doubao_trial_display
 from app.integrations.doubao_tts_service import resolve_tts_voice_type
 from app.schemas import (
+    BarevidPublicStatsResponse,
     AuthResponse,
     ContextualAIDraftApplyRequest,
     ContextualAIDraftRequest,
@@ -174,16 +177,30 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="SlideForge API", version="0.1.0", lifespan=lifespan)
 DECK_PAGE_SIZE_OPTIONS = {"16:9", "4:3", "9:16", "1:1"}
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+def _cors_allow_origins() -> list[str]:
+    base = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:5174",
         "http://127.0.0.1:5174",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-    ],
+        "http://localhost:9080",
+        "http://127.0.0.1:9080",
+    ]
+    extra = (settings.cors_extra_origins or "").strip()
+    if not extra:
+        return base
+    for part in extra.split(","):
+        u = part.strip()
+        if u and u not in base:
+            base.append(u)
+    return base
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_allow_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -284,6 +301,29 @@ async def health() -> dict:
 async def video_export_workers_status() -> VideoExportWorkersStatus:
     n = await export_worker_alive_count()
     return VideoExportWorkersStatus(alive=n)
+
+
+@app.get("/api/public/barevid-stats", response_model=BarevidPublicStatsResponse)
+async def barevid_public_stats(
+    session: AsyncSession = Depends(get_session),
+) -> BarevidPublicStatsResponse:
+    """宣传页轮询：用户/项目计数 + Worker 在线数；DeepSeek 余额优先官方 balance 接口（需 DEEPSEEK_API_KEY）。"""
+    users_n = (await session.exec(select(func.count(User.id)))).one()
+    projects_n = (await session.exec(select(func.count(Project.id)))).one()
+    workers_n = await export_worker_alive_count()
+    api_ds = await get_barevid_deepseek_balance_display()
+    fallback = (settings.barevid_deepseek_balance_display or "").strip()
+    ds = api_ds if api_ds else fallback
+    api_db = await get_barevid_doubao_trial_display()
+    db_fallback = (settings.barevid_doubao_trial_display or "").strip()
+    db = api_db if api_db else db_fallback
+    return BarevidPublicStatsResponse(
+        deepseek_balance_display=ds,
+        doubao_trial_display=db,
+        workers_online=workers_n,
+        user_count=int(users_n or 0),
+        project_count=int(projects_n or 0),
+    )
 
 
 @app.post("/api/auth/register", response_model=AuthResponse)

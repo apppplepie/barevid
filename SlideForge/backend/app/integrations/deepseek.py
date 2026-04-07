@@ -2,9 +2,11 @@ import asyncio
 import json
 import logging
 import re
+import time
 from pathlib import Path
 from typing import Any, Literal
 
+import httpx
 from openai import (
     APIConnectionError,
     APIStatusError,
@@ -1107,3 +1109,75 @@ async def generate_contextual_page_draft(
     if not html:
         raise RuntimeError("AI 草稿缺少 html")
     return {"main_title": main_title, "html": html}
+
+
+# 宣传页 /api/public/barevid-stats：官方账户余额（勿把 Key 暴露给浏览器）
+_DEEPSEEK_BALANCE_URL = "https://api.deepseek.com/user/balance"
+_BALANCE_CACHE_TTL_SEC = 120.0
+_balance_cache_monotonic: float = 0.0
+_balance_cache_display: str = ""
+
+
+def _format_balance_infos_payload(data: Any) -> str:
+    if not isinstance(data, dict):
+        return ""
+    raw = data.get("balance_infos")
+    if not isinstance(raw, list):
+        return ""
+    parts: list[str] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        cur = str(item.get("currency") or "").strip()
+        total = str(item.get("total_balance") or "").strip()
+        if cur and total:
+            parts.append(f"{cur} {total}")
+    return " · ".join(parts)
+
+
+async def get_barevid_deepseek_balance_display() -> str:
+    """GET /user/balance，带短时缓存；无 Key、失败或解析异常时返回空串（由 main 回退到静态配置）。"""
+    key = (settings.deepseek_api_key or "").strip()
+    if not key:
+        return ""
+
+    global _balance_cache_monotonic, _balance_cache_display
+    now = time.monotonic()
+    if _balance_cache_display and (now - _balance_cache_monotonic) < _BALANCE_CACHE_TTL_SEC:
+        return _balance_cache_display
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0, trust_env=False) as client:
+            r = await client.get(
+                _DEEPSEEK_BALANCE_URL,
+                headers={
+                    "Accept": "application/json",
+                    "Authorization": f"Bearer {key}",
+                },
+            )
+    except httpx.RequestError as e:
+        logger.warning("DeepSeek balance 请求失败：%s", e)
+        return _balance_cache_display
+
+    if r.status_code != 200:
+        logger.warning(
+            "DeepSeek balance HTTP %s：%s",
+            r.status_code,
+            (r.text or "")[:200],
+        )
+        return _balance_cache_display
+
+    try:
+        payload = r.json()
+    except json.JSONDecodeError:
+        logger.warning("DeepSeek balance 响应非 JSON")
+        return _balance_cache_display
+
+    display = _format_balance_infos_payload(payload)
+    if not display:
+        logger.warning("DeepSeek balance 无可用 balance_infos")
+        return _balance_cache_display
+
+    _balance_cache_display = display
+    _balance_cache_monotonic = now
+    return display

@@ -105,6 +105,19 @@ class Settings(BaseSettings):
     legacy_dev_auth_enabled: bool = False
     auth_session_ttl_days: int = 30
 
+    # 火山引擎账号 AK/SK（控制台 IAM，与豆包语音「应用」的 AppId/AccessToken 不同）。
+    # 配置后可由后端调用 ResourcePacksStatus 展示语音合成 2.0 试用字数余量（barevid 宣传页）。
+    volcengine_access_key: str = ""
+    volcengine_secret_key: str = ""
+    # ResourcePacksStatus 的 ProjectName，控制台未改时一般为 default
+    barevid_volcengine_project_name: str = "default"
+    # 宣传页 barevidweb：无 DEEPSEEK_API_KEY 或余额接口失败时的兜底展示文案（可留空）
+    barevid_deepseek_balance_display: str = ""
+    # 无火山 AK/SK 或 ResourcePacksStatus 失败时的豆包试用展示文案（可留空）
+    barevid_doubao_trial_display: str = ""
+    # 逗号分隔的额外 CORS 源，例如 https://barevid.example.com,http://127.0.0.1:9080
+    cors_extra_origins: str = ""
+
     # 并发控制：限制重任务同时运行数量，避免数据库锁争用与外部 API 限流
     tts_concurrency_limit: int = 5
     deck_page_concurrency_limit: int = 5
