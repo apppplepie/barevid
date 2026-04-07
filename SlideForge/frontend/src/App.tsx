@@ -17,6 +17,7 @@ import { type ServerWorkflow } from './utils/workflowFromPipeline';
 import {
   buildWorkflowStepsForProject,
   mergeProjectWorkflowState,
+  mergeServerWorkflowForListRefresh,
 } from './utils/workflowProject';
 import { useEditorWorkflowModel } from './hooks/useEditorWorkflowModel';
 import { WorkflowPanel } from './components/WorkflowPanel';
@@ -798,7 +799,31 @@ export default function App() {
           pipelineAutoAdvance,
         };
       });
-      setProjects(mapped);
+      setProjects((prev) =>
+        mapped.map((newP) => {
+          const old = prev.find((p) => p.id === newP.id);
+          if (!old) return newP;
+          const mergedWf = mergeServerWorkflowForListRefresh(
+            old.serverWorkflow,
+            newP.serverWorkflow,
+            old.pipeline,
+            newP.pipeline,
+          );
+          if (mergedWf === newP.serverWorkflow) return newP;
+          return {
+            ...newP,
+            serverWorkflow: mergedWf ?? newP.serverWorkflow,
+            workflowSteps: buildWorkflowStepsForProject({
+              pipeline: newP.pipeline,
+              serverStatus: newP.serverStatus,
+              deckStatus: newP.deckStatus,
+              serverWorkflow: mergedWf ?? newP.serverWorkflow,
+              pipelineAutoAdvance: newP.pipelineAutoAdvance,
+              manualOutlineConfirmed: old.manualOutlineConfirmed,
+            }),
+          };
+        }),
+      );
     },
     []
   );

@@ -119,6 +119,11 @@ export function deriveWorkflowSteps(
       ) {
         master = 'running';
       }
+      // pipeline 已标 deck 完成时，分步字段在回退/轮询瞬态可能仍为 pending 或 ready(→waiting)；与 pipeline 对齐避免场景页误闪「等待中」
+      const pDeck = pipeline?.deck === true;
+      if (pDeck && (render === 'pending' || render === 'waiting')) {
+        render = 'success';
+      }
       return [
         { id: 'deck_master', label: '演示母版', state: master, icon: Palette },
         { id: 'text', label: '文本结构化', state: outline, icon: FileText },
@@ -141,6 +146,10 @@ export function deriveWorkflowSteps(
       deck = 'waiting';
     }
     audio = audioStepWhenSynthesizing(outline, audio, projectStatus);
+    const pDeckLegacy = pipeline?.deck === true;
+    if (pDeckLegacy && (deck === 'pending' || deck === 'waiting')) {
+      deck = 'success';
+    }
     return [
       { id: 'text', label: '文本结构化', state: outline, icon: FileText },
       { id: 'audio', label: '音频生成', state: audio, icon: Mic },
