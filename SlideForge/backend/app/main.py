@@ -1657,7 +1657,10 @@ async def patch_project_deck_style(
     session: AsyncSession = Depends(get_session),
     me: User = Depends(get_current_user),
 ) -> dict:
-    if body.deck_style_preset is None and body.deck_style_user_hint is None:
+    # 区分「未传字段」与「显式传 null」：清空提示词须传 deck_style_user_hint: null，
+    # 否则旧 user_style_hint 会保留并继续参与母版生成。
+    provided = body.model_fields_set
+    if not provided.intersection({"deck_style_preset", "deck_style_user_hint"}):
         raise HTTPException(
             status_code=400,
             detail="至少提供 deck_style_preset / deck_style_user_hint 之一",
@@ -1666,16 +1669,23 @@ async def patch_project_deck_style(
     if not _can_manage_project(project, int(me.id)):
         raise HTTPException(status_code=403, detail="无权限修改该项目")
     st = await get_or_create_project_style(session, project_id, for_update=True)
-    if body.deck_style_preset is not None:
+    if "deck_style_preset" in provided:
+        preset_raw = body.deck_style_preset
+        preset = (
+            (preset_raw.strip() if isinstance(preset_raw, str) else "")
+            or DEFAULT_DECK_STYLE_PRESET
+        )
         try:
-            resolve_deck_style_preset(body.deck_style_preset)
+            resolve_deck_style_preset(preset)
         except RuntimeError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
-        st.style_preset = (
-            body.deck_style_preset.strip() or DEFAULT_DECK_STYLE_PRESET
-        )
-    if body.deck_style_user_hint is not None:
-        st.user_style_hint = body.deck_style_user_hint
+        st.style_preset = preset
+    if "deck_style_user_hint" in provided:
+        hint_raw = body.deck_style_user_hint
+        if hint_raw is None:
+            st.user_style_hint = None
+        else:
+            st.user_style_hint = str(hint_raw).strip() or None
     now = utc_now()
     st.style_data_json = None
     st.style_base_json = ""
@@ -1684,7 +1694,7 @@ async def patch_project_deck_style(
     st.updated_at = now
     session.add(st)
     await reset_export_only(session, project)
-    if body.deck_style_preset is not None or body.deck_style_user_hint is not None:
+    if provided.intersection({"deck_style_preset", "deck_style_user_hint"}):
         nd = merge_deck_master_source_id(project.description, None)
         if nd != project.description:
             project.description = nd
