@@ -15,4 +15,5 @@ docker pull creepender42/barevidweb:latest
 
 
 cd D:\workspace\code\test\barevid
+# scripts/ 默认 .gitignore；dbp.ps1 等仅本机保留
 .\scripts\dbp.ps1

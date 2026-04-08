@@ -7,6 +7,7 @@
 !**/.env.example
 
 # 本机/服务器上的 nginx 等配置（含域名与反代，勿入库）
+nginx.conf
 worker/test.conf
 
 # TLS 私钥类（若放在仓库旁）
@@ -15,6 +16,13 @@ worker/test.conf
 
 # Nested repo backup (see repo setup notes)
 .slideforge-git-backup/
+
+# PowerShell worker 日志（本机调试用）
+ps_worker_err.txt
+ps_worker_out.txt
+
+# 本地脚本（含 Docker 一键构建等，不入库）
+scripts/
 
 # Worker local SQLite (export history)
 worker/worker_tasks.db
