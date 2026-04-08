@@ -77,6 +77,22 @@ async def get_latest_video_export_job(
     return (await session.exec(stmt)).first()
 
 
+async def list_recent_video_export_jobs(
+    session: AsyncSession,
+    project_id: int,
+    *,
+    limit: int = 20,
+) -> list[VideoExportJob]:
+    n = max(1, min(100, int(limit)))
+    stmt = (
+        select(VideoExportJob)
+        .where(VideoExportJob.project_id == project_id)
+        .order_by(VideoExportJob.id.desc())
+        .limit(n)
+    )
+    return (await session.exec(stmt)).all()
+
+
 async def abort_stale_project_export_jobs(
     session: AsyncSession, project_id: int, message: str
 ) -> None:
@@ -128,23 +144,30 @@ async def recycle_stale_running_video_export_jobs(
     timeout_seconds = max(60, int(stale_after_seconds))
     now = utc_now()
     cutoff = now - timedelta(seconds=timeout_seconds)
-    await session.execute(
-        update(VideoExportJob)
+    stale_reason = _clip(
+        f"worker stale timeout after {timeout_seconds} seconds; job recycled"
+    )
+    res = await session.exec(
+        select(VideoExportJob)
         .where(VideoExportJob.status == "running")
         .where(
             (VideoExportJob.started_at.is_(None) & (VideoExportJob.updated_at < cutoff))
             | (VideoExportJob.started_at < cutoff)
         )
-        .values(
-            status="failed",
-            error_message=_clip(
-                f"worker stale timeout after {timeout_seconds} seconds; job recycled"
-            ),
-            finished_at=now,
-            updated_at=now,
-            request_authorization=None,
-        )
     )
+    stale_jobs = res.all()
+    if not stale_jobs:
+        return
+    for job in stale_jobs:
+        project = await session.get(Project, job.project_id)
+        if project is not None:
+            await mark_export_failed(session, project, stale_reason or "导出超时")
+        job.status = "failed"
+        job.error_message = stale_reason
+        job.finished_at = now
+        job.updated_at = now
+        job.request_authorization = None
+        session.add(job)
     await session.commit()
 
 

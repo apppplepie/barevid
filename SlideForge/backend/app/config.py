@@ -2,7 +2,7 @@ import os
 import sys
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -92,17 +92,48 @@ class Settings(BaseSettings):
         return (_BACKEND_DIR / v).resolve()
 
     # 视频导出：Playwright 打开的放映页 origin（无前端进程时会连接失败）
-    export_frontend_url: str = "http://127.0.0.1:3000"
+    export_frontend_url: str = Field(
+        default="http://127.0.0.1:3000",
+        validation_alias=AliasChoices(
+            "EXPORT_FRONTEND_URL",
+            "SLIDEFORGE_FRONTEND_URL",
+        ),
+    )
     # 非空时优先于请求体里的 frontend_url：专用录屏实例（如 npm run dev:play 的 5174）
-    export_play_origin: str = ""
+    export_play_origin: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "EXPORT_PLAY_ORIGIN",
+            "SLIDEFORGE_EXPORT_PLAY_ORIGIN",
+        ),
+    )
 
     # 导出脚本拉取 play-manifest 的 API 根地址（子进程内访问，默认同机 8000）
-    export_api_url: str = "http://127.0.0.1:8000"
+    export_api_url: str = Field(
+        default="http://127.0.0.1:8000",
+        validation_alias=AliasChoices(
+            "EXPORT_API_URL",
+            "SLIDEFORGE_API_URL",
+        ),
+    )
 
     # 视频导出一律入队；Worker 请求头 X-SlideForge-Worker-Key 须与此一致（必填，否则无法导出）
-    export_worker_token: str = ""
+    export_worker_token: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "EXPORT_WORKER_TOKEN",
+            "SLIDEFORGE_WORKER_KEY",
+            "SLIDEFORGE_WORKER_TOKEN",
+        ),
+    )
     # 远程 worker 用 HTTP 拉取 /media/... 音频时的站点根（通常与对外 API 同源，如 https://api.example.com）
-    export_public_base_url: str = ""
+    export_public_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "EXPORT_PUBLIC_BASE_URL",
+            "SLIDEFORGE_PUBLIC_BASE_URL",
+        ),
+    )
     export_job_running_timeout_seconds: int = 7200
     export_upload_max_bytes: int = 1_073_741_824
 

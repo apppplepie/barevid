@@ -48,6 +48,14 @@ def _env_float(key: str, *, default: float, minimum: float = 0.0) -> float:
         return max(minimum, default)
 
 
+def _env_first(*keys: str) -> str:
+    for key in keys:
+        value = (os.environ.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
 def _default_export_video_script() -> Path:
     return Path(__file__).resolve().parent / "export_video.py"
 
@@ -340,6 +348,17 @@ def _slot_loop(
                     job = response.json()
                 except httpx.HTTPError as exc:
                     print(f"[{wid}] claim failed: {exc}", flush=True)
+                    response = getattr(exc, "response", None)
+                    if response is not None:
+                        try:
+                            detail = response.text.strip()
+                        except Exception:
+                            detail = ""
+                        if detail:
+                            print(
+                                f"[{wid}] claim failed detail: {detail[:500]}",
+                                flush=True,
+                            )
                     _sleep_poll(poll_seconds, stop)
                     continue
 
@@ -380,12 +399,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="SlideForge export worker")
     parser.add_argument(
         "--api-url",
-        default=(os.environ.get("SLIDEFORGE_API_URL") or "").strip(),
+        default=_env_first("SLIDEFORGE_API_URL", "EXPORT_API_URL"),
         help="Backend API base URL, for example https://api.example.com",
     )
     parser.add_argument(
         "--worker-key",
-        default=(os.environ.get("SLIDEFORGE_WORKER_KEY") or "").strip(),
+        default=_env_first(
+            "SLIDEFORGE_WORKER_KEY",
+            "SLIDEFORGE_WORKER_TOKEN",
+            "EXPORT_WORKER_TOKEN",
+        ),
         help="Worker secret, must match backend EXPORT_WORKER_TOKEN",
     )
     parser.add_argument(
@@ -419,10 +442,17 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if not args.api_url:
-        print("missing --api-url or SLIDEFORGE_API_URL", file=sys.stderr)
+        print(
+            "missing --api-url or env SLIDEFORGE_API_URL / EXPORT_API_URL",
+            file=sys.stderr,
+        )
         return 1
     if not args.worker_key:
-        print("missing --worker-key or SLIDEFORGE_WORKER_KEY", file=sys.stderr)
+        print(
+            "missing --worker-key or env SLIDEFORGE_WORKER_KEY / "
+            "SLIDEFORGE_WORKER_TOKEN / EXPORT_WORKER_TOKEN",
+            file=sys.stderr,
+        )
         return 1
     if args.concurrency < 1:
         print("--concurrency must be >= 1", file=sys.stderr)

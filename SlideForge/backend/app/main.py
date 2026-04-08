@@ -141,6 +141,7 @@ from app.services.video_export_jobs import (
     fail_video_export_job,
     find_active_video_export_job,
     get_latest_video_export_job,
+    list_recent_video_export_jobs,
     video_export_job_public_dict,
 )
 from app.services.workflow_controls import (
@@ -308,6 +309,39 @@ async def health() -> dict:
 async def video_export_workers_status() -> VideoExportWorkersStatus:
     n = await export_worker_alive_count()
     return VideoExportWorkersStatus(alive=n)
+
+
+@app.get("/api/projects/{project_id}/video-export-jobs")
+async def project_video_export_jobs(
+    project_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+    me: User = Depends(get_current_user),
+) -> dict:
+    project = await _get_accessible_project(session, project_id, int(me.id))
+    if not _can_manage_project(project, int(me.id)):
+        raise HTTPException(status_code=403, detail="仅项目拥有者可查看导出任务详情")
+    rows = await list_recent_video_export_jobs(session, project_id, limit=limit)
+    items = []
+    for r in rows:
+        items.append(
+            {
+                "job_id": int(r.id) if r.id is not None else None,
+                "status": (r.status or "").strip().lower(),
+                "worker_id": (r.worker_id or "").strip() or None,
+                "width": int(r.width or 0),
+                "height": int(r.height or 0),
+                "error_message": (r.error_message or "").strip() or None,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "started_at": r.started_at.isoformat() if r.started_at else None,
+                "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+                "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+                "has_request_authorization": bool(
+                    (r.request_authorization or "").strip()
+                ),
+            }
+        )
+    return {"project_id": int(project_id), "count": len(items), "items": items}
 
 
 async def _build_barevid_public_stats(session: AsyncSession) -> BarevidPublicStatsResponse:

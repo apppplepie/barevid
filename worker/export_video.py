@@ -32,6 +32,14 @@ def _which(cmd: str) -> str | None:
     return shutil.which(cmd)
 
 
+def _env_first(*keys: str) -> str:
+    for key in keys:
+        value = (os.environ.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
 def _ffmpeg_timeout_seconds() -> float:
     raw = (os.environ.get("SLIDEFORGE_FFMPEG_TIMEOUT_SECONDS") or "").strip()
     if not raw:
@@ -169,6 +177,59 @@ def _resolve_ffmpeg() -> str:
     raise RuntimeError(
         "ffmpeg not found. Install ffmpeg and add it to PATH, or set FFMPEG_PATH to the full ffmpeg.exe path."
     )
+
+
+def _resolve_ffprobe(ffmpeg_path: str) -> str | None:
+    env_path = os.environ.get("FFPROBE_PATH", "").strip()
+    if env_path:
+        p = Path(env_path)
+        if p.is_file():
+            return str(p)
+    which = _which("ffprobe")
+    if which:
+        return which
+    ffmpeg_file = Path(ffmpeg_path)
+    sibling = ffmpeg_file.with_name("ffprobe.exe" if os.name == "nt" else "ffprobe")
+    if sibling.is_file():
+        return str(sibling)
+    return None
+
+
+def _probe_media_duration_ms(path: Path, ffprobe_path: str | None) -> int | None:
+    if not ffprobe_path or not path.is_file():
+        return None
+    cmd = [
+        ffprobe_path,
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(path),
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=20.0,
+        )
+    except Exception:
+        return None
+    if proc.returncode != 0:
+        return None
+    raw = (proc.stdout or "").strip()
+    if not raw:
+        return None
+    try:
+        sec = float(raw)
+    except ValueError:
+        return None
+    if sec < 0:
+        return None
+    return int(round(sec * 1000))
 
 
 def _format_srt_time(ms: int) -> str:
@@ -592,13 +653,13 @@ def _mux_video_audio(
 
 def _default_api_url() -> str:
     """Play-manifest 与媒体下载应对齐后端 API 根；勿用 SLIDEFORGE_FRONTEND_URL。"""
-    raw = (os.environ.get("SLIDEFORGE_API_URL") or "").strip()
+    raw = _env_first("SLIDEFORGE_API_URL", "EXPORT_API_URL")
     return raw or "http://127.0.0.1:8000"
 
 
 def _default_frontend_url() -> str:
     """Playwright 打开的放映页 origin；勿与 API 混用，且无公网默认（避免误连线上）。"""
-    raw = (os.environ.get("SLIDEFORGE_FRONTEND_URL") or "").strip()
+    raw = _env_first("SLIDEFORGE_FRONTEND_URL", "EXPORT_FRONTEND_URL")
     return raw or "http://127.0.0.1:3000"
 
 
@@ -643,6 +704,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     ffmpeg_path = _resolve_ffmpeg()
+    ffprobe_path = _resolve_ffprobe(ffmpeg_path)
 
     manifest = _fetch_manifest(args.api_url, args.project_id)
     steps = _flatten_steps(manifest)
@@ -688,10 +750,18 @@ def main(argv: Iterable[str] | None = None) -> int:
     has_sub = _build_subtitles(steps, subtitle_path)
 
     query = "autoplay=1&clean=1&export=1&nativeSub=0"
-    if _export_timeline_clock_enabled():
+    timeline_clock_enabled = _export_timeline_clock_enabled()
+    if timeline_clock_enabled:
         # 仅用于回退兼容：新前端默认音频驱动，长片更不易出现音画累计漂移。
         query += "&timelineClock=1"
     play_url = f"{args.frontend_url.rstrip('/')}/play/{args.project_id}/present?{query}"
+    print(
+        "[export-diagnose] "
+        f"project_id={args.project_id} timeline_clock={int(timeline_clock_enabled)} "
+        f"width={args.width} height={args.height} total_ms={total_ms}",
+        flush=True,
+    )
+    print(f"[export-diagnose] play_url={play_url}", flush=True)
     raw_auth = (os.environ.get("SLIDEFORGE_EXPORT_AUTHORIZATION") or "").strip()
     auth_token = ""
     if raw_auth:
@@ -715,6 +785,23 @@ def main(argv: Iterable[str] | None = None) -> int:
         subtitle_path if has_sub else None,
         video_preroll_ms=video_preroll_ms,
     )
+    raw_video_ms = _probe_media_duration_ms(video_path, ffprobe_path)
+    audio_ms = _probe_media_duration_ms(audio_path, ffprobe_path)
+    output_ms = _probe_media_duration_ms(output, ffprobe_path)
+    print(
+        "[export-diagnose] "
+        f"preroll_ms={video_preroll_ms} has_sub={int(has_sub)} "
+        f"raw_video_ms={raw_video_ms if raw_video_ms is not None else 'na'} "
+        f"audio_ms={audio_ms if audio_ms is not None else 'na'} "
+        f"output_ms={output_ms if output_ms is not None else 'na'}",
+        flush=True,
+    )
+    if raw_video_ms is not None and audio_ms is not None:
+        drift_ms = raw_video_ms - audio_ms
+        print(f"[export-diagnose] raw_video_minus_audio_ms={drift_ms}", flush=True)
+    if output_ms is not None and audio_ms is not None:
+        out_vs_audio_ms = output_ms - audio_ms
+        print(f"[export-diagnose] output_minus_audio_ms={out_vs_audio_ms}", flush=True)
 
     for p in (video_path, audio_path):
         try:
