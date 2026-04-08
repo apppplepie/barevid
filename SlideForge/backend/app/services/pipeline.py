@@ -23,7 +23,10 @@ from app.db.models import (
     utc_now,
 )
 from app.db.engine import async_session_maker
-from app.integrations.deepseek import structure_raw_text
+from app.integrations.deepseek import (
+    DEFAULT_DECK_STYLE_PRESET,
+    structure_raw_text,
+)
 from app.integrations.doubao_tts_service import synthesize_to_file
 from app.mediautil import audio_duration_ms, resolve_slide_audio_url
 from app.schemas import (
@@ -255,7 +258,7 @@ async def run_generate_outline_only(
     await session.refresh(project)
     style = ProjectStyle(
         origin_project_id=int(project.id),
-        style_preset="aurora_glass",
+        style_preset=DEFAULT_DECK_STYLE_PRESET,
         user_style_hint=None,
         style_prompt_text="",
         style_data_json=None,

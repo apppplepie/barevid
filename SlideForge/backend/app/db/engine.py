@@ -44,7 +44,7 @@ def _migrate_project_styles_v2(sync_conn) -> None:
     has_proj_cache = "deck_style_cache_json" in proj_cols
 
     for sql in (
-        "ALTER TABLE project_styles ADD COLUMN style_preset TEXT DEFAULT 'aurora_glass'",
+        "ALTER TABLE project_styles ADD COLUMN style_preset TEXT DEFAULT 'none'",
         "ALTER TABLE project_styles ADD COLUMN user_style_hint TEXT",
         "ALTER TABLE project_styles ADD COLUMN style_prompt_text TEXT DEFAULT ''",
         "ALTER TABLE project_styles ADD COLUMN style_data_json TEXT",
@@ -125,7 +125,7 @@ def _migrate_project_styles_v2(sync_conn) -> None:
                     if prow:
                         pp, ph = prow[0], prow[1]
                         # POST /api/projects 只写 project_styles，不写 projects.deck_style_preset；
-                        # 若此处用 NULL 回退成 aurora_glass，会在每次 init_db 覆盖用户所选预设，
+                        # 若此处用 NULL 回退成占位 none，会在每次 init_db 覆盖用户所选预设，
                         # 而 style_prompt_text 仍为原风格 → 出现「库中是极光玻璃、画面却是别的风格」。
                         pp_s = (pp or "").strip()
                         if pp_s:
@@ -200,7 +200,7 @@ def _migrate_project_styles_v2(sync_conn) -> None:
                 continue
             pp, ph = prow[0], prow[1]
             pc = prow[2] if has_proj_cache and len(prow) > 2 else None
-            sp = (pp or "").strip() or "aurora_glass"
+            sp = (pp or "").strip() or "none"
             cache_s = (pc or "").strip() if isinstance(pc, str) else ""
             legacy_blob = cache_s if cache_s else "{}"
             now = _dt_param(None)
@@ -264,7 +264,7 @@ async def _migrate_sqlite(conn) -> None:
     CREATE TABLE IF NOT EXISTS project_styles (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         origin_project_id INTEGER,
-        style_preset TEXT NOT NULL DEFAULT 'aurora_glass',
+        style_preset TEXT NOT NULL DEFAULT 'none',
         user_style_hint TEXT,
         style_prompt_text TEXT NOT NULL DEFAULT '',
         style_data_json TEXT,

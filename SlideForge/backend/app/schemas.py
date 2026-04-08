@@ -42,7 +42,7 @@ class ProjectCreate(BaseModel):
     deck_page_size: str | None = Field(default=None, description="（已废弃）")
     deck_style_preset: str | None = Field(
         default=None,
-        description="基本风格：aurora_glass | minimal_tech | dark_neon | editorial_luxury | futuristic_hud",
+        description="基本风格：none | aurora_glass | minimal_tech | dark_neon | material_design | flat_illustration | editorial_luxury | futuristic_hud",
     )
     copy_deck_master_from_project_id: int | None = Field(
         default=None,
@@ -217,7 +217,7 @@ class WorkflowStepActionBody(BaseModel):
 class DeckStylePatch(BaseModel):
     deck_style_preset: str | None = Field(
         default=None,
-        description="基本风格：aurora_glass | minimal_tech | dark_neon | editorial_luxury | futuristic_hud",
+        description="基本风格：none | aurora_glass | minimal_tech | dark_neon | material_design | flat_illustration | editorial_luxury | futuristic_hud",
     )
     deck_style_user_hint: str | None = Field(
         default=None,

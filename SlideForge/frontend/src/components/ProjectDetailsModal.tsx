@@ -68,10 +68,12 @@ const PROJECT_META_MARKER = '__sfmeta:';
 const DECK_MASTER_SRC_MARKER = '__sf_deck_src:';
 
 const DECK_STYLE_LABELS: Record<string, string> = {
-  none: '未选预设',
+  none: '未选预设（占位）',
   aurora_glass: '极光玻璃',
   minimal_tech: '极简科技',
-  dark_neon: '暗黑霓虹',
+  dark_neon: '温暖治愈',
+  material_design: 'Material 质感',
+  flat_illustration: '扁平插画风',
   editorial_luxury: '杂志高级感',
   futuristic_hud: '未来 HUD',
 };

@@ -170,10 +170,10 @@ function mergeProjectFromDetailApi(p: Project, data: ProjectDetailApi): Project 
     screenSize: (data.project.deck_page_size || p.screenSize || '16:9').trim() || '16:9',
     style:
       DECK_STYLE_DISPLAY[
-        (data.project.deck_style_preset || 'aurora_glass').trim() || 'aurora_glass'
+        (data.project.deck_style_preset || 'none').trim() || 'none'
       ] ||
       p.style ||
-      '极光玻璃',
+      '未选预设（占位）',
     workflowSteps: buildWorkflowStepsForProject({
       ...p,
       pipeline: pl,
@@ -195,8 +195,8 @@ function mergeProjectFromDetailApi(p: Project, data: ProjectDetailApi): Project 
         ? String(data.project.deck_style_prompt_text)
         : p.deckStylePromptText,
     deckStylePreset: (() => {
-      const raw = (data.project.deck_style_preset || p.deckStylePreset || 'aurora_glass').trim();
-      return raw || 'aurora_glass';
+      const raw = (data.project.deck_style_preset || p.deckStylePreset || 'none').trim();
+      return raw || 'none';
     })(),
     pipelineAutoAdvance: nextPipelineAutoAdvance,
   };
@@ -206,9 +206,12 @@ type AuthMe = { id: number; username: string };
 
 /** 与 backend `DECK_STYLE_PRESETS` 对应的列表展示名（`Project.style` 在列表中为中文名） */
 const DECK_STYLE_DISPLAY: Record<string, string> = {
+  none: '未选预设（占位）',
   aurora_glass: '极光玻璃',
   minimal_tech: '极简科技',
-  dark_neon: '暗黑霓虹',
+  dark_neon: '温暖治愈',
+  material_design: 'Material 质感',
+  flat_illustration: '扁平插画风',
   editorial_luxury: '杂志高级感',
   futuristic_hud: '未来 HUD',
 };
@@ -756,7 +759,7 @@ export default function App() {
       const items = list.items || [];
       const mapped: Project[] = items.map((item) => {
         const screenSize = item.deck_page_size || '16:9';
-        const preset = (item.deck_style_preset || 'aurora_glass').trim() || 'aurora_glass';
+        const preset = (item.deck_style_preset || 'none').trim() || 'none';
         const style = DECK_STYLE_DISPLAY[preset] || preset;
         const updatedAt = item.updated_at || item.created_at;
         const author =
@@ -2143,8 +2146,7 @@ export default function App() {
     if (!rawText || !trimmedName || userId === null) return;
     setCreateError(null);
     try {
-      const rawPreset = (newProject.style || 'aurora_glass').trim() || 'aurora_glass';
-      const preset = rawPreset === 'none' ? 'aurora_glass' : rawPreset;
+      const preset = (newProject.style || 'none').trim() || 'none';
       const body: Record<string, unknown> = {
         name: trimmedName,
         raw_text: rawText,
@@ -2588,7 +2590,7 @@ export default function App() {
         open={activeManualDialog === 'deck_master'}
         projectId={currentProjectId != null ? Number(currentProjectId) : 0}
         initialHint={(currentProject?.deckStyleUserHint ?? '').trim()}
-        initialDeckStylePreset={(currentProject?.deckStylePreset ?? 'aurora_glass').trim() || 'aurora_glass'}
+        initialDeckStylePreset={(currentProject?.deckStylePreset ?? 'none').trim() || 'none'}
         initialDeckMasterSourceProjectId={currentProject?.deckMasterSourceProjectId ?? null}
         onClose={closeManualDialog}
         onKickoffOptimistic={() => {

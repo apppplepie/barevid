@@ -56,6 +56,7 @@ from app.db.models import (
     utc_now,
 )
 from app.integrations.deepseek import (
+    DEFAULT_DECK_STYLE_PRESET,
     generate_contextual_page_draft,
     get_barevid_deepseek_balance_display,
     list_deck_style_presets,
@@ -483,8 +484,9 @@ async def list_projects(
             vj_out_url = latest_export_media_url(int(p.id), settings.storage_root)
         st = await get_project_style(session, p)
         preset = (
-            (st.style_preset if st else "aurora_glass") or "aurora_glass"
-        ).strip() or "aurora_glass"
+            (st.style_preset if st else DEFAULT_DECK_STYLE_PRESET)
+            or DEFAULT_DECK_STYLE_PRESET
+        ).strip() or DEFAULT_DECK_STYLE_PRESET
         page_size = resolve_project_page_size(p)
         deck_status = await compute_project_deck_status(session, int(p.id)) if p.id is not None else "idle"
         oid = int(p.owner_user_id) if p.owner_user_id is not None else 0
@@ -592,7 +594,7 @@ async def create_project(
                 detail="源项目还没有可用的演示风格母版，请换项目或留空以自动生成",
             )
 
-    preset = (body.deck_style_preset or "aurora_glass").strip() or "aurora_glass"
+    preset = (body.deck_style_preset or DEFAULT_DECK_STYLE_PRESET).strip() or DEFAULT_DECK_STYLE_PRESET
     if copy_master_pid is None:
         try:
             resolve_deck_style_preset(preset)
@@ -600,7 +602,10 @@ async def create_project(
             raise HTTPException(status_code=400, detail=str(e)) from e
     else:
         assert src_style_row is not None
-        preset = (src_style_row.style_preset or "aurora_glass").strip() or "aurora_glass"
+        preset = (
+            (src_style_row.style_preset or DEFAULT_DECK_STYLE_PRESET).strip()
+            or DEFAULT_DECK_STYLE_PRESET
+        )
         try:
             resolve_deck_style_preset(preset)
         except RuntimeError as e:
@@ -883,7 +888,7 @@ async def get_project(
     st_row = await get_project_style(session, project)
     if st_row is None:
         st_row = await get_or_create_project_style(session, project_id)
-    preset = (st_row.style_preset or "aurora_glass").strip() or "aurora_glass"
+    preset = (st_row.style_preset or DEFAULT_DECK_STYLE_PRESET).strip() or DEFAULT_DECK_STYLE_PRESET
     deck_style_ready, deck_style_theme_name, deck_style_version = (
         deck_style_ready_from_storage(project, st_row)
     )
@@ -1666,7 +1671,9 @@ async def patch_project_deck_style(
             resolve_deck_style_preset(body.deck_style_preset)
         except RuntimeError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
-        st.style_preset = body.deck_style_preset.strip() or "aurora_glass"
+        st.style_preset = (
+            body.deck_style_preset.strip() or DEFAULT_DECK_STYLE_PRESET
+        )
     if body.deck_style_user_hint is not None:
         st.user_style_hint = body.deck_style_user_hint
     now = utc_now()

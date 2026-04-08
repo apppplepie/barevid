@@ -21,6 +21,7 @@ from app.db.models import (
     utc_now,
 )
 from app.integrations.deepseek import (
+    DEFAULT_DECK_STYLE_PRESET,
     generate_deck_pages_html,
     generate_style_prompt_text,
 )
@@ -140,10 +141,10 @@ def _project_style_keys(
     project: Project, style_row: ProjectStyle | None
 ) -> tuple[str, str, str]:
     if style_row is not None:
-        preset = (style_row.style_preset or "aurora_glass").strip() or "aurora_glass"
+        preset = (style_row.style_preset or DEFAULT_DECK_STYLE_PRESET).strip() or DEFAULT_DECK_STYLE_PRESET
         hint = _norm_deck_hint(style_row.user_style_hint)
     else:
-        preset = "aurora_glass"
+        preset = DEFAULT_DECK_STYLE_PRESET
         hint = ""
     page_key = resolve_project_page_size(project)
     return preset, hint, page_key
@@ -188,7 +189,8 @@ async def get_or_create_project_style(
     if row is not None and for_update:
         row = ProjectStyle(
             origin_project_id=project_id,
-            style_preset=(row.style_preset or "aurora_glass").strip() or "aurora_glass",
+            style_preset=(row.style_preset or DEFAULT_DECK_STYLE_PRESET).strip()
+            or DEFAULT_DECK_STYLE_PRESET,
             user_style_hint=row.user_style_hint,
             style_prompt_text=row.style_prompt_text or "",
             style_data_json=row.style_data_json,
@@ -208,7 +210,7 @@ async def get_or_create_project_style(
 
     row = ProjectStyle(
         origin_project_id=project_id,
-        style_preset="aurora_glass",
+        style_preset=DEFAULT_DECK_STYLE_PRESET,
         user_style_hint=None,
         style_prompt_text="",
         style_data_json=None,
@@ -230,7 +232,7 @@ async def get_or_create_project_style(
 def _style_config_matches_row(
     row: ProjectStyle, preset: str, hint: str
 ) -> bool:
-    rp = (row.style_preset or "aurora_glass").strip() or "aurora_glass"
+    rp = (row.style_preset or DEFAULT_DECK_STYLE_PRESET).strip() or DEFAULT_DECK_STYLE_PRESET
     rh = _norm_deck_hint(row.user_style_hint)
     return rp == preset and rh == hint
 

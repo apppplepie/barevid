@@ -63,8 +63,8 @@ class ProjectStyle(SQLModel, table=True):
         index=True,
     )
     style_preset: str = Field(
-        default="aurora_glass",
-        description="基本风格 slug：aurora_glass | minimal_tech | …",
+        default="none",
+        description="基本风格 slug：none（占位）| aurora_glass | minimal_tech | …",
     )
     user_style_hint: Optional[str] = Field(
         default=None,

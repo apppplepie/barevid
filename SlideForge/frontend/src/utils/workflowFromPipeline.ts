@@ -173,10 +173,12 @@ export function deriveWorkflowSteps(
   else if (st === 'synthesizing') audio = 'running';
   else audio = 'pending';
 
+  // 配音与场景页在后端可并行；勿在 audio 未完成时把 deck 一律压成 pending，
+  // 否则会在「仅 pipeline + deck_status」回退路径下掩盖正在进行的页面生成。
   let deck: StepState;
-  if (audio !== 'success') deck = 'pending';
-  else if (p.deck) deck = 'success';
+  if (p.deck) deck = 'success';
   else if (ds === 'generating') deck = 'running';
+  else if (audio !== 'success') deck = 'pending';
   else deck = 'pending';
 
   if (st === 'failed') {

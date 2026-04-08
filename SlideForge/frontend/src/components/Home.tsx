@@ -149,7 +149,9 @@ type NarrationLengthPick =
 const STYLE_PRESETS = [
   { value: 'aurora_glass', title: '极光玻璃', subtitle: '' },
   { value: 'minimal_tech', title: '极简科技', subtitle: '' },
-  { value: 'dark_neon', title: '暗黑霓虹', subtitle: '' },
+  { value: 'dark_neon', title: '温暖治愈', subtitle: '' },
+  { value: 'material_design', title: 'Material 质感', subtitle: '' },
+  { value: 'flat_illustration', title: '扁平插画风', subtitle: '' },
   { value: 'editorial_luxury', title: '杂志高级感', subtitle: '' },
   { value: 'futuristic_hud', title: '未来 HUD', subtitle: '' },
 ] as const;
