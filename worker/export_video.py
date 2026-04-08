@@ -602,6 +602,16 @@ def _default_frontend_url() -> str:
     return raw or "http://127.0.0.1:3000"
 
 
+def _export_timeline_clock_enabled() -> bool:
+    """是否强制使用 timelineClock=1（旧导出时钟）；默认关闭，优先音频驱动以降低长片漂移。"""
+    raw = (os.environ.get("SLIDEFORGE_EXPORT_TIMELINE_CLOCK") or "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    return False
+
+
 def main(argv: Iterable[str] | None = None) -> int:
     env_path = Path(__file__).resolve().parent / ".env"
     if load_dotenv is not None:
@@ -677,13 +687,11 @@ def main(argv: Iterable[str] | None = None) -> int:
     subtitle_path = export_dir / "subtitles.srt"
     has_sub = _build_subtitles(steps, subtitle_path)
 
-    play_url = (
-        f"{args.frontend_url.rstrip('/')}/play/{args.project_id}/present"
-        # timelineClock=1 forces the player to advance by performance.now()
-        # instead of depending on <audio> timeupdate/setTimeout cadence, which
-        # is more stable under Playwright recording and concurrent exports.
-        f"?autoplay=1&clean=1&export=1&nativeSub=0&timelineClock=1"
-    )
+    query = "autoplay=1&clean=1&export=1&nativeSub=0"
+    if _export_timeline_clock_enabled():
+        # 仅用于回退兼容：新前端默认音频驱动，长片更不易出现音画累计漂移。
+        query += "&timelineClock=1"
+    play_url = f"{args.frontend_url.rstrip('/')}/play/{args.project_id}/present?{query}"
     raw_auth = (os.environ.get("SLIDEFORGE_EXPORT_AUTHORIZATION") or "").strip()
     auth_token = ""
     if raw_auth:

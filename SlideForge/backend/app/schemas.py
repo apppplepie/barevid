@@ -159,6 +159,10 @@ class NarrationTextPatch(BaseModel):
     """口播面板：保存某 step 节点的口播正文（与已生成音频可能不一致，需再点重配）。"""
 
     narration_text: str = Field(default="", description="口播全文")
+    preserve_alignment: bool = Field(
+        default=False,
+        description="当且仅当当前音频已按同文案重配成功时传 true，保留 narration_alignment_json",
+    )
 
 
 class ProjectPatch(BaseModel):

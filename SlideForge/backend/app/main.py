@@ -1904,7 +1904,8 @@ async def patch_outline_node_narration_text(
         raise HTTPException(status_code=404, detail="段落缺少内容记录")
     t = utc_now()
     nc.narration_text = body.narration_text or ""
-    nc.narration_alignment_json = None
+    if not body.preserve_alignment:
+        nc.narration_alignment_json = None
     nc.updated_at = t
     session.add(nc)
     project.updated_at = t

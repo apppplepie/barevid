@@ -361,6 +361,10 @@ export default function App() {
   const [narrationApplyBusyByKey, setNarrationApplyBusyByKey] = useState<Record<string, boolean>>(
     {},
   );
+  /** 记录最近一次「重配成功」所用文本；仅当应用相同文本时保留对齐 JSON */
+  const [narrationResynthTextByKey, setNarrationResynthTextByKey] = useState<
+    Record<string, string>
+  >({});
   const [narrationDraftMap, setNarrationDraftMap] = useState<
     Record<string, NarrationDraftEntry>
   >({});
@@ -1024,6 +1028,14 @@ export default function App() {
         ...prev,
         [key]: { projectId: pid, stepNodeId: sid, draftText: next },
       }));
+      const trimmed = next.trim();
+      setNarrationResynthTextByKey((prev) => {
+        const last = prev[key];
+        if (!last || last === trimmed) return prev;
+        const out = { ...prev };
+        delete out[key];
+        return out;
+      });
     },
     [narrationPanelClip, currentProjectId],
   );
@@ -1036,6 +1048,12 @@ export default function App() {
     if (!Number.isFinite(pid) || sid == null) return;
     const key = `${pid}:${sid}`;
     setNarrationDraftMap((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setNarrationResynthTextByKey((prev) => {
+      if (!(key in prev)) return prev;
       const next = { ...prev };
       delete next[key];
       return next;
@@ -1077,6 +1095,7 @@ export default function App() {
         setEditorFlashDownloadUrl(null);
         setEditorFlashMessage(resp.message || '该段音频已就绪。');
       } else {
+        setNarrationResynthTextByKey((prev) => ({ ...prev, [key]: text }));
         if (currentProjectId) {
           try {
             sessionStorage.setItem(`${LS_EXPORT_STALE_PREFIX}${currentProjectId}`, '1');
@@ -1110,25 +1129,36 @@ export default function App() {
     if (!Number.isFinite(pid) || sid == null) return;
     const key = `${pid}:${sid}`;
     const text = narrationDraftMap[key]?.draftText ?? '';
+    const trimmedText = text.trim();
     const baseline = (
       playSteps.find((s) => s.clip_id === c.id)?.narration_text ?? c.content ?? ''
     ).trim();
-    if (text.trim() === baseline) {
+    if (trimmedText === baseline) {
       setNarrationErrorByKey((prev) => ({
         ...prev,
         [key]: '草稿与已保存台词一致，无需应用。',
       }));
       return;
     }
+    const preserveAlignment = narrationResynthTextByKey[key] === trimmedText;
     setNarrationApplyBusyByKey((prev) => ({ ...prev, [key]: true }));
     setNarrationErrorByKey((prev) => ({ ...prev, [key]: null }));
     try {
       await apiFetch(`/api/projects/${pid}/outline-nodes/${sid}/narration-text`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ narration_text: text }),
+        body: JSON.stringify({
+          narration_text: text,
+          preserve_alignment: preserveAlignment,
+        }),
       });
       setNarrationDraftMap((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      setNarrationResynthTextByKey((prev) => {
+        if (!(key in prev)) return prev;
         const next = { ...prev };
         delete next[key];
         return next;
@@ -1142,7 +1172,14 @@ export default function App() {
     } finally {
       setNarrationApplyBusyByKey((prev) => ({ ...prev, [key]: false }));
     }
-  }, [narrationPanelClip, currentProjectId, narrationDraftMap, playSteps, reloadEditorWithMessage]);
+  }, [
+    narrationPanelClip,
+    currentProjectId,
+    narrationDraftMap,
+    narrationResynthTextByKey,
+    playSteps,
+    reloadEditorWithMessage,
+  ]);
 
   const handleGenerateAiDraft = useCallback(
     async (instruction: string) => {
