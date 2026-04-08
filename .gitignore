@@ -29,6 +29,9 @@ worker/worker_tasks.db-shm
 *.egg-info/
 .eggs/
 
+# barevidweb: 演示用视频体积大，勿提交（本地或 CDN；GitHub clone 更轻）
+barevidweb/public/vidsrc/*.mp4
+
 # Node / frontend build
 **/node_modules/
 **/dist/
