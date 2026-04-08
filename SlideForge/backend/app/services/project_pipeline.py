@@ -44,8 +44,11 @@ async def compute_project_pipeline(
         video_done = bool(ex and ex.status == wf.EXPORT_SUCCESS and (ex.output_file_url or "").strip())
 
     page_ids = await collect_deck_page_node_ids(session, pid)
-    deck_done = True
+    # 尚无「含子节点的 page」时，不应把 deck 标为完成；否则 pipeline.deck=true
+    # 会让前端把「场景页面」与 workflow 的 pending 对齐成 success（误显示已完成）。
+    deck_done = False
     if page_ids:
+        deck_done = True
         for nid in page_ids:
             r = await session.exec(
                 select(NodeContent).where(NodeContent.node_id == nid)
