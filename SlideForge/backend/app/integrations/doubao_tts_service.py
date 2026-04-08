@@ -50,13 +50,110 @@ def _normalize_addition(raw: Any) -> Any:
     return raw
 
 
+def _ensure_addition_frontend_json_string(addition: Any) -> Any:
+    """入库前将 addition.frontend 统一为 JSON 字符串，与 V3 路径一致，便于前端/导出解析。"""
+    if not isinstance(addition, dict):
+        return addition
+    out = dict(addition)
+    fe = out.get("frontend")
+    if isinstance(fe, dict):
+        out["frontend"] = json.dumps(fe, ensure_ascii=False)
+    return out
+
+
+def _canonicalize_alignment_object(obj: dict[str, Any]) -> dict[str, Any]:
+    """
+    将多种口播对齐 JSON 形态统一为 {source, reqid?, addition}；
+    addition 为 dict 且 frontend 为内嵌 words 的 JSON 字符串。
+    支持：addition 为字符串、顶层 words[]、顶层 frontend。
+    """
+    out = {k: v for k, v in obj.items() if k != "ingest_json_cache"}
+    add = out.get("addition")
+    if isinstance(add, str) and add.strip():
+        try:
+            parsed = json.loads(add)
+            out["addition"] = parsed
+            add = parsed
+        except json.JSONDecodeError:
+            pass
+
+    if not isinstance(out.get("addition"), dict):
+        words = out.get("words")
+        if isinstance(words, list) and len(words) > 0:
+            inner = json.dumps({"words": words}, ensure_ascii=False)
+            src = str(out.get("source") or "").strip() or "inferred_flat_words"
+            rid = out.get("reqid")
+            base = {k: v for k, v in out.items() if k not in ("words", "frontend")}
+            out = {
+                "source": src,
+                **({"reqid": rid} if rid is not None else {}),
+                "addition": {"frontend": inner},
+                **{
+                    k: v
+                    for k, v in base.items()
+                    if k not in ("source", "reqid", "addition")
+                },
+            }
+        elif "frontend" in out:
+            fe = out.get("frontend")
+            src = str(out.get("source") or "").strip() or "inferred_frontend_root"
+            rid = out.get("reqid")
+            base = {k: v for k, v in out.items() if k not in ("frontend", "words")}
+            out = {
+                "source": src,
+                **({"reqid": rid} if rid is not None else {}),
+                "addition": {"frontend": fe},
+                **{k: v for k, v in base.items() if k not in ("source", "reqid", "addition")},
+            }
+
+    add_d = out.get("addition")
+    if isinstance(add_d, dict):
+        out["addition"] = _ensure_addition_frontend_json_string(add_d)
+    return out
+
+
+def canonicalize_stored_narration_alignment_json(text: str | None) -> str | None:
+    """
+    入库前规范化 narration_alignment_json；无法解析为 JSON 时原样返回（仍写入「缓存」列）。
+    若规范化改变了结构，附带 ingest_json_cache 保留原始文本（体积上限约 200KB）。
+    """
+    if text is None:
+        return None
+    if not isinstance(text, str) or not text.strip():
+        return None
+    raw_stripped = text.strip()
+    try:
+        obj = json.loads(raw_stripped)
+    except json.JSONDecodeError:
+        return raw_stripped
+    if not isinstance(obj, dict):
+        return raw_stripped
+    obj_clean = {k: v for k, v in obj.items() if k != "ingest_json_cache"}
+    fixed = _canonicalize_alignment_object(obj_clean)
+    try:
+        stable_before = json.dumps(obj_clean, ensure_ascii=False, sort_keys=True)
+        stable_after = json.dumps(fixed, ensure_ascii=False, sort_keys=True)
+        if (
+            stable_before != stable_after
+            and len(raw_stripped) <= 200_000
+            and "ingest_json_cache" not in fixed
+        ):
+            fixed = dict(fixed)
+            fixed["ingest_json_cache"] = raw_stripped
+    except (TypeError, ValueError):
+        pass
+    return json.dumps(fixed, ensure_ascii=False)
+
+
 def _alignment_json_from_response(payload: dict[str, Any], source: str) -> str:
-    pack = {
+    norm = _normalize_addition(payload.get("addition"))
+    pack: dict[str, Any] = {
         "source": source,
         "reqid": payload.get("reqid"),
-        "addition": _normalize_addition(payload.get("addition")),
+        "addition": _ensure_addition_frontend_json_string(norm),
     }
-    return json.dumps(pack, ensure_ascii=False)
+    dumped = json.dumps(pack, ensure_ascii=False)
+    return canonicalize_stored_narration_alignment_json(dumped) or dumped
 
 
 def _speed_ratio_to_v3_speech_rate(speed_ratio: float) -> int:
@@ -317,7 +414,8 @@ async def _synthesize_v3_to_file(text: str, out_path: Path, voice_type: str) -> 
         "reqid": req_id,
         "addition": addition,
     }
-    return json.dumps(pack, ensure_ascii=False)
+    dumped = json.dumps(pack, ensure_ascii=False)
+    return canonicalize_stored_narration_alignment_json(dumped) or dumped
 
 
 async def synthesize_to_file(
@@ -332,5 +430,7 @@ async def synthesize_to_file(
     """
     voice = resolve_tts_voice_type(voice_override)
     if settings.doubao_tts_use_v3:
-        return await _synthesize_v3_to_file(text, out_path, voice)
-    return await _synthesize_v1_to_file(text, out_path, voice)
+        raw = await _synthesize_v3_to_file(text, out_path, voice)
+    else:
+        raw = await _synthesize_v1_to_file(text, out_path, voice)
+    return canonicalize_stored_narration_alignment_json(raw)

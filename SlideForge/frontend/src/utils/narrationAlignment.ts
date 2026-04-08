@@ -41,30 +41,64 @@ export function wordsToSentenceCues(words: DoubaoWordCue[]): NarrationSentenceCu
   return out;
 }
 
-function parseWordsFromAddition(addition: Record<string, unknown>): DoubaoWordCue[] | null {
-  const frontendRaw = addition.frontend;
-  if (typeof frontendRaw !== 'string' || !frontendRaw.trim()) return null;
-  let inner: unknown;
-  try {
-    inner = JSON.parse(frontendRaw);
-  } catch {
-    return null;
-  }
-  if (!inner || typeof inner !== 'object') return null;
-  const words = (inner as Record<string, unknown>).words;
-  if (!Array.isArray(words) || words.length === 0) return null;
-
+/** 从 words 数组解析字级轴；支持 startTime/endTime 驼峰。 */
+function parseWordArrayToCues(words: unknown[]): DoubaoWordCue[] | null {
   const parsed: DoubaoWordCue[] = [];
   for (const item of words) {
     if (!item || typeof item !== 'object') continue;
     const o = item as Record<string, unknown>;
-    const st = Number(o.start_time);
-    const en = Number(o.end_time);
+    const st = Number(o.start_time ?? o.startTime);
+    const en = Number(o.end_time ?? o.endTime);
     const word = String(o.word ?? '');
     if (!Number.isFinite(st) || !Number.isFinite(en)) continue;
-    parsed.push({ start_time: st, end_time: en, word });
+    parsed.push({ start_time: Math.round(st), end_time: Math.round(en), word });
   }
   return parsed.length > 0 ? parsed : null;
+}
+
+function parseWordsFromInner(inner: Record<string, unknown>): DoubaoWordCue[] | null {
+  const words = inner.words;
+  if (!Array.isArray(words) || words.length === 0) return null;
+  return parseWordArrayToCues(words);
+}
+
+function parseWordsFromAddition(addition: Record<string, unknown>): DoubaoWordCue[] | null {
+  const frontendRaw = addition.frontend;
+  let inner: unknown;
+  if (typeof frontendRaw === 'string' && frontendRaw.trim()) {
+    try {
+      inner = JSON.parse(frontendRaw);
+    } catch {
+      return null;
+    }
+  } else if (frontendRaw && typeof frontendRaw === 'object') {
+    inner = frontendRaw;
+  } else {
+    return null;
+  }
+  if (!inner || typeof inner !== 'object') return null;
+  return parseWordsFromInner(inner as Record<string, unknown>);
+}
+
+function sentenceCuesFromAlignmentRoot(root: Record<string, unknown>): NarrationSentenceCue[] | null {
+  let addition: unknown = root.addition;
+  if (typeof addition === 'string' && addition.trim()) {
+    try {
+      addition = JSON.parse(addition);
+    } catch {
+      addition = null;
+    }
+  }
+  if (addition && typeof addition === 'object') {
+    const w = parseWordsFromAddition(addition as Record<string, unknown>);
+    if (w) return wordsToSentenceCues(w);
+  }
+  const topWords = root.words;
+  if (Array.isArray(topWords) && topWords.length > 0) {
+    const w = parseWordArrayToCues(topWords);
+    if (w) return wordsToSentenceCues(w);
+  }
+  return null;
 }
 
 export function parseDoubaoSentenceCues(
@@ -72,11 +106,21 @@ export function parseDoubaoSentenceCues(
 ): NarrationSentenceCue[] | null {
   if (!alignment || typeof alignment !== 'object') return null;
   const root = alignment as Record<string, unknown>;
-  const addition = root.addition;
-  if (!addition || typeof addition !== 'object') return null;
-  const words = parseWordsFromAddition(addition as Record<string, unknown>);
-  if (!words) return null;
-  return wordsToSentenceCues(words);
+  const direct = sentenceCuesFromAlignmentRoot(root);
+  if (direct) return direct;
+  const cacheRaw = root.ingest_json_cache;
+  if (typeof cacheRaw === 'string' && cacheRaw.trim()) {
+    try {
+      const cached = JSON.parse(cacheRaw) as unknown;
+      if (cached && typeof cached === 'object') {
+        const fromCache = sentenceCuesFromAlignmentRoot(cached as Record<string, unknown>);
+        if (fromCache) return fromCache;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
 }
 
 export function activeSentenceIndex(

@@ -189,38 +189,70 @@ def _word_ends_sentence(word: str) -> bool:
     )
 
 
-def _parse_words_from_alignment(alignment: dict[str, Any]) -> list[dict[str, Any]]:
-    addition = alignment.get("addition")
-    if not isinstance(addition, dict):
-        return []
-    frontend_raw = addition.get("frontend")
-    if not isinstance(frontend_raw, str) or not frontend_raw.strip():
-        return []
-    try:
-        inner = json.loads(frontend_raw)
-    except Exception:
-        return []
-    if not isinstance(inner, dict):
-        return []
-    words = inner.get("words")
-    if not isinstance(words, list):
-        return []
+def _word_items_from_list(words: list[Any]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for item in words:
         if not isinstance(item, dict):
             continue
-        st = item.get("start_time")
-        en = item.get("end_time")
+        st = item.get("start_time", item.get("startTime"))
+        en = item.get("end_time", item.get("endTime"))
         word = item.get("word")
         try:
-            st = int(st)
-            en = int(en)
-        except Exception:
+            st_i = int(round(float(st)))
+            en_i = int(round(float(en)))
+        except (TypeError, ValueError):
             continue
         if not isinstance(word, str):
             word = str(word or "")
-        out.append({"start_ms": st, "end_ms": en, "word": word})
+        out.append({"start_ms": st_i, "end_ms": en_i, "word": word})
     return out
+
+
+def _parse_words_from_alignment_dict(alignment: dict[str, Any]) -> list[dict[str, Any]]:
+    addition_raw = alignment.get("addition")
+    addition: Any = addition_raw
+    if isinstance(addition_raw, str) and addition_raw.strip():
+        try:
+            addition = json.loads(addition_raw)
+        except Exception:
+            addition = None
+    if isinstance(addition, dict):
+        frontend_raw = addition.get("frontend")
+        inner: Any = None
+        if isinstance(frontend_raw, str) and frontend_raw.strip():
+            try:
+                inner = json.loads(frontend_raw)
+            except Exception:
+                inner = None
+        elif isinstance(frontend_raw, dict):
+            inner = frontend_raw
+        if isinstance(inner, dict):
+            words = inner.get("words")
+            if isinstance(words, list) and words:
+                w = _word_items_from_list(words)
+                if w:
+                    return w
+    tw = alignment.get("words")
+    if isinstance(tw, list) and tw:
+        w = _word_items_from_list(tw)
+        if w:
+            return w
+    return []
+
+
+def _parse_words_from_alignment(alignment: dict[str, Any]) -> list[dict[str, Any]]:
+    w = _parse_words_from_alignment_dict(alignment)
+    if w:
+        return w
+    cache = alignment.get("ingest_json_cache")
+    if isinstance(cache, str) and cache.strip():
+        try:
+            obj = json.loads(cache.strip())
+        except Exception:
+            return []
+        if isinstance(obj, dict):
+            return _parse_words_from_alignment_dict(obj)
+    return []
 
 
 def _words_to_sentence_cues(words: list[dict[str, Any]]) -> list[dict[str, Any]]:
