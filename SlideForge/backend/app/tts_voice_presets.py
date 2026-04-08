@@ -11,7 +11,6 @@ TTS_VOICE_PRESETS: list[dict[str, str]] = [
     {"value": "zh_female_xiaohe_uranus_bigtts", "label": "小何（通用场景 · 2.0）"},
     {"value": "zh_male_m191_uranus_bigtts", "label": "云舟（通用场景 · 2.0）"},
     {"value": "zh_male_taocheng_uranus_bigtts", "label": "小天（通用场景 · 2.0）"},
-    {"value": "en_male_tim_uranus_bigtts", "label": "Tim（通用场景 · 2.0）"},
 ]
 
 
