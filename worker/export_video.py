@@ -54,6 +54,37 @@ def _export_done_wait_buffer_ms() -> int:
         return 120_000
 
 
+def _export_tail_buffer_ms() -> int:
+    """收到播放结束信号后、关闭页面前的额外等待（毫秒）。
+    给浏览器留出时间渲染最后几帧；在机器性能不足或视频较长时应适当调大。
+    可通过 SLIDEFORGE_EXPORT_TAIL_BUFFER_MS 覆盖，默认 1500ms。
+    """
+    raw = (os.environ.get("SLIDEFORGE_EXPORT_TAIL_BUFFER_MS") or "").strip()
+    if not raw:
+        return 1500
+    try:
+        return max(0, min(10_000, int(raw)))
+    except ValueError:
+        return 1500
+
+
+def _export_record_scale() -> float:
+    """录制分辨率相对于最终输出分辨率的缩放比（0.25–1.0）。
+    降低此值可大幅减轻 Playwright 录制时的渲染压力，ffmpeg 合成时再上采样还原。
+    例：SLIDEFORGE_EXPORT_RECORD_SCALE=0.5 以 960×540 录制后缩放到 1920×1080。
+    机器性能不足、长视频帧延迟积累时，设为 0.5 可显著改善画音同步。
+    默认 1.0（与输出分辨率相同）。
+    """
+    raw = (os.environ.get("SLIDEFORGE_EXPORT_RECORD_SCALE") or "").strip()
+    if not raw:
+        return 1.0
+    try:
+        v = float(raw)
+        return max(0.25, min(1.0, v))
+    except ValueError:
+        return 1.0
+
+
 def _run(cmd: list[str], *, timeout_seconds: float | None = None) -> None:
     try:
         proc = subprocess.run(cmd, check=False, timeout=timeout_seconds)
@@ -360,7 +391,8 @@ async def _record_video(
     width: int,
     height: int,
     auth_token: str | None = None,
-) -> tuple[Path, int]:
+) -> tuple[Path, int, int, int]:
+    """录制并返回 (视频路径, preroll_ms, 实际录制宽度, 实际录制高度)。"""
     try:
         from playwright.async_api import async_playwright
     except Exception as exc:  # pragma: no cover - runtime guard
@@ -368,15 +400,27 @@ async def _record_video(
             "Playwright not installed. Run: pip install playwright && python -m playwright install chromium"
         ) from exc
 
+    scale = _export_record_scale()
+    rec_width = max(1, int(width * scale))
+    rec_height = max(1, int(height * scale))
+
     out_dir.mkdir(parents=True, exist_ok=True)
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            args=["--autoplay-policy=no-user-gesture-required"]
+            args=[
+                "--autoplay-policy=no-user-gesture-required",
+                # 以下参数减轻录制时的渲染压力，改善长视频帧延迟积累：
+                "--disable-dev-shm-usage",            # 避免 /dev/shm 不足导致渲染卡顿
+                "--disable-background-timer-throttling",  # 防止后台标签页 timer 被节流
+                "--disable-renderer-backgrounding",   # 防止渲染进程被降级
+                "--disable-backgrounding-occluded-windows",
+                "--disable-ipc-flooding-protection",  # 减少 IPC 节流带来的帧延迟
+            ]
         )
         context = await browser.new_context(
-            viewport={"width": width, "height": height},
+            viewport={"width": rec_width, "height": rec_height},
             record_video_dir=str(out_dir),
-            record_video_size={"width": width, "height": height},
+            record_video_size={"width": rec_width, "height": rec_height},
         )
         if auth_token:
             safe_token = json.dumps(auth_token)
@@ -479,7 +523,9 @@ async def _record_video(
                 "() => typeof window.__SLIDEFORGE_EXPORT_DONE_AT_MS === 'number'",
                 timeout=done_timeout_ms,
             )
-            await page.wait_for_timeout(300)
+            # 收到结束信号后额外等待，让浏览器有时间渲染最后几帧；
+            # 在机器性能不足或长视频时应调大 SLIDEFORGE_EXPORT_TAIL_BUFFER_MS（默认 1500ms）。
+            await page.wait_for_timeout(_export_tail_buffer_ms())
         except Exception:
             # 兜底：兼容旧前端或标记丢失场景，仅做短暂收尾等待，避免总时长翻倍。
             await page.wait_for_timeout(1200)
@@ -490,7 +536,7 @@ async def _record_video(
         await browser.close()
         if not video_path:
             raise RuntimeError("Failed to capture video.")
-        return Path(video_path), preroll_ms
+        return Path(video_path), preroll_ms, rec_width, rec_height
 
 
 def _escape_subtitle_path(path: Path) -> str:
@@ -507,6 +553,11 @@ def _mux_video_audio(
     ffmpeg_path: str,
     subtitle_path: Path | None,
     video_preroll_ms: int = 0,
+    *,
+    output_width: int | None = None,
+    output_height: int | None = None,
+    rec_width: int | None = None,
+    rec_height: int | None = None,
 ) -> None:
     cmd = [ffmpeg_path, "-y"]
     # 解码 VP8 + 字幕滤镜 + x264 在 1080p 下可能吃满内存；限制线程可降低峰值（尤其 Windows）。
@@ -520,31 +571,32 @@ def _mux_video_audio(
     if trim_s > 0.01:
         cmd += ["-ss", f"{trim_s:.3f}"]
     cmd += ["-i", str(video_path), "-i", str(audio_path)]
-    if subtitle_path and subtitle_path.is_file():
-        sub = _escape_subtitle_path(subtitle_path)
-        cmd += [
-            "-vf",
-            f"subtitles='{sub}'",
-            "-c:v",
-            "libx264",
-            "-crf",
-            x264_crf,
-            "-preset",
-            x264_preset,
-        ]
+
+    # 当录制分辨率低于输出分辨率时（SLIDEFORGE_EXPORT_RECORD_SCALE < 1.0），
+    # 在 vf 滤镜链中插入 scale 上采样，使最终输出保持目标分辨率。
+    needs_scale = (
+        output_width and output_height and rec_width and rec_height
+        and (rec_width != output_width or rec_height != output_height)
+    )
+    scale_filter = f"scale={output_width}:{output_height}:flags=lanczos" if needs_scale else ""
+
+    # 总需要 libx264 重编码的条件：有字幕滤镜、有 scale 滤镜、或者有时间裁剪。
+    needs_reencode = bool(
+        (subtitle_path and subtitle_path.is_file()) or scale_filter or trim_s > 0.01
+    )
+
+    if needs_reencode:
+        vf_parts: list[str] = []
+        if scale_filter:
+            vf_parts.append(scale_filter)
+        if subtitle_path and subtitle_path.is_file():
+            sub = _escape_subtitle_path(subtitle_path)
+            vf_parts.append(f"subtitles='{sub}'")
+        cmd += ["-vf", ",".join(vf_parts)] if vf_parts else []
+        cmd += ["-c:v", "libx264", "-crf", x264_crf, "-preset", x264_preset]
     else:
-        if trim_s > 0.01:
-            # 发生裁剪时改为重编码，避免 copy 在非关键帧处裁剪不准。
-            cmd += [
-                "-c:v",
-                "libx264",
-                "-crf",
-                x264_crf,
-                "-preset",
-                x264_preset,
-            ]
-        else:
-            cmd += ["-c:v", "copy"]
+        cmd += ["-c:v", "copy"]
+
     cmd += [
         "-c:a",
         "aac",
@@ -656,7 +708,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     auth_token = ""
     if raw_auth:
         auth_token = raw_auth[7:].strip() if raw_auth.lower().startswith("bearer ") else raw_auth
-    video_path, video_preroll_ms = asyncio.run(
+    video_path, video_preroll_ms, rec_width, rec_height = asyncio.run(
         _record_video(
             play_url,
             total_ms,
@@ -674,6 +726,10 @@ def main(argv: Iterable[str] | None = None) -> int:
         ffmpeg_path,
         subtitle_path if has_sub else None,
         video_preroll_ms=video_preroll_ms,
+        output_width=args.width,
+        output_height=args.height,
+        rec_width=rec_width,
+        rec_height=rec_height,
     )
 
     for p in (video_path, audio_path):
