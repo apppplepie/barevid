@@ -18,6 +18,10 @@ type StepRange = {
 
 type StepPlayerOptions = {
   useTimelineClock?: boolean;
+  /** 导出录屏：每帧用 audio.currentTime 推进时间轴，避免 timeupdate 过稀导致画面慢于口播 */
+  highResAudioClock?: boolean;
+  /** 最后一段口播 audio 自然结束（不含 pause 步） */
+  onLastAudioClipEnded?: () => void;
 };
 
 function clampRange(
@@ -48,6 +52,10 @@ export function useStepPlayer(
   options?: StepPlayerOptions
 ) {
   const useTimelineClock = Boolean(options?.useTimelineClock);
+  const highResAudioClock = Boolean(options?.highResAudioClock);
+  const onLastAudioClipEndedRef = useRef(options?.onLastAudioClipEnded);
+  onLastAudioClipEndedRef.current = options?.onLastAudioClipEnded;
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const isPlayingRef = useRef(false);
   const rafRef = useRef<number | null>(null);
@@ -67,6 +75,11 @@ export function useStepPlayer(
     safeRange.end
   );
   const currentStep = steps.length === 0 ? 0 : safeIndex;
+
+  const stepsRef = useRef(steps);
+  stepsRef.current = steps;
+  const safeIndexRef = useRef(safeIndex);
+  safeIndexRef.current = safeIndex;
 
   useEffect(() => {
     if (steps.length === 0) return;
@@ -124,6 +137,28 @@ export function useStepPlayer(
     };
   }, [isPlaying, safeIndex, steps, useTimelineClock]);
 
+  /** 导出录屏：timeupdate 过稀时 globalMs 滞后于真实播放，画面/字幕会慢于口播 */
+  useEffect(() => {
+    if (useTimelineClock || !highResAudioClock) return;
+    if (!isPlaying) return;
+
+    let rafId = 0;
+    const tick = () => {
+      if (!isPlayingRef.current) return;
+      const el = audioRef.current;
+      const idx = safeIndexRef.current;
+      const st = stepsRef.current[idx];
+      if (el && st && !isPauseStep(st)) {
+        setGlobalMs(st.start_ms + el.currentTime * 1000);
+      }
+      rafId = window.requestAnimationFrame(tick);
+    };
+    rafId = window.requestAnimationFrame(tick);
+    return () => {
+      if (rafId) window.cancelAnimationFrame(rafId);
+    };
+  }, [isPlaying, useTimelineClock, highResAudioClock, safeIndex]);
+
   useEffect(() => {
     if (!useTimelineClock) return;
     if (!isPlaying) return;
@@ -177,6 +212,7 @@ export function useStepPlayer(
           setGlobalMs((next?.start_ms ?? 0) + 0);
           return i + 1;
         }
+        onLastAudioClipEndedRef.current?.();
         setIsPlaying(false);
         return i;
       });
@@ -208,6 +244,7 @@ export function useStepPlayer(
         setIsPlaying(true);
         return i + 1;
       }
+      onLastAudioClipEndedRef.current?.();
       setIsPlaying(false);
       return i;
     });

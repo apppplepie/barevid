@@ -593,7 +593,7 @@ async def structure_raw_text(
     data = await _extract_json_object_with_repair(
         content=content,
         client=client,
-        scene="播客结构化（items/segments）",
+        scene="文本结构化（items/segments）",
     )
     # 兼容旧响应：若 brief 缺失/为空，使用 script 自动派生
     if isinstance(data, dict):
@@ -629,7 +629,7 @@ IMAGE_SEMANTIC = (
 )
 # 放映页：视觉与交互规范（不含 API 输出 JSON 形状，便于按场景拼接）
 DECK_CORE_VISUAL_SYSTEM = (
-    """你是负责设计高端产品网页前端工程师：你在交付**全屏滚动着陆页**（full viewport、整屏 snap 滚动），用完整 HTML/CSS 实现。
+    """你是资深前端工程师：你在交付**全屏滚动着陆页**（full viewport、整屏 snap 滚动），用完整 HTML/CSS 实现。
 输出：现代、克制但有层次的全屏分屏页面（N 个 section）。
 核心交互（必须实现语义）
 * 页面为“分屏滚动”（fullpage / snap scroll）
@@ -639,33 +639,30 @@ DECK_CORE_VISUAL_SYSTEM = (
 * 所有 section 需天然适配“整屏切换”（优先 CSS scroll-snap + 锚点；避免大段内联 JS）
 文本规则（硬性）
 * 禁止 emoji / 情绪符号
-* 页面文本必须是“展示文案”，非口语/解说
 * 每个元素里面的字数不得多于20个字
-* 字号下限（不可协商）：凡面向用户阅读的展示文字（标题、副标题、列表项、按钮/标签、高亮关键词、引用等），在 CSS 中须显式 font-size，且数值须 **严格大于 28px**（例如至少 32px）；禁止依赖默认 body 字号、禁止用 rem/em 间接导致折算后 ≤28px。代码块内等宽字体可略小，但代码块外的说明文字仍须 >28px。自检：在样式中搜索 font-size，任一展示文本若 ≤28px 即视为不合格输出。
+* 字号下限（不可协商）：凡面向用户阅读的展示文字（标题、副标题、列表项、高亮关键词、引用等），在 CSS 中须显式 font-size，且数值须 **严格大于 28px**（例如至少 32px）；禁止依赖默认 body 字号、禁止用 rem/em 间接导致折算后 ≤28px。代码块内等宽字体可略小，但代码块外的说明文字仍须 >28px。自检：在样式中搜索 font-size，任一展示文本若 ≤28px 即视为不合格输出。
 表现力规则（必须）
 1）用视觉承载信息
-情绪、强调和对比必须通过视觉组件表达，优先使用：
-在 React Icons 里优先用：hi（Heroicons），lu（Lucide），tb（Tabler Icons）
-渐变、光晕、模糊、噪点、发光边缘
-动效：fade / slide / glow / float / scale
-数据化表达：数字、对比条、进度、趋势
-结构化组件：卡片、时间轴、仪表盘
-2）每个 section 必须“高端产品网页”风格
-每个 section 都要包含至少一种非文本视觉元。
-3）空间与构图
-内容应在视口中形成平衡构图，避免单边堆满文字。
-4）并列单元控制
-同一 section 内并列单元数 ≤ 2
-超过 2 个时必须分组、分层或拆成上下两段
-5）从 brief 提炼出的硬要求
-必须具备：
-短标题：3~10 字，直接有力
-关键词高亮：使用 <span> 突出关键语义
-列表 / 模块化结构：信息必须被拆分成清晰模块
-非纯文本化：每个 section 都要有视觉元素参与表达
+* 优先使用：
+* React Icons 里优先用：hi（Heroicons），lu（Lucide），tb（Tabler Icons）
+* 渐变、光晕、模糊、噪点、发光边缘
+* 动效：fade / slide / glow / float / scale
+* 数据化表达：数字、对比条、进度、趋势
+2）空间与构图
+* 内容应在视口中形成平衡构图，不得大量留空或超出比例。
+3）并列单元控制
+* 同一 section 内并列单元数 ≤ 3，禁止出现三个一排或一列的并列单元
+* 超过 3 个时必须分组、分层或拆成上下两段
+* 每个文字容器宽度不得小于100px
+4）从 brief 提炼出的硬要求
+* 必须具备：
+* 短标题：3~10 字，直接有力
+* 关键词高亮：使用 <span> 突出关键语义
+* 列表 / 模块化结构：信息必须被拆分成清晰模块
+* 非纯文本化：每个 section 都要有视觉元素参与表达
 
-禁止：
-* 滚动提示词
+*禁止：
+* 连接线
 * 页码
 * emoji
 * 情绪符号

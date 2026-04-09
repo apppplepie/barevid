@@ -90,6 +90,15 @@ export function SlidePlayer({
       : undefined;
   const rangeStart = range?.start ?? 0;
   const rangeEnd = range?.end ?? Math.max(0, steps.length - 1);
+
+  const markExportPlaybackDone = useCallback(() => {
+    if (!exportMode || typeof window === "undefined") return;
+    const w = window as Window & {
+      __SLIDEFORGE_EXPORT_DONE_AT_MS?: number;
+    };
+    w.__SLIDEFORGE_EXPORT_DONE_AT_MS = Math.round(performance.now());
+  }, [exportMode]);
+
   const {
     audioRef,
     currentStep,
@@ -106,7 +115,11 @@ export function SlidePlayer({
     onEnded,
     onPlay,
     onPause,
-  } = useStepPlayer(steps, range, { useTimelineClock });
+  } = useStepPlayer(steps, range, {
+    useTimelineClock,
+    highResAudioClock: exportMode,
+    onLastAudioClipEnded: exportMode ? markExportPlaybackDone : undefined,
+  });
 
   const [audioErr, setAudioErr] = useState<string | null>(null);
   /** 浏览器实测时长（秒），用于修正与 manifest duration_ms 不一致 */
