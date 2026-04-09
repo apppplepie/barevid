@@ -303,7 +303,7 @@ html[data-theme='light'] {
   stroke: var(--sf-workflow-edge-inactive);
 }
 
-/** 前序已完成 → 当前进行/待操作步骤：蓝色虚线 + 沿路径前进的 dash 动画（offset 周期 = dash 周期无缝循环） */
+/** 前序已完成 → 当前「进行中」步骤：蓝色虚线 + 沿路径前进的 dash 动画 */
 @keyframes sf-workflow-edge-dash-march {
   to {
     stroke-dashoffset: -5;
@@ -324,6 +324,22 @@ html[data-theme='light'] {
 .light .sf-workflow-edge-progress {
   stroke: rgb(37 99 235);
   filter: drop-shadow(0 0 1px rgb(37 99 235 / 0.45));
+}
+
+/** 前序已完成 → 当前「待操作」步骤：黄色虚线，不滚动（与进行中蓝色区分） */
+.sf-workflow-edge-waiting {
+  stroke: rgb(245 158 11);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  stroke-dasharray: 3 2;
+  stroke-dashoffset: 0;
+  filter: drop-shadow(0 0 1px rgb(245 158 11 / 0.45));
+}
+
+.light .sf-workflow-edge-waiting {
+  stroke: rgb(217 119 6);
+  filter: drop-shadow(0 0 1px rgb(217 119 6 / 0.4));
 }
 
 /** 前序 → 已完成步骤：静态绿色实线（无动画） */

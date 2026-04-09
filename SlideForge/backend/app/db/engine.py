@@ -1,6 +1,8 @@
+import asyncio
 import json
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from datetime import datetime, timezone
+from typing import TypeVar
 
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import OperationalError
@@ -10,6 +12,8 @@ from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import settings
+
+T = TypeVar("T")
 
 _raw_db_url = (settings.database_url or "").strip()
 if not _raw_db_url:
@@ -30,6 +34,8 @@ async_session_maker = sessionmaker(
     engine,
     class_=AsyncSession,
     expire_on_commit=False,
+    # 避免 SELECT 触发隐式 flush（Query-invoked autoflush），降低并发更新时死锁概率。
+    autoflush=False,
 )
 
 
@@ -773,3 +779,48 @@ async def init_db() -> None:
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_maker() as session:
         yield session
+
+
+def is_retryable_mysql_lock_error(exc: OperationalError) -> bool:
+    """MySQL 死锁/锁等待超时判定（1213 / 1205）。"""
+    msg = str(exc).lower()
+    if "deadlock found when trying to get lock" in msg:
+        return True
+    if "lock wait timeout exceeded" in msg:
+        return True
+    code = None
+    orig = getattr(exc, "orig", None)
+    if orig is not None:
+        try:
+            args = getattr(orig, "args", None) or ()
+            if args:
+                code = int(args[0])
+        except Exception:
+            code = None
+    return code in (1205, 1213)
+
+
+async def with_session_deadlock_retry(
+    op: Callable[[AsyncSession], Awaitable[T]],
+    *,
+    max_retries: int = 2,
+    base_delay_seconds: float = 0.06,
+) -> T:
+    """通用事务重试封装：每次重试使用全新 session，成功后自动 commit。"""
+    retries = max(0, int(max_retries))
+    for attempt in range(retries + 1):
+        async with async_session_maker() as session:
+            try:
+                result = await op(session)
+                await session.commit()
+                return result
+            except OperationalError as exc:
+                await session.rollback()
+                if (not is_retryable_mysql_lock_error(exc)) or attempt >= retries:
+                    raise
+                delay = float(base_delay_seconds) * (2**attempt)
+                await asyncio.sleep(delay)
+            except Exception:
+                await session.rollback()
+                raise
+    raise RuntimeError("deadlock retry exhausted")

@@ -22,7 +22,7 @@ from app.db.models import (
     WorkflowStepRun,
     utc_now,
 )
-from app.db.engine import async_session_maker
+from app.db.engine import async_session_maker, with_session_deadlock_retry
 from app.integrations.deepseek import (
     DEFAULT_DECK_STYLE_PRESET,
     structure_raw_text,
@@ -66,7 +66,7 @@ def _clip_pipeline_err(message: object, max_len: int = 1800) -> str:
 
 async def _mark_audio_pipeline_failed(project_id: int, message: object) -> None:
     detail = _clip_pipeline_err(message)
-    async with async_session_maker() as session:
+    async def _op(session: AsyncSession) -> None:
         project = await session.get(Project, project_id)
         if project is None:
             return
@@ -80,7 +80,7 @@ async def _mark_audio_pipeline_failed(project_id: int, message: object) -> None:
         project.status = "failed"
         project.updated_at = utc_now()
         session.add(project)
-        await session.commit()
+    await with_session_deadlock_retry(_op)
 
 
 async def _mark_deck_pipeline_failed(project_id: int, message: object) -> None:
@@ -91,7 +91,7 @@ async def _mark_deck_pipeline_failed(project_id: int, message: object) -> None:
     )
 
     detail = _clip_pipeline_err(message)
-    async with async_session_maker() as session:
+    async def _op(session: AsyncSession) -> None:
         project = await session.get(Project, project_id)
         if project is None:
             return
@@ -123,7 +123,7 @@ async def _mark_deck_pipeline_failed(project_id: int, message: object) -> None:
         project.updated_at = utc_now()
         session.add(project)
         await sync_demo_workflow_from_deck(session, project_id)
-        await session.commit()
+    await with_session_deadlock_retry(_op)
 
 
 def _flatten_segments(structured: StructuredPodcast) -> list[tuple[str, str, str]]:
@@ -469,7 +469,7 @@ async def _run_deck_master_entry_parallel(project_id: int) -> None:
 
     try:
         # 立刻标 running，避免前端在 ensure_style_base 整段耗时内仍显示 pending→waiting（闹钟）
-        async with async_session_maker() as session:
+        async def _mark_running(session: AsyncSession) -> None:
             project = await session.get(Project, project_id)
             if project:
                 await wf_engine.set_step(
@@ -478,19 +478,19 @@ async def _run_deck_master_entry_parallel(project_id: int) -> None:
                     wf_engine.STEP_DECK_MASTER,
                     wf_engine.STEP_RUNNING,
                 )
-                await session.commit()
+        await with_session_deadlock_retry(_mark_running)
         await ensure_style_base(project_id)
-        async with async_session_maker() as session:
+        async def _mark_succeeded(session: AsyncSession) -> None:
             await wf_engine.notify_deck_master_success_if_pending(session, project_id)
             await sync_demo_workflow_from_deck(session, project_id)
-            await session.commit()
+        await with_session_deadlock_retry(_mark_succeeded)
     except asyncio.CancelledError:
         raise
     except Exception as e:
         logger.exception("project %s deck_master entry failed", project_id)
         detail = _clip_pipeline_err(e)
         try:
-            async with async_session_maker() as session:
+            async def _mark_failed(session: AsyncSession) -> None:
                 project = await session.get(Project, project_id)
                 if project:
                     await wf_engine.set_step(
@@ -500,7 +500,7 @@ async def _run_deck_master_entry_parallel(project_id: int) -> None:
                         wf_engine.STEP_FAILED,
                         error_message=detail,
                     )
-                    await session.commit()
+            await with_session_deadlock_retry(_mark_failed)
         except Exception:
             logger.exception(
                 "project %s failed to persist deck_master failure", project_id

@@ -10,9 +10,9 @@ export const NARRATION_SECONDS_MAX = 3600;
 export const NARRATION_CUSTOM_MINUTES_MIN = 1;
 export const NARRATION_CUSTOM_MINUTES_MAX = 15;
 
-const MIN_CPM = 200;
-const MAX_CPM = 260;
-const MID_CPM = 230;
+const MIN_CPM = 180;
+const MAX_CPM = 240;
+const MID_CPM = 210;
 
 export function clampNarrationSeconds(seconds: number): number {
   const s = Math.trunc(seconds);

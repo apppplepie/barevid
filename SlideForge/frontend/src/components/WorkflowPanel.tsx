@@ -344,7 +344,7 @@ function PipelineNodeCard({
         : isRunning
           ? 'bg-blue-400 shadow-[0_0_10px_rgba(96,165,250,0.55)]'
           : showWaitingVisual
-            ? 'bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.45)]'
+            ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.45)]'
             : isError
               ? 'bg-rose-400 shadow-[0_0_10px_rgba(251,113,133,0.5)]'
               : isCancelled
@@ -359,7 +359,7 @@ function PipelineNodeCard({
         : isRunning
           ? 'bg-blue-950/35 shadow-[0_0_28px_rgba(59,130,246,0.2)] light:border-blue-200/70 light:bg-blue-50/90 light:shadow-[0_0_24px_rgba(59,130,246,0.1)]'
           : showWaitingVisual
-            ? 'bg-cyan-950/30 shadow-[0_0_26px_rgba(34,211,238,0.14)] light:border-cyan-200/70 light:bg-cyan-50/85 light:shadow-[0_0_22px_rgba(34,211,238,0.08)]'
+            ? 'bg-amber-950/30 shadow-[0_0_26px_rgba(245,158,11,0.14)] light:border-amber-200/70 light:bg-amber-50/85 light:shadow-[0_0_22px_rgba(245,158,11,0.08)]'
             : isError
               ? 'bg-rose-950/32 shadow-[0_0_24px_rgba(244,63,94,0.14)] light:border-rose-200/70 light:bg-rose-50/90 light:shadow-[0_0_22px_rgba(244,63,94,0.08)]'
               : isCancelled
@@ -367,7 +367,7 @@ function PipelineNodeCard({
                 : 'bg-zinc-900/50 hover:bg-zinc-900/65 light:border-slate-200/90 light:bg-slate-100/85 light:hover:bg-slate-200/80';
 
   const statusIcon = showWaitingVisual ? (
-    <Clock className="h-[18px] w-[18px] text-cyan-400" strokeWidth={2} aria-hidden />
+    <Clock className="h-[18px] w-[18px] text-amber-400" strokeWidth={2} aria-hidden />
   ) : isPendingOnly ? (
     <CircleDashed className="h-[18px] w-[18px] text-zinc-400 light:text-slate-500" strokeWidth={2} aria-hidden />
   ) : isRunning ? (
@@ -400,7 +400,9 @@ function PipelineNodeCard({
         className={`pointer-events-none absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-xl ${
           inRevertImpactZone && !isReopening
             ? 'sf-workflow-revert-corner bg-red-950/50 light:bg-red-100/90'
-            : 'sf-workflow-node-dim'
+            : showWaitingVisual
+              ? 'border border-amber-500/35 bg-amber-500/15 light:border-amber-400/50 light:bg-amber-100/90'
+              : 'sf-workflow-node-dim'
         }`}
         aria-hidden
       >
@@ -421,7 +423,7 @@ function PipelineNodeCard({
                 : isRunning
                   ? 'bg-blue-500/20 text-blue-400'
                   : showWaitingVisual
-                    ? 'bg-cyan-500/15 text-cyan-400'
+                    ? 'bg-amber-500/15 text-amber-400'
                     : isError
                       ? 'bg-rose-500/20 text-rose-400'
                       : isCancelled
@@ -450,7 +452,7 @@ function PipelineNodeCard({
                     onRetryStep?.(step.id);
                   }}
                   disabled={!onRetryStep}
-                  className="inline-flex w-full min-h-[34px] items-center justify-center gap-1.5 rounded-lg bg-violet-600/90 px-3 text-[11px] font-medium text-white transition-colors hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex w-full min-h-[34px] items-center justify-center gap-1.5 rounded-lg bg-amber-600/90 px-3 text-[11px] font-medium text-white transition-colors hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50 light:bg-amber-600 light:hover:bg-amber-500"
                 >
                   {isRetrying ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -468,7 +470,7 @@ function PipelineNodeCard({
                     onRetryStep?.(step.id);
                   }}
                   disabled={!onRetryStep}
-                  className="inline-flex w-full min-h-[34px] items-center justify-center gap-1.5 rounded-lg bg-violet-600/90 px-3 text-[11px] font-medium text-white transition-colors hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex w-full min-h-[34px] items-center justify-center gap-1.5 rounded-lg bg-amber-600/90 px-3 text-[11px] font-medium text-white transition-colors hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50 light:bg-amber-600 light:hover:bg-amber-500"
                 >
                   {isRetrying ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -507,7 +509,7 @@ function PipelineNodeCard({
                     onRetryStep?.(step.id);
                   }}
                   disabled={!onRetryStep || locked}
-                  className="inline-flex w-full min-h-[34px] items-center justify-center gap-1.5 rounded-lg bg-violet-600/90 px-3 text-[11px] font-medium text-white transition-colors hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex w-full min-h-[34px] items-center justify-center gap-1.5 rounded-lg bg-amber-600/90 px-3 text-[11px] font-medium text-white transition-colors hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50 light:bg-amber-600 light:hover:bg-amber-500"
                 >
                   {isRetrying ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -543,7 +545,7 @@ function PipelineNodeCard({
                     onRetryStep?.(step.id);
                   }}
                   disabled={!onRetryStep}
-                  className="inline-flex w-full min-h-[34px] items-center justify-center gap-1.5 rounded-lg bg-violet-600/90 px-3 text-[11px] font-medium text-white transition-colors hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex w-full min-h-[34px] items-center justify-center gap-1.5 rounded-lg bg-amber-600/90 px-3 text-[11px] font-medium text-white transition-colors hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50 light:bg-amber-600 light:hover:bg-amber-500"
                 >
                   {isRetrying ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -671,7 +673,7 @@ export function WorkflowPanel({
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="flex items-center gap-2 sf-text-primary">
-                <GitBranch className="h-4.5 w-4.5 text-violet-300 light:text-violet-600" />
+                <GitBranch className="h-4.5 w-4.5 text-amber-300 light:text-amber-600" />
                 <h3 id="workflow-panel-title" className="text-base font-semibold tracking-wide">
                   工作流面板
                 </h3>
@@ -727,18 +729,18 @@ export function WorkflowPanel({
                   steps,
                   manualBlocked,
                 );
-                /** 指向「制作前沿」：进行中 / 等待操作 / 前置已齐的 pending（与卡片可点开始一致） */
-                const toIsPipelineFrontier =
-                  toState === 'running' ||
-                  toState === 'waiting' ||
-                  (toState === 'pending' && toDepsReady);
+                /** 指向「制作前沿」：进行中 → 蓝虚线滚动；待操作 / 前置已齐 pending → 黄虚线静态 */
+                const toIsRunningFrontier = toState === 'running';
+                const toIsWaitingFrontier =
+                  toState === 'waiting' || (toState === 'pending' && toDepsReady);
                 const isCompletedEdge = fromDone && toState === 'success';
-                const isProgressEdge =
+                const frontierBase =
                   fromDone &&
                   toState !== 'success' &&
                   toState !== 'error' &&
-                  toState !== 'cancelled' &&
-                  toIsPipelineFrontier;
+                  toState !== 'cancelled';
+                const isRunningProgressEdge = frontierBase && toIsRunningFrontier;
+                const isWaitingProgressEdge = frontierBase && toIsWaitingFrontier;
                 const edgeInRevertImpact =
                   revertImpactIds != null &&
                   revertImpactIds.has(from) &&
@@ -766,10 +768,17 @@ export function WorkflowPanel({
                       />
                     ) : (
                       <>
-                        {isProgressEdge ? (
+                        {isRunningProgressEdge ? (
                           <path
                             d={pathD}
                             className="sf-workflow-edge-progress"
+                            strokeWidth="0.62"
+                          />
+                        ) : null}
+                        {isWaitingProgressEdge ? (
+                          <path
+                            d={pathD}
+                            className="sf-workflow-edge-waiting"
                             strokeWidth="0.62"
                           />
                         ) : null}

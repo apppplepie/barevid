@@ -30,9 +30,6 @@ export interface PageMetric {
   delta?: string;
 }
 
-/** 与 play-manifest / NodeContent.page_deck_status 对齐 */
-export type PageDeckStatus = 'idle' | 'generating' | 'ready' | 'failed';
-
 export interface PageData {
   id: string;
   title: string;
@@ -43,9 +40,6 @@ export interface PageData {
   bullets?: string[];
   chart?: number[];
   html?: string;
-  /** 该大页演示 HTML 生成状态（无 html 时用于占位） */
-  deckStatus?: PageDeckStatus;
-  deckError?: string;
 }
 
 export interface AudioSegmentData {

@@ -618,7 +618,7 @@ export default function App() {
         const k = `${aiPanelProjectIdNum}:${p.id}`;
         const d = deckDraftMap[k];
         if (!d || !d.draftHtml) return p;
-        return { ...p, html: d.draftHtml, deckStatus: 'ready' as const };
+        return { ...p, html: d.draftHtml };
       }),
     [workspacePages, deckDraftMap, aiPanelProjectIdNum],
   );

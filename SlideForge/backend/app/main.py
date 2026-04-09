@@ -21,11 +21,12 @@ from fastapi import (
     Query,
     UploadFile,
 )
+from fastapi.responses import JSONResponse
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, or_, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -184,6 +185,35 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="SlideForge API", version="0.1.0", lifespan=lifespan)
 DECK_PAGE_SIZE_OPTIONS = {"16:9", "4:3", "9:16", "1:1"}
+
+
+def _is_mysql_deadlock(err: OperationalError) -> bool:
+    msg = str(err).lower()
+    if "deadlock found when trying to get lock" in msg:
+        return True
+    if "lock wait timeout exceeded" in msg:
+        return True
+    code = None
+    orig = getattr(err, "orig", None)
+    if orig is not None:
+        try:
+            args = getattr(orig, "args", None) or ()
+            if args:
+                code = int(args[0])
+        except Exception:
+            code = None
+    return code in (1205, 1213)
+
+
+@app.exception_handler(OperationalError)
+async def operational_error_handler(_request, exc: OperationalError):
+    # 并发场景下 MySQL 可能短暂死锁；返回可重试错误，避免前端直接抛白屏。
+    if _is_mysql_deadlock(exc):
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "数据库并发冲突（死锁/锁等待超时），请稍后重试。"},
+        )
+    raise exc
 
 def _cors_allow_origins() -> list[str]:
     base = [

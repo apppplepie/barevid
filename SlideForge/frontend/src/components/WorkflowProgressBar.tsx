@@ -143,7 +143,7 @@ export function WorkflowProgressBar({
                     className={[
                       'flex min-w-0 items-center gap-1.5 rounded-full px-1.5 py-0.5 sm:gap-2 sm:px-2 sm:py-1',
                       startRowClickable
-                        ? 'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50'
+                        ? 'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50'
                         : '',
                     ]
                       .filter(Boolean)
@@ -159,7 +159,7 @@ export function WorkflowProgressBar({
                         isCancelled &&
                           'border-amber-500/40 bg-amber-500/10 text-amber-200 light:border-amber-600/45 light:bg-amber-100/90 light:text-amber-900',
                         (isWaiting || canStartFromGraph) &&
-                          'border-cyan-500/35 bg-cyan-500/10 text-cyan-200 light:border-cyan-600/40 light:bg-cyan-100/80 light:text-cyan-900',
+                          'border-amber-500/35 bg-amber-500/10 text-amber-200 light:border-amber-600/40 light:bg-amber-100/80 light:text-amber-900',
                         !isSuccess &&
                           !isRunning &&
                           !isError &&
@@ -306,7 +306,7 @@ export function WorkflowProgressBar({
                           }}
                           disabled={retryingStepId === step.id}
                           title={`等待操作，点击开始：${step.label}`}
-                          className="flex h-full w-full items-center justify-center rounded-full outline-none transition-colors hover:bg-cyan-500/20 focus-visible:ring-2 focus-visible:ring-cyan-400/50 disabled:opacity-50"
+                          className="flex h-full w-full items-center justify-center rounded-full outline-none transition-colors hover:bg-amber-500/20 focus-visible:ring-2 focus-visible:ring-amber-400/50 disabled:opacity-50"
                         >
                           {retryingStepId === step.id ? (
                             <Loader2
@@ -339,7 +339,7 @@ export function WorkflowProgressBar({
                           }}
                           disabled={retryingStepId === step.id}
                           title={`等待操作，点击打开：${step.label}`}
-                          className="flex h-full w-full items-center justify-center rounded-full outline-none transition-colors hover:bg-cyan-500/20 focus-visible:ring-2 focus-visible:ring-cyan-400/50 disabled:opacity-50"
+                          className="flex h-full w-full items-center justify-center rounded-full outline-none transition-colors hover:bg-amber-500/20 focus-visible:ring-2 focus-visible:ring-amber-400/50 disabled:opacity-50"
                         >
                           {retryingStepId === step.id ? (
                             <Loader2
@@ -372,7 +372,7 @@ export function WorkflowProgressBar({
                         isError && 'text-red-200/90 light:text-red-600',
                         isCancelled && 'text-amber-200/95 light:text-amber-800',
                         (isWaiting || canStartFromGraph) &&
-                          'text-cyan-200/95 light:text-cyan-800',
+                          'text-amber-200/95 light:text-amber-900',
                         !isSuccess &&
                           !isRunning &&
                           !isError &&

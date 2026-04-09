@@ -88,8 +88,9 @@ export function MainWorkspace({
     ) ||
     gateSteps.find((s) => s.state === 'pending' || s.state === 'waiting');
 
-  /** 时间轴未解锁时：仅「进行中 / 待操作」二态；任一步 running 即为进行中，其余（含失败、等待）均为待操作 */
-  const gatePipelineRunning = gateSteps.some((s) => s.state === 'running');
+  /** 与顶栏 workflow 一致：任一步 running 即为「进行中」 */
+  const workflowAnyRunning = (steps ?? []).some((s) => s.state === 'running');
+  const gatePipelineRunning = workflowAnyRunning;
 
   const activeVideoClip = findClipAtTime(clips, 'video', currentTime);
   const activeAudioClip = findClipAtTime(clips, 'audio', currentTime);
@@ -224,10 +225,7 @@ export function MainWorkspace({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center bg-zinc-950 light:bg-slate-50 relative">
         <div className="flex flex-col items-center gap-4">
           {gatePipelineRunning ? (
-            <Loader2
-              className="h-8 w-8 animate-spin text-emerald-500 light:text-emerald-600"
-              aria-hidden
-            />
+            <Loader2 className="h-8 w-8 animate-spin text-blue-500" aria-hidden />
           ) : (
             <div className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-500/40 bg-amber-500/10">
               <Clock
@@ -241,7 +239,7 @@ export function MainWorkspace({
             <h3
               className={`text-lg font-medium ${
                 gatePipelineRunning
-                  ? 'text-emerald-300 light:text-emerald-800'
+                  ? 'text-blue-200 light:text-blue-800'
                   : 'text-amber-200 light:text-amber-900'
               }`}
             >
@@ -262,12 +260,9 @@ export function MainWorkspace({
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center bg-zinc-950 light:bg-slate-50 relative">
         <div className="flex flex-col items-center gap-4">
-          <Loader2
-            className="h-8 w-8 animate-spin text-emerald-500 light:text-emerald-600"
-            aria-hidden
-          />
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500" aria-hidden />
           <div className="text-center">
-            <h3 className="text-lg font-medium text-emerald-300 light:text-emerald-800">进行中</h3>
+            <h3 className="text-lg font-medium text-blue-200 light:text-blue-800">进行中</h3>
             <p className="mt-1 text-sm text-zinc-500 light:text-slate-500">正在加载时间轴与演示画面…</p>
           </div>
         </div>
@@ -309,6 +304,7 @@ export function MainWorkspace({
                     screenSize={screenSize}
                     sectionIndex={deckSectionIndex}
                     onDeckViewportPxChange={onDeckViewportPxChange}
+                    workflowRunning={workflowAnyRunning}
                   />
                 </div>
               ) : (

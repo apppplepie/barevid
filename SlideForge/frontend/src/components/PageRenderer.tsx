@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, LayoutTemplate, Loader2 } from 'lucide-react';
+import { Clock, LayoutTemplate, Loader2 } from 'lucide-react';
 import { PageData } from '../types';
 import { buildDeckIframeSrcDoc } from '../utils/deckIframeDoc';
 
@@ -9,22 +9,27 @@ function DeckPageStatePlaceholder({
   subtitle,
 }: {
   page: PageData;
-  variant: 'loading' | 'error';
+  variant: 'loading' | 'idle';
   subtitle: string;
 }) {
+  const busy = variant === 'loading';
   return (
     <div className="flex min-h-0 min-w-0 h-full w-full flex-col items-center justify-center gap-4 bg-gradient-to-br from-zinc-950 to-black light:from-slate-100 light:to-slate-50 p-6 text-center text-zinc-100 light:text-slate-900">
       <div
         className={`flex h-16 w-16 items-center justify-center rounded-2xl border ${
-          variant === 'error'
-            ? 'border-red-500/30 bg-red-500/10 light:bg-red-50'
-            : 'border-zinc-700/80 light:border-slate-300 bg-zinc-900/80 light:bg-white'
+          busy
+            ? 'border-zinc-700/80 light:border-slate-300 bg-zinc-900/80 light:bg-white'
+            : 'border-amber-500/40 bg-amber-500/10 light:border-amber-400/50 light:bg-amber-50/90'
         }`}
       >
-        {variant === 'error' ? (
-          <AlertTriangle className="h-8 w-8 text-red-400" aria-hidden />
+        {busy ? (
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500" aria-hidden />
         ) : (
-          <Loader2 className="h-8 w-8 animate-spin text-sky-400" aria-hidden />
+          <Clock
+            className="h-8 w-8 text-amber-400 light:text-amber-700"
+            strokeWidth={2}
+            aria-hidden
+          />
         )}
       </div>
       <div className="max-w-md space-y-2">
@@ -32,13 +37,17 @@ function DeckPageStatePlaceholder({
           <LayoutTemplate className="h-3.5 w-3.5" aria-hidden />
           演示页
         </div>
+        <p
+          className={`text-base font-semibold ${
+            busy
+              ? 'text-blue-200 light:text-blue-800'
+              : 'text-amber-200 light:text-amber-900'
+          }`}
+        >
+          {busy ? '进行中' : '待操作'}
+        </p>
         <h2 className="text-lg font-semibold text-zinc-100 light:text-slate-900 sm:text-xl">{page.title}</h2>
         <p className="text-sm text-zinc-400 light:text-slate-600">{subtitle}</p>
-        {variant === 'error' && page.deckError ? (
-          <p className="rounded-lg border border-red-500/20 bg-red-950/30 light:bg-red-50 px-3 py-2 text-left text-xs leading-relaxed text-red-100/90 light:text-red-700">
-            {page.deckError}
-          </p>
-        ) : null}
       </div>
     </div>
   );
@@ -64,11 +73,14 @@ export function PageRenderer({
   sectionIndex = 0,
   /** 缩放后画布在屏幕上的像素尺寸（与 iframe 视觉区域一致），供字幕等叠层对齐 */
   onDeckViewportPxChange,
+  /** 与顶栏 workflow 一致：任一步 running 则预览无 HTML 时显示「进行中」，否则「待操作」 */
+  workflowRunning = false,
 }: {
   page: PageData;
   screenSize?: string;
   sectionIndex?: number;
   onDeckViewportPxChange?: (size: { width: number; height: number } | null) => void;
+  workflowRunning?: boolean;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const deckIframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -174,87 +186,17 @@ export function PageRenderer({
   if (page.kind === 'ops') {
     return <OpsPage page={page} />;
   }
-  if (page.deckStatus != null) {
-    if (page.deckStatus === 'failed') {
-      return (
-        <DeckPageStatePlaceholder
-          page={page}
-          variant="error"
-          subtitle="该页演示生成失败，可在侧栏或工作流中重试。"
-        />
-      );
-    }
-    if (page.deckStatus === 'generating') {
-      return (
-        <DeckPageStatePlaceholder
-          page={page}
-          variant="loading"
-          subtitle="正在生成该页演示画面…"
-        />
-      );
-    }
-    return (
-      <DeckPageStatePlaceholder
-        page={page}
-        variant="loading"
-        subtitle="演示页尚未生成，请等待流水线处理该大页。"
-      />
-    );
-  }
-  return <OverviewPage page={page} />;
-}
 
-function OverviewPage({ page }: { page: PageData }) {
   return (
-    <div className="flex min-h-0 min-w-0 h-full w-full max-w-full flex-col gap-6 overflow-x-hidden overflow-y-auto overscroll-contain bg-gradient-to-br from-zinc-950 to-black light:from-slate-100 light:to-slate-50 p-6 text-zinc-100 light:text-slate-900 [-ms-overflow-style:none] [scrollbar-width:none] sm:p-10 [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0">
-      <header className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500 light:text-slate-500">
-            Overview
-          </p>
-          <h2 className="truncate text-2xl font-semibold sm:text-3xl">{page.title}</h2>
-          {page.subtitle ? (
-            <p className="text-sm text-zinc-400 light:text-slate-600 mt-2 max-w-xl">
-              {page.subtitle}
-            </p>
-          ) : null}
-        </div>
-        <div className="shrink-0 whitespace-nowrap rounded-full border border-zinc-800 light:border-slate-200 bg-zinc-900 light:bg-white px-3 py-1.5 font-mono text-[10px] text-zinc-300 light:text-slate-700 sm:px-4 sm:py-2 sm:text-xs">
-          自动同步
-        </div>
-      </header>
-
-      <section className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3">
-        {(page.metrics || []).map((metric) => (
-          <div
-            key={metric.label}
-            className="min-w-0 rounded-xl border border-zinc-800 light:border-slate-200 bg-zinc-900/50 light:bg-white/90 p-4 shadow-sm light:shadow-slate-200/50"
-          >
-            <p className="text-xs text-zinc-500 light:text-slate-500 uppercase tracking-wider">
-              {metric.label}
-            </p>
-            <p className="text-2xl font-semibold mt-2">{metric.value}</p>
-            {metric.delta ? (
-              <p className="text-xs text-zinc-400 light:text-slate-600 mt-1">{metric.delta}</p>
-            ) : null}
-          </div>
-        ))}
-      </section>
-
-      <section className="min-w-0 flex-1 rounded-2xl border border-zinc-800 light:border-slate-200 bg-zinc-900/40 light:bg-slate-50/95 p-4 sm:p-6">
-        <h3 className="text-sm font-semibold text-zinc-200 light:text-slate-800 mb-3">
-          实时笔记
-        </h3>
-        <ul className="text-sm text-zinc-400 light:text-slate-600 space-y-2">
-          {(page.bullets || []).map((item) => (
-            <li key={item} className="flex items-start gap-2">
-              <span className="mt-1 h-1.5 w-1.5 rounded-full bg-cyan-400 light:bg-cyan-500" />
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </div>
+    <DeckPageStatePlaceholder
+      page={page}
+      variant={workflowRunning ? 'loading' : 'idle'}
+      subtitle={
+        workflowRunning
+          ? '请稍候。'
+          : '请在顶部制作进度条或「制作流程」中继续（手动流程需点击开始）。'
+      }
+    />
   );
 }
 

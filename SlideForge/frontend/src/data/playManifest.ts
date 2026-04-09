@@ -1,12 +1,4 @@
-import { ClipData, ClipNode, PageData, type PageDeckStatus } from '../types';
-
-function normalizeDeckStatus(raw: string | undefined | null): PageDeckStatus {
-  const v = (raw || 'idle').trim().toLowerCase();
-  if (v === 'generating') return 'generating';
-  if (v === 'failed') return 'failed';
-  if (v === 'ready') return 'ready';
-  return 'idle';
-}
+import { ClipData, ClipNode, PageData } from '../types';
 
 export type PlayManifestStep = {
   step_id: number;
@@ -217,10 +209,6 @@ export function buildTimelineFromPlayManifest(manifest: PlayManifest): {
 
   const pages: PageData[] = (manifest.pages || []).map((p) => {
     const htmlTrim = (p.html || '').trim();
-    const rawDs = normalizeDeckStatus(p.page_deck_status);
-    const deckStatus: PageDeckStatus =
-      htmlTrim && rawDs !== 'failed' ? 'ready' : rawDs;
-    const err = (p.page_deck_error || '').trim();
     return {
       id: `page-${p.page_id}`,
       title: p.title || 'Page',
@@ -228,8 +216,6 @@ export function buildTimelineFromPlayManifest(manifest: PlayManifest): {
       kind: 'overview' as const,
       accent: 'from-zinc-800/40 via-zinc-900/20 to-zinc-950',
       html: htmlTrim || undefined,
-      deckStatus,
-      deckError: err || undefined,
     };
   });
 
