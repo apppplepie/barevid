@@ -430,52 +430,15 @@ async def _record_video(
                 f"localStorage.setItem('slideforge_token', {safe_token});"
             )
         page = await context.new_page()
-        # 线上反代/Cloudflare 下，networkidle 容易因长连接或持续请求误判超时；
-        # 后面还有页面可用态检测，因此这里只要求 DOM 就绪并适当放宽导航超时。
+        # networkidle：等所有网络请求静止后再继续，确保字体/CSS/iframe 内容全部就绪，
+        # 避免录制开始时浏览器仍在后台加载资源造成渲染压力和首帧延迟。
+        # 线上反代/长连接场景若 networkidle 超时，可设 SLIDEFORGE_EXPORT_WAIT_UNTIL=domcontentloaded 降级。
         nav_timeout_ms = max(60000, min(180000, duration_ms + 30000))
-        await page.goto(url, wait_until="domcontentloaded", timeout=nav_timeout_ms)
-        # 导航后先固定等待再进入可用态检测，降低 Web 字体/子资源未就绪就录进缺字形的概率。
-        # 可用 SLIDEFORGE_EXPORT_INITIAL_WAIT_MS 覆盖（0 表示关闭），上限 30s。
-        initial_wait_ms = 3000
-        raw_initial = (os.environ.get("SLIDEFORGE_EXPORT_INITIAL_WAIT_MS") or "").strip()
-        if raw_initial:
-            try:
-                initial_wait_ms = max(0, min(30000, int(raw_initial)))
-            except ValueError:
-                initial_wait_ms = 3000
-        if initial_wait_ms > 0:
-            await page.wait_for_timeout(initial_wait_ms)
-        # 经验值：给前端资源加载/首帧渲染留一段缓冲；可通过环境变量下调（默认 1200ms）。
-        extra_wait_ms = 1200
-        raw_extra_wait = (os.environ.get("SLIDEFORGE_EXPORT_EXTRA_WAIT_MS") or "").strip()
-        if raw_extra_wait:
-            try:
-                extra_wait_ms = max(0, min(8000, int(raw_extra_wait)))
-            except ValueError:
-                extra_wait_ms = 1200
-        if extra_wait_ms > 0:
-            await page.wait_for_timeout(extra_wait_ms)
+        _wait_until = (os.environ.get("SLIDEFORGE_EXPORT_WAIT_UNTIL") or "networkidle").strip() or "networkidle"
+        await page.goto(url, wait_until=_wait_until, timeout=nav_timeout_ms)  # noqa: E501
         try:
-            # 等待当前文档已参与渲染的字体加载完成，减少首帧录到回退字体的概率。
-            await page.evaluate(
-                """
-                async () => {
-                  const fonts = document.fonts;
-                  if (!fonts || !fonts.ready) return true;
-                  try {
-                    await fonts.ready;
-                  } catch {
-                    // 字体等待失败时降级继续，避免个别字体源阻塞整次导出。
-                  }
-                  return true;
-                }
-                """
-            )
-        except Exception:
-            # 兼容不支持 Font Loading API 的运行环境。
-            pass
-        try:
-            # 放映页可用态：不再显示“加载放映数据”，且播放器主体节点已出现。
+            # 放映页可用态：加载提示消失 + 播放器壳 + 音频节点；
+            # 若有 deck iframe 则等其 document complete（与 SlidePlayer iframe onLoad 对齐）。
             await page.wait_for_function(
                 """
                 () => {
@@ -484,7 +447,16 @@ async def _record_video(
                   if (loadingMsg) return false;
                   const hasMain = Boolean(document.querySelector(".sf-play-main-body"));
                   const hasAudio = Boolean(document.querySelector(".sf-controls audio"));
-                  return hasMain && hasAudio;
+                  if (!hasMain || !hasAudio) return false;
+                  const iframe = document.querySelector("iframe.sf-deck-iframe, iframe.sf-html-stage");
+                  if (!iframe) return true;
+                  try {
+                    const doc = iframe.contentDocument;
+                    if (!doc || doc.readyState !== "complete") return false;
+                    return true;
+                  } catch {
+                    return true;
+                  }
                 }
                 """,
                 timeout=max(15000, min(90000, duration_ms + 15000)),
@@ -492,6 +464,41 @@ async def _record_video(
         except Exception:
             # 兼容样式类名调整：若检测失败，后续仍以 started 标记为准裁剪。
             pass
+        try:
+            # 等待主文档和 deck iframe 的字体都加载完成，减少首帧录到回退字体的概率。
+            await page.evaluate(
+                """
+                async () => {
+                  async function waitFonts(doc) {
+                    try {
+                      const fonts = doc.fonts;
+                      if (fonts && fonts.ready) await fonts.ready;
+                    } catch {
+                      /* 单个文档字体失败不阻塞整次导出 */
+                    }
+                  }
+                  await waitFonts(document);
+                  const iframe = document.querySelector("iframe.sf-deck-iframe, iframe.sf-html-stage");
+                  if (iframe && iframe.contentDocument) {
+                    try { await waitFonts(iframe.contentDocument); } catch { /* ignore */ }
+                  }
+                  return true;
+                }
+                """
+            )
+        except Exception:
+            pass
+        # 在「页面已就绪 + 字体已加载」之后再额外等待，是真正有效的缓冲。
+        # 可通过 SLIDEFORGE_EXPORT_EXTRA_WAIT_MS 覆盖（默认 3000ms）。
+        extra_wait_ms = 3000
+        raw_extra_wait = (os.environ.get("SLIDEFORGE_EXPORT_EXTRA_WAIT_MS") or "").strip()
+        if raw_extra_wait:
+            try:
+                extra_wait_ms = max(0, min(8000, int(raw_extra_wait)))
+            except ValueError:
+                extra_wait_ms = 3000
+        if extra_wait_ms > 0:
+            await page.wait_for_timeout(extra_wait_ms)
         preroll_ms = 0
         try:
             await page.wait_for_function(
