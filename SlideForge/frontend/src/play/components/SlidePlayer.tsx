@@ -1,4 +1,5 @@
 import {
+  type SyntheticEvent,
   Fragment,
   useCallback,
   useEffect,
@@ -136,6 +137,42 @@ export function SlidePlayer({
     // DOM 舞台依赖 iframe 首次加载；非 DOM 舞台可直接视为 ready。
     setVisualReady(!domStage);
   }, [domStage, steps]);
+
+  /**
+   * iframe onLoad 仅表示 HTML 文档加载完成，但 CSS/字体/布局/绘制可能尚未结束。
+   * 此回调在 onLoad 后：等 iframe 内字体就绪 → 两帧 rAF（确保浏览器完成绘制）→
+   * 才标记 visualReady，使 autoplay 逻辑真正在画面渲染完毕后才开始播放音频。
+   */
+  const handleIframeLoad = useCallback(
+    (_e: SyntheticEvent<HTMLIFrameElement>) => {
+      const iframe = deckIframeRef.current;
+      if (!iframe) {
+        setVisualReady(true);
+        return;
+      }
+      const iframeWin = iframe.contentWindow;
+      const iframeDoc = iframe.contentDocument;
+      if (!iframeWin || !iframeDoc) {
+        setVisualReady(true);
+        return;
+      }
+      const afterPaint = () => {
+        // 双 rAF：第一帧调度，第二帧确认合成器已绘制
+        iframeWin.requestAnimationFrame(() => {
+          iframeWin.requestAnimationFrame(() => {
+            setVisualReady(true);
+          });
+        });
+      };
+      // 先等 iframe 内字体全部就绪
+      if (iframeDoc.fonts?.ready) {
+        iframeDoc.fonts.ready.then(afterPaint).catch(afterPaint);
+      } else {
+        afterPaint();
+      }
+    },
+    []
+  );
 
   const markExportStarted = useCallback(() => {
     if (!exportMode || typeof window === "undefined") return;
@@ -638,7 +675,7 @@ export function SlidePlayer({
                 className="sf-deck-iframe sf-html-stage"
                 aria-live="polite"
                 sandbox="allow-scripts allow-same-origin allow-forms"
-                onLoad={() => setVisualReady(true)}
+                onLoad={handleIframeLoad}
               />
             ) : (
               Object.entries(visible).map(([k, action]) => (
