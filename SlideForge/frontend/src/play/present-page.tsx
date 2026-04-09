@@ -21,6 +21,8 @@ export default function PresentPage() {
     query.get('export') === '1' || query.get('export') === 'true';
   const forceTimelineClock =
     query.get('timelineClock') === '1' || query.get('timelineClock') === 'true';
+  // 导出场景默认音频驱动；timelineClock 仅作为导出排障回退开关。
+  const useTimelineClockForPlayer = exporting && forceTimelineClock;
   const showNativeCaption =
     !(query.get('nativeSub') === '0' || query.get('nativeSub') === 'false');
 
@@ -88,8 +90,8 @@ export default function PresentPage() {
         deckTitle={manifest.title}
         slide={flattened}
         autoPlay={autoPlay}
-        /** 导出默认改为音频驱动；必要时可用 ?timelineClock=1 回退旧行为 */
-        useTimelineClock={forceTimelineClock}
+        /** 导出默认音频驱动，仅在 ?timelineClock=1 时回退旧时钟 */
+        useTimelineClock={useTimelineClockForPlayer}
         showNativeCaption={showNativeCaption}
         exportMode={exporting}
       />

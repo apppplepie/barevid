@@ -629,6 +629,53 @@ async def _record_video(
         except Exception:
             # 兜底：兼容旧前端或标记丢失场景，仅做短暂收尾等待，避免总时长翻倍。
             await page.wait_for_timeout(1200)
+        try:
+            sync_diag = await page.evaluate(
+                """
+                () => {
+                  const logs = Array.isArray(window.__SLIDEFORGE_EXPORT_SYNC_LOGS)
+                    ? window.__SLIDEFORGE_EXPORT_SYNC_LOGS
+                    : [];
+                  let maxAbsClip = 0;
+                  let maxAbsGlobal = 0;
+                  for (const item of logs) {
+                    const clip = Number(item?.clip_drift_ms || 0);
+                    const global = Number(item?.global_drift_ms || 0);
+                    maxAbsClip = Math.max(maxAbsClip, Math.abs(clip));
+                    maxAbsGlobal = Math.max(maxAbsGlobal, Math.abs(global));
+                  }
+                  return {
+                    clock_mode: String(window.__SLIDEFORGE_EXPORT_CLOCK_MODE || ""),
+                    count: logs.length,
+                    max_abs_clip_drift_ms: maxAbsClip,
+                    max_abs_global_drift_ms: maxAbsGlobal,
+                    tail: logs.slice(-12),
+                  };
+                }
+                """
+            )
+            if isinstance(sync_diag, dict):
+                clock_mode = str(sync_diag.get("clock_mode") or "unknown")
+                count = int(sync_diag.get("count") or 0)
+                max_abs_clip = int(sync_diag.get("max_abs_clip_drift_ms") or 0)
+                max_abs_global = int(sync_diag.get("max_abs_global_drift_ms") or 0)
+                print(
+                    "[export-sync] "
+                    f"clock_mode={clock_mode} samples={count} "
+                    f"max_abs_clip_drift_ms={max_abs_clip} "
+                    f"max_abs_global_drift_ms={max_abs_global}",
+                    flush=True,
+                )
+                tail = sync_diag.get("tail")
+                if isinstance(tail, list) and tail:
+                    for idx, row in enumerate(tail, start=1):
+                        print(
+                            f"[export-sync] tail#{idx} "
+                            f"{json.dumps(row, ensure_ascii=False)}",
+                            flush=True,
+                        )
+        except Exception:
+            pass
         video = page.video
         await page.close()
         video_path = await video.path() if video else None

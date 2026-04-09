@@ -119,6 +119,7 @@ export function SlidePlayer({
   } = useStepPlayer(steps, range, {
     useTimelineClock,
     highResAudioClock: exportMode,
+    preloadNextClip: exportMode,
     onLastAudioClipEnded: exportMode ? markExportPlaybackDone : undefined,
   });
 
@@ -127,6 +128,7 @@ export function SlidePlayer({
   const [liveClipDurMs, setLiveClipDurMs] = useState(0);
   const [visualReady, setVisualReady] = useState(false);
   const deckIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const iframeReadyDelayTimerRef = useRef<number | null>(null);
   const captionLinesRef = useRef<HTMLDivElement | null>(null);
   const autoPlayedRef = useRef(false);
   const prevPlayingRef = useRef(false);
@@ -149,12 +151,25 @@ export function SlidePlayer({
   useEffect(() => {
     // DOM 舞台依赖 iframe 首次加载；非 DOM 舞台可直接视为 ready。
     setVisualReady(!domStage);
+    if (iframeReadyDelayTimerRef.current != null) {
+      window.clearTimeout(iframeReadyDelayTimerRef.current);
+      iframeReadyDelayTimerRef.current = null;
+    }
   }, [domStage, steps]);
+
+  useEffect(() => {
+    return () => {
+      if (iframeReadyDelayTimerRef.current != null) {
+        window.clearTimeout(iframeReadyDelayTimerRef.current);
+        iframeReadyDelayTimerRef.current = null;
+      }
+    };
+  }, []);
 
   /**
    * iframe onLoad 仅表示 HTML 文档加载完成，但 CSS/字体/布局/绘制可能尚未结束。
    * 此回调在 onLoad 后：等 iframe 内字体就绪 → 两帧 rAF（确保浏览器完成绘制）→
-   * 才标记 visualReady，使 autoplay 逻辑真正在画面渲染完毕后才开始播放音频。
+   * 额外等待 2s，再标记 visualReady，使 autoplay 在画面稳定后开始。
    */
   const handleIframeLoad = useCallback(
     (_e: SyntheticEvent<HTMLIFrameElement>) => {
@@ -173,7 +188,13 @@ export function SlidePlayer({
         // 双 rAF：第一帧调度，第二帧确认合成器已绘制
         iframeWin.requestAnimationFrame(() => {
           iframeWin.requestAnimationFrame(() => {
-            setVisualReady(true);
+            if (iframeReadyDelayTimerRef.current != null) {
+              window.clearTimeout(iframeReadyDelayTimerRef.current);
+            }
+            iframeReadyDelayTimerRef.current = window.setTimeout(() => {
+              setVisualReady(true);
+              iframeReadyDelayTimerRef.current = null;
+            }, 2000);
           });
         });
       };
@@ -192,12 +213,17 @@ export function SlidePlayer({
     const w = window as Window & {
       __SLIDEFORGE_EXPORT_STARTED_AT_MS?: number;
       __SLIDEFORGE_EXPORT_DONE_AT_MS?: number;
+      __SLIDEFORGE_EXPORT_CLOCK_MODE?: "audio" | "timeline";
+      __SLIDEFORGE_EXPORT_SYNC_LOGS?: unknown[];
     };
     if (typeof w.__SLIDEFORGE_EXPORT_STARTED_AT_MS !== "number") {
       w.__SLIDEFORGE_EXPORT_STARTED_AT_MS = Math.round(performance.now());
+      // 每次导出启动时重置同步诊断日志，避免读到上一轮残留。
+      w.__SLIDEFORGE_EXPORT_SYNC_LOGS = [];
     }
+    w.__SLIDEFORGE_EXPORT_CLOCK_MODE = useTimelineClock ? "timeline" : "audio";
     delete w.__SLIDEFORGE_EXPORT_DONE_AT_MS;
-  }, [exportMode]);
+  }, [exportMode, useTimelineClock]);
 
   useEffect(() => {
     if (!autoPlay || autoPlayedRef.current) return;
@@ -210,6 +236,7 @@ export function SlidePlayer({
       firstStep.kind === "pause" ||
       !firstStep.audio_url?.trim();
     if (firstStepNeedsImmediateClock) {
+      // 首段无音频时不会触发 onPlaying，需在启动时立即打点。
       markExportStarted();
     }
     play();
@@ -409,6 +436,7 @@ export function SlidePlayer({
               onPlay();
             }}
             onPlaying={() => {
+              // 有音频首段以真正开始出声时刻作为导出零点，避免固定相位偏移。
               markExportStarted();
             }}
             onPause={onPause}
@@ -571,6 +599,7 @@ export function SlidePlayer({
               className="sf-btn"
               onClick={() => {
                 if (!hasAudioClip) {
+                  // 当前段无音频时不会触发 onPlaying，需即时打点。
                   markExportStarted();
                 }
                 play();

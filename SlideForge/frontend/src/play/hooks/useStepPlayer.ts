@@ -20,9 +20,64 @@ type StepPlayerOptions = {
   useTimelineClock?: boolean;
   /** 导出录屏：每帧用 audio.currentTime 推进时间轴，避免 timeupdate 过稀导致画面慢于口播 */
   highResAudioClock?: boolean;
+  /** 在当前段播放时提前预加载下一段音频，减少段间 canplay 等待造成的累计滞后 */
+  preloadNextClip?: boolean;
   /** 最后一段口播 audio 自然结束（不含 pause 步） */
   onLastAudioClipEnded?: () => void;
 };
+
+type ExportSyncSample = {
+  event: "audio_ended" | "pause_timeout";
+  index: number;
+  kind: string;
+  expected_clip_ms: number;
+  actual_clip_ms: number;
+  clip_drift_ms: number;
+  expected_global_ms: number;
+  actual_global_ms: number;
+  global_drift_ms: number;
+  at_perf_ms: number;
+};
+
+type ExportSyncWindow = Window & {
+  __SLIDEFORGE_EXPORT_SYNC_LOGS?: ExportSyncSample[];
+};
+
+function pushExportSyncSample(sample: ExportSyncSample) {
+  if (typeof window === "undefined") return;
+  const w = window as ExportSyncWindow;
+  const list = w.__SLIDEFORGE_EXPORT_SYNC_LOGS ?? [];
+  list.push(sample);
+  if (list.length > 2000) {
+    list.splice(0, list.length - 2000);
+  }
+  w.__SLIDEFORGE_EXPORT_SYNC_LOGS = list;
+}
+
+function logTransitionSample(
+  event: ExportSyncSample["event"],
+  index: number,
+  step: PlayStep | undefined,
+  actualClipMs: number
+) {
+  if (!step) return;
+  const expectedClipMs = Math.max(0, step.duration_ms || 0);
+  const normalizedActual = Math.max(0, actualClipMs);
+  const expectedGlobal = step.start_ms + expectedClipMs;
+  const actualGlobal = step.start_ms + normalizedActual;
+  pushExportSyncSample({
+    event,
+    index,
+    kind: step.kind || "",
+    expected_clip_ms: Math.round(expectedClipMs),
+    actual_clip_ms: Math.round(normalizedActual),
+    clip_drift_ms: Math.round(normalizedActual - expectedClipMs),
+    expected_global_ms: Math.round(expectedGlobal),
+    actual_global_ms: Math.round(actualGlobal),
+    global_drift_ms: Math.round(actualGlobal - expectedGlobal),
+    at_perf_ms: Math.round(performance.now()),
+  });
+}
 
 function clampRange(
   steps: PlayStep[],
@@ -53,10 +108,12 @@ export function useStepPlayer(
 ) {
   const useTimelineClock = Boolean(options?.useTimelineClock);
   const highResAudioClock = Boolean(options?.highResAudioClock);
+  const preloadNextClip = Boolean(options?.preloadNextClip);
   const onLastAudioClipEndedRef = useRef(options?.onLastAudioClipEnded);
   onLastAudioClipEndedRef.current = options?.onLastAudioClipEnded;
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const preloadAudioRef = useRef<HTMLAudioElement | null>(null);
   const isPlayingRef = useRef(false);
   const rafRef = useRef<number | null>(null);
   const clockStartPerfRef = useRef(0);
@@ -106,6 +163,46 @@ export function useStepPlayer(
     el.preload = "auto";
     el.load();
   }, [steps, safeIndex, useTimelineClock]);
+
+  useEffect(() => {
+    if (useTimelineClock || !preloadNextClip) return;
+    if (steps.length === 0) return;
+    if (safeIndex >= safeRange.end) return;
+
+    let nextAudioUrl = "";
+    for (let i = safeIndex + 1; i <= safeRange.end; i++) {
+      const st = steps[i];
+      if (!st || isPauseStep(st)) continue;
+      const candidate = st.audio_url?.trim() || "";
+      if (candidate) {
+        nextAudioUrl = candidate;
+      }
+      break;
+    }
+    if (!nextAudioUrl) return;
+
+    try {
+      const p = new Audio();
+      p.preload = "auto";
+      p.src = nextAudioUrl;
+      p.load();
+      preloadAudioRef.current = p;
+    } catch {
+      preloadAudioRef.current = null;
+    }
+
+    return () => {
+      const p = preloadAudioRef.current;
+      if (!p) return;
+      try {
+        p.removeAttribute("src");
+        p.load();
+      } catch {
+        // ignore preload cleanup failure
+      }
+      preloadAudioRef.current = null;
+    };
+  }, [preloadNextClip, safeIndex, safeRange.end, steps, useTimelineClock]);
 
   /** load() 异步完成前调用 play() 会失败；等 canplay 再播。 */
   useEffect(() => {
@@ -207,6 +304,10 @@ export function useStepPlayer(
     const dur = Math.max(50, s.duration_ms || 0);
     const t = window.setTimeout(() => {
       setClipIndex((i) => {
+        if (highResAudioClock) {
+          const endedStep = steps[i];
+          logTransitionSample("pause_timeout", i, endedStep, dur);
+        }
         if (i < safeRange.end) {
           const next = steps[i + 1];
           setGlobalMs((next?.start_ms ?? 0) + 0);
@@ -218,7 +319,14 @@ export function useStepPlayer(
       });
     }, dur);
     return () => window.clearTimeout(t);
-  }, [isPlaying, safeIndex, safeRange.end, steps, useTimelineClock]);
+  }, [
+    highResAudioClock,
+    isPlaying,
+    safeIndex,
+    safeRange.end,
+    steps,
+    useTimelineClock,
+  ]);
 
   const syncGlobalMs = useCallback(() => {
     const el = audioRef.current;
@@ -237,6 +345,11 @@ export function useStepPlayer(
   const onEnded = useCallback(() => {
     if (useTimelineClock) return;
     setClipIndex((i) => {
+      if (highResAudioClock) {
+        const endedStep = steps[i];
+        const actualClipMs = (audioRef.current?.currentTime ?? 0) * 1000;
+        logTransitionSample("audio_ended", i, endedStep, actualClipMs);
+      }
       if (i < safeRange.end) {
         const next = steps[i + 1];
         setGlobalMs(next?.start_ms ?? 0);
@@ -248,7 +361,7 @@ export function useStepPlayer(
       setIsPlaying(false);
       return i;
     });
-  }, [safeRange.end, steps, useTimelineClock]);
+  }, [highResAudioClock, safeRange.end, steps, useTimelineClock]);
 
   const play = useCallback(() => {
     setIsPlaying(true);
