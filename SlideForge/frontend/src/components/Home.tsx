@@ -34,6 +34,10 @@ import {
   mergeTtsVoicePresetsFromServer,
 } from '../utils/ttsVoicePresets';
 import { apiFetch } from '../api';
+import {
+  isDeckBetaVisualArmed,
+  toggleDeckBetaVisual,
+} from '../utils/deckBetaVisual';
 import { TtsVoiceSelect } from './TtsVoiceSelect';
 import type { VideoExportJobInfo } from './ExportVideoStatusDialog';
 import { APP_BRAND } from '../brand';
@@ -106,6 +110,8 @@ export type CreateProjectInput = Omit<
   targetNarrationSeconds?: number;
   ttsVoiceType?: string;
   pipelineAutoAdvance?: boolean;
+  /** 与后端 `deck_beta_visual`：自动流水线首次演示生成用保守视觉 */
+  deckBetaVisual?: boolean;
 };
 
 /** 为 false 时隐藏片头/片尾勾选 UI；状态仍参与提交，便于日后开放入口 */
@@ -200,6 +206,8 @@ export function Home({
   onDownloadProject,
 }: HomeProps) {
   const [newProjectName, setNewProjectName] = useState('');
+  /** 与 localStorage 同步；开启后创建（自动流水线）会传 deck_beta_visual，且下一次演示页请求可带 beta_visual */
+  const [creativeModeOn, setCreativeModeOn] = useState(() => isDeckBetaVisualArmed());
   const [selectedSize, setSelectedSize] = useState('16:9');
   /** 与后端 style_preset 一致；none 表示未选预设，可再点同一项取消 */
   const [selectedStyle, setSelectedStyle] = useState<string>(DEFAULT_DECK_STYLE_PRESET);
@@ -377,6 +385,7 @@ export function Home({
             : deckStyleUserHint.trim() || undefined,
         ttsVoiceType: selectedTtsVoice.trim() || undefined,
         pipelineAutoAdvance: pipelineRunMode === 'auto',
+        deckBetaVisual: creativeModeOn,
       });
       setNewProjectName('');
       setPrompt('');
@@ -554,7 +563,7 @@ export function Home({
               aria-hidden
             />
 
-            <div className="relative space-y-2">
+            <div className="relative z-0 space-y-2 pr-[7.5rem] max-sm:pr-0 max-sm:pt-10">
               <label className="flex flex-wrap items-center gap-2 text-sm font-medium text-zinc-300">
                 <Type className="h-3.5 w-3.5 text-purple-400/90" />
                 <span className="inline-flex items-center gap-2">
@@ -958,6 +967,28 @@ export function Home({
                 </button>
               </div>
             </div>
+
+            <button
+              type="button"
+              aria-pressed={creativeModeOn}
+              title={
+                creativeModeOn
+                  ? '已开启创意视觉；再点可关闭'
+                  : '如果你有更高追求，可以试试这个按钮，不保证页面准确！'
+              }
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setCreativeModeOn(toggleDeckBetaVisual());
+              }}
+              className={`pointer-events-auto absolute right-4 top-4 z-[60] shrink-0 cursor-pointer rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm backdrop-blur-sm transition select-none light:shadow-slate-200/40 ${
+                creativeModeOn
+                  ? 'border-purple-500/55 bg-purple-500/15 text-violet-100 ring-2 ring-purple-500/35 light:border-purple-400 light:bg-purple-50 light:text-purple-900 light:ring-purple-300/50'
+                  : 'border-zinc-600/60 bg-zinc-900/90 text-zinc-200 hover:border-violet-500/50 hover:bg-violet-950/35 hover:text-violet-100 light:border-slate-300 light:bg-white/95 light:text-slate-700 light:hover:border-violet-400 light:hover:bg-violet-50 light:hover:text-violet-900'
+              }`}
+            >
+              创意模式
+            </button>
               </form>
             </>
           )}

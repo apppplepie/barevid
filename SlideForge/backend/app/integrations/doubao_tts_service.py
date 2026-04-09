@@ -15,6 +15,12 @@ _DOUBAO_TTS_V1_URL = "https://openspeech.bytedance.com/api/v1/tts"
 _DOUBAO_TTS_V3_URL = "https://openspeech.bytedance.com/api/v3/tts/unidirectional"
 
 
+def _doubao_httpx_timeout() -> httpx.Timeout:
+    """流式 TTS 两包之间可能间隔较长，read 须足够大，否则会 httpx.ReadTimeout。"""
+    read_s = max(60.0, float(settings.doubao_tts_http_timeout_seconds or 600.0))
+    return httpx.Timeout(connect=30.0, read=read_s, write=120.0, pool=30.0)
+
+
 def resolve_tts_voice_type(stored: str | None) -> str:
     """项目覆盖音色优先，否则使用环境默认。"""
     t = (stored or "").strip()
@@ -242,7 +248,7 @@ async def _synthesize_v1_to_file(text: str, out_path: Path, voice_type: str) -> 
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    async with httpx.AsyncClient(timeout=120.0, trust_env=False) as client:
+    async with httpx.AsyncClient(timeout=_doubao_httpx_timeout(), trust_env=False) as client:
         r = await client.post(_DOUBAO_TTS_V1_URL, json=body, headers=headers)
         if r.status_code >= 400:
             detail = (r.text or "").strip()
@@ -355,7 +361,7 @@ async def _synthesize_v3_to_file(text: str, out_path: Path, voice_type: str) -> 
         if isinstance(sentence, dict):
             sentence_events.append(sentence)
 
-    async with httpx.AsyncClient(timeout=120.0, trust_env=False) as client:
+    async with httpx.AsyncClient(timeout=_doubao_httpx_timeout(), trust_env=False) as client:
         async with client.stream(
             "POST",
             _DOUBAO_TTS_V3_URL,

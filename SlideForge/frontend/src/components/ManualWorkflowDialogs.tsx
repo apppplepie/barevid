@@ -10,6 +10,7 @@ import {
   type OutlineNodeApi,
   outlineToPages,
 } from '../utils/outlineScriptPages';
+import { consumeDeckBetaVisualQuery } from '../utils/deckBetaVisual';
 
 type ProjectDetailForManual = {
   project: {
@@ -651,17 +652,16 @@ export function ManualDeckMasterDialog(props: {
     if (!open) return;
     setDeckStyleUserHint(initialHint);
     setErr(null);
+    // 默认「自己设计」：不因项目曾「复用母版创建」就自动切到复用 Tab（用户反馈易误触）
+    setDeckMasterMode('self');
     if (initialDeckMasterSourceProjectId != null) {
-      setDeckMasterMode('reuse');
       setDeckMasterSourceRaw(String(initialDeckMasterSourceProjectId));
-      setSelectedStyle('none');
     } else {
-      setDeckMasterMode('self');
       setDeckMasterSourceRaw('');
-      const p = (initialDeckStylePreset || 'none').trim() || 'none';
-      const valid = STYLE_PRESETS.some((x) => x.value === p);
-      setSelectedStyle(valid ? p : 'none');
     }
+    const p = (initialDeckStylePreset || 'none').trim() || 'none';
+    const valid = STYLE_PRESETS.some((x) => x.value === p);
+    setSelectedStyle(valid ? p : 'none');
   }, [open, initialHint, initialDeckStylePreset, initialDeckMasterSourceProjectId]);
 
   if (!open) return null;
@@ -1011,11 +1011,14 @@ export function ManualDeckPagesDialog(props: {
           deck_style_prompt_text: stylePromptText.trim(),
         }),
       });
-      await apiFetch(`/api/projects/${projectId}/workflow/demo/run`, {
-        method: 'POST',
-        headers: jsonPost(),
-        body: '{}',
-      });
+      await apiFetch(
+        `/api/projects/${projectId}/workflow/demo/run${consumeDeckBetaVisualQuery()}`,
+        {
+          method: 'POST',
+          headers: jsonPost(),
+          body: '{}',
+        },
+      );
       deckPagesKickoffInFlightRef.current = false;
       onConfirmHandoff?.();
       onDone();

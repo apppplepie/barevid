@@ -42,6 +42,7 @@ import {
 import { useStepPlayer } from './hooks/useStepPlayer';
 import { findClipAtTime } from './utils/timelineHit';
 import type { OutlineNodeApi } from './utils/outlineScriptPages';
+import { consumeDeckBetaVisualQuery } from './utils/deckBetaVisual';
 
 function parsePageNodeIdFromPageId(pageId?: string | null): number {
   const pm = /^page-(\d+)$/.exec((pageId || '').trim());
@@ -601,6 +602,27 @@ export default function App() {
   const aiDraft = aiDraftKey ? deckDraftMap[aiDraftKey] : undefined;
   const aiGenerating = aiDraftKey ? Boolean(deckAiGeneratingByKey[aiDraftKey]) : false;
   const aiError = aiDraftKey ? (deckAiErrorByKey[aiDraftKey] ?? null) : null;
+
+  /** 左侧属性面板当前页（与右侧 AI 面板可能不是同一 clip） */
+  const detailPanelPageId =
+    detailPanelClip?.type === 'video' ? (detailPanelClip.pageId || '').trim() : '';
+  const detailDeckBusyKey =
+    Number.isFinite(aiPanelProjectIdNum) && detailPanelPageId
+      ? `${aiPanelProjectIdNum}:${detailPanelPageId}`
+      : '';
+  const deckAiDraftBusyOnDetailPage = detailDeckBusyKey
+    ? Boolean(deckAiGeneratingByKey[detailDeckBusyKey])
+    : false;
+
+  /** 左侧整页重生成轮询中：右侧同页也应显示「生成中」并禁用按钮 */
+  const aiPanelPageNodeIdForRegen =
+    aiPanelClip?.type === 'video' ? parsePageNodeIdFromPageId(aiPanelClip.pageId) : NaN;
+  const deckFullRegenBusyOnAiPanel =
+    deckRegenWatchActive &&
+    Number.isFinite(aiPanelPageNodeIdForRegen) &&
+    deckRegenWatchPageNodeId != null &&
+    deckRegenWatchPageNodeId === aiPanelPageNodeIdForRegen;
+  const aiDeckGeneratingUnified = aiGenerating || deckFullRegenBusyOnAiPanel;
   const aiContextPage = workspacePages.find((p) => p.id === aiPanelPageId);
   const aiCurrentDraftHtml = (aiDraft?.draftHtml || aiContextPage?.html || '').trim();
   /** 发给后端的上下文（含 html），面板内单独展示原始 HTML */
@@ -1978,11 +2000,14 @@ export default function App() {
           setEditorFlashMessage('配音任务已提交。');
         } else if (stepId === 'pages' || stepId === 'deck_render') {
           setHeaderDeckPagesKickoffPending(true);
-          await apiFetch(`/api/projects/${pid}/workflow/demo/run`, {
-            method: 'POST',
-            headers: jsonHeaders,
-            body: '{}',
-          });
+          await apiFetch(
+            `/api/projects/${pid}/workflow/demo/run${consumeDeckBetaVisualQuery()}`,
+            {
+              method: 'POST',
+              headers: jsonHeaders,
+              body: '{}',
+            },
+          );
           setEditorFlashMessage('演示页生成已启动。');
         } else if (stepId === 'deck_master') {
           await apiFetch(`/api/projects/${pid}/workflow/deck_master/run`, {
@@ -2212,11 +2237,20 @@ export default function App() {
       // if (newProject.includeOutro) body.include_outro = true;
       const ttsVt = (newProject.ttsVoiceType || '').trim();
       if (ttsVt) body.tts_voice_type = ttsVt;
+      if (newProject.deckBetaVisual === true) {
+        body.deck_beta_visual = true;
+      }
       const res = await apiFetch<{ project_id: number }>('/api/projects', {
         method: 'POST',
         body: JSON.stringify(body),
       });
       const pid = res.project_id;
+      if (
+        newProject.deckBetaVisual === true &&
+        newProject.pipelineAutoAdvance !== false
+      ) {
+        consumeDeckBetaVisualQuery();
+      }
       await fetchProjects(userId, username);
       setCurrentProjectId(String(pid));
       setCurrentView('editor');
@@ -2742,6 +2776,7 @@ export default function App() {
               onDeckPageRegenSubmitted={onDeckPageRegenSubmitted}
               deckRegenerating={deckRegenWatchActive}
               deckRegeneratingPageNodeId={deckRegenWatchPageNodeId}
+              deckAiDraftBusyForPage={deckAiDraftBusyOnDetailPage}
               onNotify={(message) => {
                 setEditorFlashDownloadUrl(null);
                 setEditorFlashMessage(message);
@@ -2792,7 +2827,7 @@ export default function App() {
             clip: aiPanelClip,
             contextHtmlText: aiContextHtmlText,
             draftHtmlText: aiDraft?.draftHtml || null,
-            isGenerating: aiGenerating,
+            isGenerating: aiDeckGeneratingUnified,
             errorText: aiError,
             onGenerate: handleGenerateAiDraft,
             onApplyChanges: () => void handleApplyAiDraft(),

@@ -507,7 +507,9 @@ async def _run_deck_master_entry_parallel(project_id: int) -> None:
             )
 
 
-async def _run_audio_and_deck_parallel(project_id: int) -> None:
+async def _run_audio_and_deck_parallel(
+    project_id: int, *, deck_beta_visual: bool = False
+) -> None:
     """文本已成功：配音与演示页并行。"""
     from app.services.deck import (
         collect_deck_page_node_ids_needing_generation,
@@ -568,7 +570,9 @@ async def _run_audio_and_deck_parallel(project_id: int) -> None:
                         await s2.commit()
                 return
             await asyncio.wait_for(
-                run_generate_deck_all_job(project_id, started),
+                run_generate_deck_all_job(
+                    project_id, started, beta_visual=deck_beta_visual
+                ),
                 timeout=max(120, int(settings.deck_pipeline_timeout_seconds or 900)),
             )
         except asyncio.TimeoutError:
@@ -655,7 +659,9 @@ async def run_text_rebuild_job(project_id: int) -> None:
         await _run_audio_and_deck_parallel(project_id)
 
 
-async def run_queued_project_pipeline_job(project_id: int) -> None:
+async def run_queued_project_pipeline_job(
+    project_id: int, *, deck_beta_visual: bool = False
+) -> None:
     """
     后台：queued → structuring；结构化阶段与 deck_master（风格母版）并行；
     入库 draft 后（配音 ∥ 演示页）并行。
@@ -719,7 +725,9 @@ async def run_queued_project_pipeline_job(project_id: int) -> None:
         return
 
     await deck_master_task
-    await _run_audio_and_deck_parallel(project_id)
+    await _run_audio_and_deck_parallel(
+        project_id, deck_beta_visual=deck_beta_visual
+    )
 
 
 async def run_generate(

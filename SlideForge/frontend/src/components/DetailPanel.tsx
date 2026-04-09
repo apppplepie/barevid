@@ -5,6 +5,7 @@ import { ClipData } from '../types';
 import { findPlayStepOnPageAtMs, type PlayStep } from '../data/playManifest';
 import { activeSentenceIndex, parseDoubaoSentenceCues } from '../utils/narrationAlignment';
 import { apiFetch } from '../api';
+import { consumeDeckBetaVisualQuery } from '../utils/deckBetaVisual';
 
 export function DetailPanel({
   width,
@@ -19,6 +20,8 @@ export function DetailPanel({
   onDeckPageRegenSubmitted,
   deckRegenerating,
   deckRegeneratingPageNodeId,
+  /** 右侧 AI 草稿「重新生成」进行中，与本页为同一 page 时禁用左侧整页重生成 */
+  deckAiDraftBusyForPage,
   onNotify,
   playback,
 }: {
@@ -35,6 +38,7 @@ export function DetailPanel({
   onDeckPageRegenSubmitted?: (pageNodeId: number) => void;
   deckRegenerating?: boolean;
   deckRegeneratingPageNodeId?: number | null;
+  deckAiDraftBusyForPage?: boolean;
   onNotify?: (message: string) => void;
   playback?: {
     steps: PlayStep[];
@@ -84,6 +88,7 @@ export function DetailPanel({
               onDeckPageRegenSubmitted={onDeckPageRegenSubmitted}
               deckRegenerating={deckRegenerating}
               deckRegeneratingPageNodeId={deckRegeneratingPageNodeId}
+              deckAiDraftBusyForPage={deckAiDraftBusyForPage}
               onNotify={onNotify}
             />
           </Fragment>
@@ -299,6 +304,7 @@ function PageDetails({
   onDeckPageRegenSubmitted,
   deckRegenerating = false,
   deckRegeneratingPageNodeId = null,
+  deckAiDraftBusyForPage = false,
   onNotify,
 }: {
   clip: ClipData;
@@ -312,6 +318,7 @@ function PageDetails({
   onDeckPageRegenSubmitted?: (pageNodeId: number) => void;
   deckRegenerating?: boolean;
   deckRegeneratingPageNodeId?: number | null;
+  deckAiDraftBusyForPage?: boolean;
   onNotify?: (message: string) => void;
 }) {
   const [nodesExpanded, setNodesExpanded] = useState(true);
@@ -327,7 +334,8 @@ function PageDetails({
     currentPageNodeId != null &&
     deckRegeneratingPageNodeId != null &&
     currentPageNodeId === deckRegeneratingPageNodeId;
-  const effectivePageGenBusy = pageGenBusy || deckRegeneratingOnCurrentPage;
+  const effectivePageGenBusy =
+    pageGenBusy || deckRegeneratingOnCurrentPage || deckAiDraftBusyForPage;
 
   const pageContextBrief = useMemo(() => {
     if (clip.type !== 'video' || !clip.pageId) {
@@ -368,7 +376,7 @@ function PageDetails({
     setPageGenBusy(true);
     try {
       await apiFetch(
-        `/api/projects/${projectId}/outline-nodes/${currentPageNodeId}/generate-deck-page`,
+        `/api/projects/${projectId}/outline-nodes/${currentPageNodeId}/generate-deck-page${consumeDeckBetaVisualQuery()}`,
         { method: 'POST' },
       );
       onDeckPageRegenSubmitted?.(currentPageNodeId);

@@ -880,6 +880,7 @@ async def run_generate_deck_page_job(
     page_node_id: int,
     *,
     skip_style_ensure: bool = False,
+    beta_visual: bool = False,
 ) -> None:
     ptitle: str | None = None
     page_size_meta = _PAGE_SIZE_META["16:9"]
@@ -995,6 +996,7 @@ async def run_generate_deck_page_job(
                 style_prompt_text=style_prompt,
                 page_size=page_size_key,
                 fim_dump=(dump_dir, stem),
+                use_beta_visual=beta_visual,
             )
             normalized = _normalize_pages_html(data["pages_html"], [ptitle])
             html = normalized[0]["html"]
@@ -1029,7 +1031,12 @@ async def run_generate_deck_page_job(
         await session.commit()
 
 
-async def run_generate_deck_all_job(project_id: int, page_node_ids: list[int]) -> None:
+async def run_generate_deck_all_job(
+    project_id: int,
+    page_node_ids: list[int],
+    *,
+    beta_visual: bool = False,
+) -> None:
     """已在外层将各页标为 generating；先确保 style_base，再并行生成各页 HTML。"""
     if not page_node_ids:
         return
@@ -1086,7 +1093,12 @@ async def run_generate_deck_all_job(project_id: int, page_node_ids: list[int]) -
 
     await asyncio.gather(
         *[
-            run_generate_deck_page_job(project_id, nid, skip_style_ensure=True)
+            run_generate_deck_page_job(
+                project_id,
+                nid,
+                skip_style_ensure=True,
+                beta_visual=beta_visual,
+            )
             for nid in page_node_ids
         ]
     )

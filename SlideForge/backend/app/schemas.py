@@ -62,6 +62,10 @@ class ProjectCreate(BaseModel):
         default=True,
         description="为 False 时创建后不自动排队跑流水线，需在工程内手动点步骤开始",
     )
+    deck_beta_visual: bool = Field(
+        default=False,
+        description="为 True 时自动流水线首次生成演示页使用beta视觉提示（与 ?beta_visual=1 一致）",
+    )
     tts_voice_type: str | None = Field(
         default=None,
         max_length=200,

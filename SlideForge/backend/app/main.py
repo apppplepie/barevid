@@ -742,7 +742,11 @@ async def create_project(
     await _wf.ensure_workflow_for_project(session, project, align_from_project=False)
     await session.commit()
     if auto_run:
-        background_tasks.add_task(run_queued_project_pipeline_job, project.id)
+        background_tasks.add_task(
+            run_queued_project_pipeline_job,
+            project.id,
+            deck_beta_visual=bool(body.deck_beta_visual),
+        )
     return {"project_id": project.id}
 
 
@@ -1435,6 +1439,7 @@ async def workflow_run_audio(
 async def workflow_run_demo(
     project_id: int,
     background_tasks: BackgroundTasks,
+    beta_visual: Annotated[bool, Query()] = False,
     session: AsyncSession = Depends(get_session),
     me: User = Depends(get_current_user),
 ) -> dict:
@@ -1474,7 +1479,9 @@ async def workflow_run_demo(
             status_code=409,
             detail="没有可启动的页面（可能均在生成中）",
         )
-    background_tasks.add_task(run_generate_deck_all_job, project_id, started)
+    background_tasks.add_task(
+        run_generate_deck_all_job, project_id, started, beta_visual=beta_visual
+    )
     return {"started_page_node_ids": started, "count": len(started)}
 
 
@@ -1540,6 +1547,7 @@ async def generate_deck_page(
     project_id: int,
     node_id: int,
     background_tasks: BackgroundTasks,
+    beta_visual: Annotated[bool, Query()] = False,
     session: AsyncSession = Depends(get_session),
     me: User = Depends(get_current_user),
 ) -> dict:
@@ -1557,7 +1565,12 @@ async def generate_deck_page(
     if started == "conflict":
         raise HTTPException(status_code=409, detail="该页演示正在生成中，请稍候")
 
-    background_tasks.add_task(run_generate_deck_page_job, project_id, node_id)
+    background_tasks.add_task(
+        run_generate_deck_page_job,
+        project_id,
+        node_id,
+        beta_visual=beta_visual,
+    )
     return {"page_deck_status": "generating", "page_node_id": node_id}
 
 
@@ -1872,6 +1885,7 @@ async def generate_project_deck_style(
 async def generate_deck_all_pages(
     project_id: int,
     background_tasks: BackgroundTasks,
+    beta_visual: Annotated[bool, Query()] = False,
     session: AsyncSession = Depends(get_session),
     me: User = Depends(get_current_user),
 ) -> dict:
@@ -1903,7 +1917,9 @@ async def generate_deck_all_pages(
             status_code=409,
             detail="没有可启动的页面（可能均在生成中）",
         )
-    background_tasks.add_task(run_generate_deck_all_job, project_id, started)
+    background_tasks.add_task(
+        run_generate_deck_all_job, project_id, started, beta_visual=beta_visual
+    )
     return {"started_page_node_ids": started, "count": len(started)}
 
 

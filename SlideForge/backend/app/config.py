@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     doubao_tts_speed_ratio: float = 1.0
     # 字级时间戳：V1 为 with_timestamp；V3 在 TTS2.0 为 audio_params.enable_subtitle
     doubao_tts_with_timestamp: bool = True
+    # 豆包 TTS 单次请求（含流式读响应体）超时；长文稿或网络慢时易触发 httpx.ReadTimeout，宜与 audio_pipeline 同量级
+    doubao_tts_http_timeout_seconds: float = 600.0
 
     storage_root: Path = Field(default_factory=_default_storage_root)
     # 必填（无默认值，避免误用 SQLite）。见 backend/.env 中 DATABASE_URL。
