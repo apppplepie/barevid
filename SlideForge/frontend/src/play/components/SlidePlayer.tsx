@@ -167,9 +167,25 @@ export function SlidePlayer({
     if (!steps.length) return;
     if (domStage && !visualReady) return;
     autoPlayedRef.current = true;
-    markExportStarted();
+    const firstStep = steps[rangeStart];
+    const firstStepNeedsImmediateClock =
+      !firstStep ||
+      firstStep.kind === "pause" ||
+      !firstStep.audio_url?.trim();
+    if (firstStepNeedsImmediateClock) {
+      markExportStarted();
+    }
     play();
-  }, [autoPlay, domStage, markExportStarted, play, steps.length, visualReady]);
+  }, [
+    autoPlay,
+    domStage,
+    markExportStarted,
+    play,
+    rangeStart,
+    steps,
+    steps.length,
+    visualReady,
+  ]);
 
   useEffect(() => {
     if (!exportMode || typeof window === "undefined") {
@@ -355,6 +371,9 @@ export function SlidePlayer({
               setAudioErr(null);
               onPlay();
             }}
+            onPlaying={() => {
+              markExportStarted();
+            }}
             onPause={onPause}
             onLoadedData={() => setAudioErr(null)}
             onLoadedMetadata={(e) => {
@@ -514,7 +533,9 @@ export function SlidePlayer({
               type="button"
               className="sf-btn"
               onClick={() => {
-                markExportStarted();
+                if (!hasAudioClip) {
+                  markExportStarted();
+                }
                 play();
               }}
             >

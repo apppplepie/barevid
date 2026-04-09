@@ -528,16 +528,18 @@ async def _record_video(
         nav_timeout_ms = max(60000, min(180000, duration_ms + 30000))
         await page.goto(url, wait_until="domcontentloaded", timeout=nav_timeout_ms)
         # 导航后先固定等待再进入可用态检测，降低 Web 字体/子资源未就绪就录进缺字形的概率。
-        # 可用 SLIDEFORGE_EXPORT_INITIAL_WAIT_MS 覆盖（0 表示关闭），上限 30s。
-        initial_wait_ms = 3000
+        # 至少等待 3s（产品要求，不可省略）。SLIDEFORGE_EXPORT_INITIAL_WAIT_MS 仅可在 3s～30s 范围内加大，不能关。
+        _initial_wait_floor_ms = 3000
+        initial_wait_ms = _initial_wait_floor_ms
         raw_initial = (os.environ.get("SLIDEFORGE_EXPORT_INITIAL_WAIT_MS") or "").strip()
         if raw_initial:
             try:
-                initial_wait_ms = max(0, min(30000, int(raw_initial)))
+                initial_wait_ms = max(
+                    _initial_wait_floor_ms, min(30000, int(raw_initial))
+                )
             except ValueError:
-                initial_wait_ms = 3000
-        if initial_wait_ms > 0:
-            await page.wait_for_timeout(initial_wait_ms)
+                initial_wait_ms = _initial_wait_floor_ms
+        await page.wait_for_timeout(initial_wait_ms)
         # 经验值：给前端资源加载/首帧渲染留一段缓冲；可通过环境变量下调（默认 1200ms）。
         extra_wait_ms = 1200
         raw_extra_wait = (os.environ.get("SLIDEFORGE_EXPORT_EXTRA_WAIT_MS") or "").strip()
