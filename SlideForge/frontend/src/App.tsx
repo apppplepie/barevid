@@ -1789,11 +1789,12 @@ export default function App() {
         pipeline: { outline: boolean; audio: boolean; deck: boolean; video: boolean };
       },
     ) => {
+      const rp = res.pipeline;
       const nextPl = {
-        outline: Boolean(res.pipeline.outline),
-        audio: Boolean(res.pipeline.audio),
-        deck: Boolean(res.pipeline.deck),
-        video: Boolean(res.pipeline.video),
+        outline: Boolean(rp?.outline),
+        audio: Boolean(rp?.audio),
+        deck: Boolean(rp?.deck),
+        video: Boolean(rp?.video),
       };
       const queued = (res.action || '').trim().toLowerCase() === 'queued';
       setProjects((prev) =>
@@ -1881,7 +1882,7 @@ export default function App() {
           return;
         }
         setExportTracking(null);
-        if (!res.pipeline.video) {
+        if (!res.pipeline?.video) {
           setEditorFlashDownloadUrl(null);
           setEditorFlashMessage('导出尚未完成，请稍后再试。');
           setExportTracking(null);

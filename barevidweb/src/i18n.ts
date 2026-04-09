@@ -58,7 +58,7 @@ const resources = {
         stat3Label: "Manual mode",
         stat3Value: "Per-slide tweaks, fully custom",
         noVideos: "No showcase clips yet. Drop .mp4 files into public/vidsrc and run npm run vidsrc:manifest.",
-        manifestError: "Could not load /vidsrc/manifest.json. Run npm run vidsrc:manifest after adding videos.",
+        manifestError: "Could not load /vidsrc/manifest.json. Local dev: run npm run vidsrc:manifest after adding videos. Docker: rebuild/restart the image — the container regenerates the list from the mounted vidsrc folder.",
         loadingShowcase: "Loading showcase…",
         clipBadge: "Showcase clip"
       },
@@ -173,7 +173,7 @@ const resources = {
         stat3Label: "手动方案",
         stat3Value: "逐页微调，私人定制",
         noVideos: "暂无展示视频。把 .mp4 放进 public/vidsrc 后执行 npm run vidsrc:manifest。",
-        manifestError: "无法加载 /vidsrc/manifest.json。添加视频后请执行 npm run vidsrc:manifest。",
+        manifestError: "无法加载 /vidsrc/manifest.json。本地开发：添加视频后执行 npm run vidsrc:manifest。Docker：重新构建并启动镜像即可，容器会根据挂载目录自动生成清单。",
         loadingShowcase: "加载展示视频…",
         clipBadge: "展示片段"
       },

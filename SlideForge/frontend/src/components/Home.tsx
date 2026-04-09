@@ -38,7 +38,10 @@ import { TtsVoiceSelect } from './TtsVoiceSelect';
 import type { VideoExportJobInfo } from './ExportVideoStatusDialog';
 import { APP_BRAND } from '../brand';
 import type { OutlineNodeApi } from '../utils/outlineScriptPages';
-import { projectPipelineTagTone } from '../utils/projectPipelineTagTone';
+import {
+  projectPipelineCardLabel,
+  projectPipelineTagTone,
+} from '../utils/projectPipelineTagTone';
 import { SfTag } from './ui/SfTag';
 
 export interface Project {
@@ -105,23 +108,6 @@ export type CreateProjectInput = Omit<
   pipelineAutoAdvance?: boolean;
 };
 
-function pipelineStatusLabel(project: Project): string {
-  const st = (project.serverStatus || '').toLowerCase();
-  const ds = (project.deckStatus || 'idle').toLowerCase();
-  const pl = project.pipeline;
-  if (st === 'failed') return '失败';
-  if (st === 'queued') return '加载中';
-  if (st === 'pending_text') return '待生成文案';
-  if (st === 'structuring') return '文本结构化';
-  if (st === 'synthesizing') return '配音中';
-  if (pl?.video) return '完成';
-  if (pl?.audio && pl?.deck) return '就绪';
-  if (pl?.audio && (ds === 'generating' || !pl?.deck)) return '演示页生成中';
-  if (pl?.audio) return '待演示页';
-  if (pl?.outline) return '待配音';
-  return '处理中';
-}
-
 /** 为 false 时隐藏片头/片尾勾选 UI；状态仍参与提交，便于日后开放入口 */
 /** 与后端片头/片尾入口一致：暂关；恢复时改为 true 并打开 App 内 body.include_* */
 const SHOW_INTRO_OUTRO_UI = false;
@@ -155,6 +141,9 @@ const STYLE_PRESETS = [
   { value: 'editorial_luxury', title: '杂志高级感', subtitle: '' },
   { value: 'futuristic_hud', title: '未来 HUD', subtitle: '' },
 ] as const;
+
+/** 创建表单默认风格（仅前端）；可再点同一预设取消为 none */
+const DEFAULT_DECK_STYLE_PRESET = 'aurora_glass' as const;
 
 /** 卡片上展示的母版号：复用则显示源项目 id，自建则显示本项目 id */
 function deckMasterDisplayNo(project: Project): string {
@@ -213,7 +202,7 @@ export function Home({
   const [newProjectName, setNewProjectName] = useState('');
   const [selectedSize, setSelectedSize] = useState('16:9');
   /** 与后端 style_preset 一致；none 表示未选预设，可再点同一项取消 */
-  const [selectedStyle, setSelectedStyle] = useState<string>('none');
+  const [selectedStyle, setSelectedStyle] = useState<string>(DEFAULT_DECK_STYLE_PRESET);
   const [deckStyleUserHint, setDeckStyleUserHint] = useState('');
   /** 复用已有项目的演示母版：填源项目数字 id */
   const [deckMasterSourceRaw, setDeckMasterSourceRaw] = useState('');
@@ -352,7 +341,7 @@ export function Home({
     setPrompt('');
     setDeckMasterSourceRaw('');
     setDeckMasterMode('self');
-    setSelectedStyle('none');
+    setSelectedStyle(DEFAULT_DECK_STYLE_PRESET);
     setDeckStyleUserHint('');
     setIncludeIntro(false);
     setIncludeOutro(false);
@@ -393,7 +382,7 @@ export function Home({
       setPrompt('');
       setDeckMasterSourceRaw('');
       setDeckMasterMode('self');
-      setSelectedStyle('none');
+      setSelectedStyle(DEFAULT_DECK_STYLE_PRESET);
       setDeckStyleUserHint('');
       setIncludeIntro(false);
       setIncludeOutro(false);
@@ -646,6 +635,7 @@ export function Home({
                       if (creating || deckMasterMode === 'self') return;
                       setDeckMasterMode('self');
                       setDeckMasterSourceRaw('');
+                      setSelectedStyle(DEFAULT_DECK_STYLE_PRESET);
                     }}
                     disabled={creating}
                     className={`rounded-xl border px-3 py-2 text-sm transition-all disabled:opacity-50 ${
@@ -1005,7 +995,7 @@ export function Home({
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
                     <SfTag tone={projectPipelineTagTone(project)} size="xs">
-                      {pipelineStatusLabel(project)}
+                      {projectPipelineCardLabel(project)}
                     </SfTag>
                     {project.isShared ? (
                       <SfTag
@@ -1159,7 +1149,7 @@ export function Home({
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
                     <SfTag tone={projectPipelineTagTone(project)} size="xs">
-                      {pipelineStatusLabel(project)}
+                      {projectPipelineCardLabel(project)}
                     </SfTag>
                     <button
                       type="button"

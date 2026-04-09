@@ -523,10 +523,10 @@ export function ProjectDetailsModal({ open, onClose, projectId }: ProjectDetails
               />
             </Section>
             <Section title="流水线里程碑（pipeline）">
-              <Row label="文案已写入大纲" value={formatValue(data.pipeline.outline)} />
-              <Row label="配音完成" value={formatValue(data.pipeline.audio)} />
-              <Row label="演示页就绪" value={formatValue(data.pipeline.deck)} />
-              <Row label="已成功导出成片" value={formatValue(data.pipeline.video)} />
+              <Row label="文案已写入大纲" value={formatValue(data.pipeline?.outline)} />
+              <Row label="配音完成" value={formatValue(data.pipeline?.audio)} />
+              <Row label="演示页就绪" value={formatValue(data.pipeline?.deck)} />
+              <Row label="已成功导出成片" value={formatValue(data.pipeline?.video)} />
             </Section>
             <Section title="成片与导出链接">
               <Row label="最近导出成功时间" value={formatValue(data.video_exported_at)} />

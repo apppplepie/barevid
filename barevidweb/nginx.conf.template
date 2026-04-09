@@ -1,3 +1,6 @@
+# 本文件经 docker-entrypoint 渲染为 /etc/nginx/conf.d/default.conf（站点默认 server）。
+# 不是镜像内的主配置 /etc/nginx/nginx.conf；自建 nginx 时把下面整个 server { } 放进你的站点配置即可。
+
 server {
     listen 80;
     server_name _;
@@ -11,6 +14,14 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # 由 docker-entrypoint 根据挂载目录生成，避免 :ro 卷覆盖镜像内 manifest 后 404
+    location = /vidsrc/manifest.json {
+        alias /run/barevid/vidsrc-manifest.json;
+        default_type application/json;
+        charset utf-8;
+        add_header Cache-Control "no-store";
     }
 
     location / {

@@ -49,27 +49,30 @@ export function mergeProjectWorkflowState(
 }
 
 export function buildWorkflowStepsForProject(
-  p: Pick<
-    Project,
-    | 'pipeline'
-    | 'serverStatus'
-    | 'deckStatus'
-    | 'serverWorkflow'
-    | 'pipelineAutoAdvance'
-    | 'manualOutlineConfirmed'
-  >,
+  p:
+    | Pick<
+        Project,
+        | 'pipeline'
+        | 'serverStatus'
+        | 'deckStatus'
+        | 'serverWorkflow'
+        | 'pipelineAutoAdvance'
+        | 'manualOutlineConfirmed'
+      >
+    | null
+    | undefined,
 ) {
   const raw = deriveWorkflowSteps(
-    p.pipeline,
-    p.serverStatus,
-    p.deckStatus,
-    p.serverWorkflow ?? null,
+    p?.pipeline,
+    p?.serverStatus,
+    p?.deckStatus,
+    p?.serverWorkflow ?? null,
     {
-      pipelineAutoAdvance: p.pipelineAutoAdvance !== false,
+      pipelineAutoAdvance: p?.pipelineAutoAdvance !== false,
     },
   );
   return applyActionableWaitingToSteps(raw, {
-    pipelineAutoAdvance: p.pipelineAutoAdvance !== false,
-    manualOutlineConfirmed: p.manualOutlineConfirmed !== false,
+    pipelineAutoAdvance: p?.pipelineAutoAdvance !== false,
+    manualOutlineConfirmed: p?.manualOutlineConfirmed !== false,
   });
 }

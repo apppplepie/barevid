@@ -4,6 +4,8 @@
  * Each entry uses your file name as `file`; the UI shows the same base name (no extension).
  *
  * Run: npm run vidsrc:manifest — also runs before dev/build via predev/prebuild.
+ * Docker (nginx 镜像): docker-entrypoint.sh 在启动时扫描挂载的 vidsrc 并写入 /run/barevid，
+ * 由 nginx 提供 /vidsrc/manifest.json，无需在宿主机执行本脚本。
  */
 import fs from 'node:fs';
 import path from 'node:path';

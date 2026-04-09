@@ -11,7 +11,6 @@ import {
   Minimize2,
   MonitorPlay,
   Loader2,
-  AlertTriangle,
   Play,
   Pause,
   Clock,
@@ -88,6 +87,9 @@ export function MainWorkspace({
         s.state === 'cancelled',
     ) ||
     gateSteps.find((s) => s.state === 'pending' || s.state === 'waiting');
+
+  /** 时间轴未解锁时：仅「进行中 / 待操作」二态；任一步 running 即为进行中，其余（含失败、等待）均为待操作 */
+  const gatePipelineRunning = gateSteps.some((s) => s.state === 'running');
 
   const activeVideoClip = findClipAtTime(clips, 'video', currentTime);
   const activeAudioClip = findClipAtTime(clips, 'audio', currentTime);
@@ -218,55 +220,37 @@ export function MainWorkspace({
     !timelineUnlocked && Boolean(activeGateStep);
 
   if (showInitialPipelineGate) {
-    const isError = activeGateStep.state === 'error';
-    const isCancelled = activeGateStep.state === 'cancelled';
-    const isRunning = activeGateStep.state === 'running';
-    const needsUserAction =
-      activeGateStep.state === 'waiting' || activeGateStep.state === 'pending';
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center bg-zinc-950 light:bg-slate-50 relative">
         <div className="flex flex-col items-center gap-4">
-          {isError ? (
-            <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6 text-red-500" />
-            </div>
-          ) : isCancelled ? (
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10">
-              <span className="text-lg font-semibold text-amber-600" aria-hidden>
-                —
-              </span>
-            </div>
-          ) : isRunning ? (
-            <Loader2 className="w-8 h-8 animate-spin text-blue-500" aria-hidden />
-          ) : needsUserAction ? (
-            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-cyan-500/35 bg-cyan-500/10">
-              <Clock className="h-7 w-7 text-cyan-400 light:text-cyan-700" strokeWidth={2} aria-hidden />
-            </div>
+          {gatePipelineRunning ? (
+            <Loader2
+              className="h-8 w-8 animate-spin text-emerald-500 light:text-emerald-600"
+              aria-hidden
+            />
           ) : (
-            <Loader2 className="w-8 h-8 animate-spin text-blue-500" aria-hidden />
+            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-500/40 bg-amber-500/10">
+              <Clock
+                className="h-7 w-7 text-amber-400 light:text-amber-700"
+                strokeWidth={2}
+                aria-hidden
+              />
+            </div>
           )}
           <div className="text-center">
-            <h3 className="text-lg font-medium text-zinc-200 light:text-slate-800">
-              {isError
-                ? `${activeGateStep.label} 出错`
-                : isCancelled
-                  ? `${activeGateStep.label} 已取消`
-                  : isRunning
-                    ? `正在处理：${activeGateStep.label}…`
-                    : needsUserAction
-                      ? `等待操作：${activeGateStep.label}`
-                      : `正在处理：${activeGateStep.label}…`}
+            <h3
+              className={`text-lg font-medium ${
+                gatePipelineRunning
+                  ? 'text-emerald-300 light:text-emerald-800'
+                  : 'text-amber-200 light:text-amber-900'
+              }`}
+            >
+              {gatePipelineRunning ? '进行中' : '待操作'}
             </h3>
-            <p className="text-sm text-zinc-500 light:text-slate-500 mt-1 max-w-sm">
-              {isError
-                ? '可在顶部进度条该步骤上点击重试。'
-                : isCancelled
-                  ? '可在顶部进度条该步骤上点击重新开始。'
-                  : isRunning
-                    ? '后台任务进行中，请稍候。'
-                    : needsUserAction
-                      ? '请在顶部制作进度条或「制作流程」面板中点击该步骤开始（手动流程不会自动执行）。'
-                      : '可能需要一点时间。'}
+            <p className="mt-1 max-w-sm text-sm text-zinc-500 light:text-slate-500">
+              {gatePipelineRunning
+                ? '请稍候。'
+                : '请在顶部制作进度条或「制作流程」中继续。手动流程需逐步点击开始。'}
             </p>
           </div>
         </div>
@@ -278,10 +262,13 @@ export function MainWorkspace({
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center bg-zinc-950 light:bg-slate-50 relative">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+          <Loader2
+            className="h-8 w-8 animate-spin text-emerald-500 light:text-emerald-600"
+            aria-hidden
+          />
           <div className="text-center">
-            <h3 className="text-lg font-medium text-zinc-200 light:text-slate-800">加载时间轴...</h3>
-            <p className="text-sm text-zinc-500 light:text-slate-500 mt-1">从服务器同步音频片段...</p>
+            <h3 className="text-lg font-medium text-emerald-300 light:text-emerald-800">进行中</h3>
+            <p className="mt-1 text-sm text-zinc-500 light:text-slate-500">正在加载时间轴与演示画面…</p>
           </div>
         </div>
       </div>
