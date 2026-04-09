@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Play, Terminal, Cpu, Sparkles, Loader2 } from 'lucide-react';
+import { Play, Terminal, Cpu, Sparkles, Loader2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 type TerminalSimulatorProps = {
@@ -14,13 +14,23 @@ export function TerminalSimulator({ videoSrc }: TerminalSimulatorProps) {
   const [logs, setLogs] = useState<string[]>([]);
   const heroVideoRef = useRef<HTMLVideoElement>(null);
   const [heroPlaybackStarted, setHeroPlaybackStarted] = useState(false);
+  const [heroExpandOpen, setHeroExpandOpen] = useState(false);
 
   useEffect(() => {
     setHeroPlaybackStarted(false);
   }, [videoSrc]);
 
   useEffect(() => {
-    const duration = 7000;
+    if (!heroExpandOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setHeroExpandOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [heroExpandOpen]);
+
+  useEffect(() => {
+    const duration = 3500;
     const interval = 50;
     const steps = duration / interval;
     let currentStep = 0;
@@ -62,12 +72,17 @@ export function TerminalSimulator({ videoSrc }: TerminalSimulatorProps) {
   const isComplete = progress >= 100;
 
   const showHeroLoader = Boolean(videoSrc && (!isComplete || !heroPlaybackStarted));
+  const heroVideoInteractive = Boolean(videoSrc && !showHeroLoader);
 
   /** Hero 视频：等底部日志跑完再播放 */
   useEffect(() => {
     if (!videoSrc) return;
     const el = heroVideoRef.current;
     if (!el) return;
+    if (heroExpandOpen) {
+      el.pause();
+      return;
+    }
     if (isComplete) {
       void el.play().catch(() => {});
     } else {
@@ -78,7 +93,7 @@ export function TerminalSimulator({ videoSrc }: TerminalSimulatorProps) {
         /* metadata 未就绪时 seek 可能失败 */
       }
     }
-  }, [videoSrc, isComplete]);
+  }, [videoSrc, isComplete, heroExpandOpen]);
 
   return (
     <div className="relative w-full aspect-[4/5] md:aspect-square lg:aspect-[4/3] max-w-2xl mx-auto mt-12 lg:mt-0 flex items-center justify-center z-10">
@@ -99,19 +114,32 @@ export function TerminalSimulator({ videoSrc }: TerminalSimulatorProps) {
         </div>
       </motion.div>
 
-      {/* Main Video/Render Container (Center) */}
+      {/* Main Video/Render Container (Center) — 就绪后 z 高于上下挡板，可点击放大 */}
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
-        className="absolute inset-y-16 inset-x-0 md:inset-12 bg-surface border border-primary/30 rounded-xl overflow-hidden z-20 shadow-[0_0_50px_rgba(176,38,255,0.2)] flex items-center justify-center"
+        className={`absolute inset-y-16 inset-x-0 md:inset-12 bg-surface border border-primary/30 rounded-xl overflow-hidden shadow-[0_0_50px_rgba(176,38,255,0.2)] flex items-center justify-center ${
+          heroVideoInteractive ? 'z-40 cursor-pointer' : 'z-20'
+        }`}
+        onClick={() => heroVideoInteractive && setHeroExpandOpen(true)}
+        role={heroVideoInteractive ? 'button' : undefined}
+        tabIndex={heroVideoInteractive ? 0 : undefined}
+        onKeyDown={(e) => {
+          if (!heroVideoInteractive) return;
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setHeroExpandOpen(true);
+          }
+        }}
+        aria-label={heroVideoInteractive ? t('terminal.expandVideo', 'Expand demo video') : undefined}
       >
         {videoSrc ? (
           <>
             <video
               ref={heroVideoRef}
               src={videoSrc}
-              className="absolute inset-0 h-full w-full object-cover"
+              className="absolute inset-0 h-full w-full object-cover pointer-events-none"
               muted
               loop
               playsInline
@@ -201,6 +229,41 @@ export function TerminalSimulator({ videoSrc }: TerminalSimulatorProps) {
           </AnimatePresence>
         )}
       </motion.div>
+
+      {videoSrc && heroExpandOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/92 p-4 md:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('terminal.videoPreview', 'Video preview')}
+          onClick={() => setHeroExpandOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-5xl flex flex-col gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-end gap-4">
+              <button
+                type="button"
+                onClick={() => setHeroExpandOpen(false)}
+                className="shrink-0 w-10 h-10 rounded-sm border border-white/20 flex items-center justify-center text-white hover:bg-white/10 hover:border-white/40 transition-colors"
+                aria-label={t('common.close', 'Close')}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="rounded-xl overflow-hidden border border-primary/30 bg-black shadow-[0_0_60px_rgba(176,38,255,0.25)]">
+              <video
+                src={videoSrc}
+                className="w-full max-h-[min(85vh,900px)] object-contain bg-black"
+                controls
+                autoPlay
+                playsInline
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Terminal Logs (Bottom Right) */}
       <motion.div 
