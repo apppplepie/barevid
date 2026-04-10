@@ -973,8 +973,8 @@ export function Home({
               aria-pressed={creativeModeOn}
               title={
                 creativeModeOn
-                  ? '已开启创意视觉；再点可关闭'
-                  : '如果你有更高追求，可以试试这个按钮，不保证页面准确！'
+                  ? '已开启保守视觉；再点可关闭'
+                  : '如果你追求自动化，可以试试这个按钮，生成页面更准确'
               }
               onClick={(e) => {
                 e.preventDefault();
@@ -987,7 +987,7 @@ export function Home({
                   : 'border-zinc-600/60 bg-zinc-900/90 text-zinc-200 hover:border-violet-500/50 hover:bg-violet-950/35 hover:text-violet-100 light:border-slate-300 light:bg-white/95 light:text-slate-700 light:hover:border-violet-400 light:hover:bg-violet-50 light:hover:text-violet-900'
               }`}
             >
-              创意模式
+              保守模式
             </button>
               </form>
             </>
