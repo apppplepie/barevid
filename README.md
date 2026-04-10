@@ -52,9 +52,10 @@
 
 ```
 barevid/
-├── barevidweb/          # 对外展示用的宣传站（Vite/React，文案见 src/i18n.ts）
-├── SlideForge/          # 真正部署在服务器上的「主应用」：FastAPI 后端 + Vite/React 前端
-├── worker/              # 导出侧：轮询任务，Playwright + ffmpeg 合成 MP4（工作节点）
+├── docker-compose.yml   # 根目录一键：MySQL + SlideForge 后端/前端 + 导出 Worker（推荐）
+├── barevidweb/          # 可选：对外宣传站（Vite/React）；默认 compose 不包含，需单独部署见该目录
+├── SlideForge/          # 主应用：FastAPI 后端 + Vite/React 前端（亦可单独 docker compose）
+├── worker/              # 导出 Worker：Playwright + ffmpeg；根 compose 会构建并运行
 └── README.md            # 本文件
 ```
 
@@ -80,6 +81,28 @@ barevid/
 ---
 
 ## 快速开始
+
+### Docker 一键（SlideForge + Worker）
+
+适合：**clone 整仓**后在一台机子上用 Docker 跑通编辑与**视频导出**（需 Docker Compose **v2.24+**，支持 `include`）。
+
+1. 安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)（Windows 建议启用 WSL2 后端）。
+2. 复制 `SlideForge/backend/.env.example` → `SlideForge/backend/.env`，填写 `DEEPSEEK_API_KEY`、豆包 TTS、`EXPORT_WORKER_TOKEN` 等（与 [SlideForge/README.md](./SlideForge/README.md)「准备」一致）。
+3. 复制仓库根 `.env.example` → `.env`，设置 `EXPORT_WORKER_TOKEN`（须与 `SlideForge/backend/.env` 里同名变量一致；根 `.env` 会经 compose 注入后端与 Worker，覆盖同名项）。
+4. 在**仓库根目录**执行：
+
+   ```powershell
+   cd D:\workspace\code\test\barevid
+   docker compose up -d --build --quiet-build
+   ```
+
+   `--quiet-build` 会**隐藏构建日志**（含 Worker 镜像），终端少一大截输出；拉基础镜像时若仍嫌吵，可再加 `--quiet-pull`。
+
+5. 浏览器打开 `http://127.0.0.1:3000`；API `http://127.0.0.1:8000`；MySQL `127.0.0.1:3307`。
+
+仅起 SlideForge 三件套（**不要** Worker）、或只拉镜像不 build：见 **[SlideForge/README.md](./SlideForge/README.md)** 的 Docker 小节。
+
+### 本机开发（无 Docker）
 
 细节以 **[SlideForge/README.md](./SlideForge/README.md)** 为准：
 

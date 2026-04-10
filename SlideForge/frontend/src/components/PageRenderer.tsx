@@ -57,7 +57,7 @@ function DeckPageStatePlaceholder({
 const BASE_SIZES: Record<string, { w: number; h: number }> = {
   '16:9': { w: 1920, h: 1080 },
   '4:3': { w: 1024, h: 768 },
-  '9:16': { w: 1080, h: 1920 },
+  '9:16': { w: 720, h: 1280 },
   '1:1': { w: 1080, h: 1080 },
 };
 

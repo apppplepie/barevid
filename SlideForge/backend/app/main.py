@@ -13,6 +13,7 @@ from typing import Annotated
 
 from fastapi import (
     BackgroundTasks,
+    Body,
     Depends,
     FastAPI,
     File,
@@ -90,6 +91,7 @@ from app.schemas import (
     ResynthesizeStepAudioRequest,
     SynthesizeAudioResponse,
     VideoExportWorkersStatus,
+    WorkflowDemoRunRequest,
     WorkerVideoExportFailBody,
     WorkerVideoExportJobPayload,
 )
@@ -283,7 +285,7 @@ _DEFAULT_PAGE_SIZE = "16:9"
 _EXPORT_SIZE_BY_PAGE: dict[str, tuple[int, int]] = {
     "16:9": (1920, 1080),
     "4:3": (1024, 768),
-    "9:16": (1080, 1920),
+    "9:16": (720, 1280),
     "1:1": (1080, 1080),
 }
 
@@ -1440,6 +1442,7 @@ async def workflow_run_demo(
     project_id: int,
     background_tasks: BackgroundTasks,
     beta_visual: Annotated[bool, Query()] = False,
+    body: WorkflowDemoRunRequest | None = Body(default=None),
     session: AsyncSession = Depends(get_session),
     me: User = Depends(get_current_user),
 ) -> dict:
@@ -1452,6 +1455,40 @@ async def workflow_run_demo(
     wf = await workflow_public_dict_async(session, project)
     if (wf.get("deckMasterStatus") or "").strip().lower() != "succeeded":
         raise HTTPException(status_code=409, detail="请先完成演示母版")
+
+    demo_req = body or WorkflowDemoRunRequest()
+    ps_opt = (demo_req.deck_page_size or "").strip() or None
+    if ps_opt is not None:
+        if ps_opt not in DECK_PAGE_SIZE_OPTIONS:
+            raise HTTPException(
+                status_code=400,
+                detail="deck_page_size 非法，可选：16:9, 4:3, 9:16, 1:1",
+            )
+        cur = resolve_project_page_size(project)
+        w, h = _EXPORT_SIZE_BY_PAGE.get(
+            ps_opt, _EXPORT_SIZE_BY_PAGE[_DEFAULT_PAGE_SIZE]
+        )
+        if ps_opt != cur:
+            project.aspect_ratio = ps_opt
+            project.deck_width = w
+            project.deck_height = h
+            project.updated_at = utc_now()
+            session.add(project)
+            await invalidate_all_page_decks_after_master_change(session, project_id)
+            await sync_demo_workflow_from_deck(session, project_id)
+            await session.commit()
+            await session.refresh(project)
+        elif project.deck_width != w or project.deck_height != h:
+            # 比例字符串相同但库内像素与当前基准不一致（如部署后调整竖屏等）
+            project.deck_width = w
+            project.deck_height = h
+            project.updated_at = utc_now()
+            session.add(project)
+            await invalidate_all_page_decks_after_master_change(session, project_id)
+            await sync_demo_workflow_from_deck(session, project_id)
+            await session.commit()
+            await session.refresh(project)
+
     if (await compute_project_deck_status(session, project_id)) == "generating":
         raise HTTPException(status_code=409, detail="演示生成中")
     timeline = await load_deck_timeline(session, project_id)

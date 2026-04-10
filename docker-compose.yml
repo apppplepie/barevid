@@ -1,0 +1,43 @@
+# 仓库根：MySQL + SlideForge 后端/前端 + 视频导出 Worker（同一 Docker 网络内）。
+# 需要 Docker Compose v2.24+（支持 include）。
+#
+# 首次：
+#   1) 复制 SlideForge/backend/.env.example -> SlideForge/backend/.env，填写 DEEPSEEK、豆包 TTS、EXPORT_WORKER_TOKEN 等
+#   2) 复制 .env.example -> .env，至少设置 EXPORT_WORKER_TOKEN（须与 backend/.env 一致；也可用根 .env 覆盖注入）
+#   3) docker compose up -d --build --quiet-build
+#      （--quiet-build 抑制镜像构建过程输出，少刷屏；拉镜像可加 --quiet-pull）
+#
+# 浏览器：http://127.0.0.1:3000 ；仅 SlideForge 三件套（无 Worker）：见 SlideForge/docker-compose.yml
+#
+# 说明：下面为 backend 注入的 EXPORT_* 使用容器内服务名，供 Worker 内 Playwright 访问；若 Worker 在宿主机或其它机器跑，勿用本文件，改回 127.0.0.1/公网域名。
+include:
+  - path: SlideForge/docker-compose.yml
+
+services:
+  backend:
+    environment:
+      EXPORT_API_URL: http://backend:8000
+      EXPORT_FRONTEND_URL: http://frontend:3000
+      EXPORT_WORKER_TOKEN: ${EXPORT_WORKER_TOKEN:-test_key}
+
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: barevid-worker
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+      frontend:
+        condition: service_started
+    environment:
+      SLIDEFORGE_API_URL: http://backend:8000
+      SLIDEFORGE_FRONTEND_URL: http://frontend:3000
+      SLIDEFORGE_WORKER_KEY: ${EXPORT_WORKER_TOKEN:-test_key}
+      SLIDEFORGE_WORKER_DB_PATH: /data/worker_tasks.db
+    volumes:
+      - worker_data:/data
+
+volumes:
+  worker_data:

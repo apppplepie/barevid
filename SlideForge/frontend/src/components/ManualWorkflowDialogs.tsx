@@ -12,6 +12,14 @@ import {
 } from '../utils/outlineScriptPages';
 import { consumeDeckBetaVisualQuery } from '../utils/deckBetaVisual';
 
+/** 与创建工程、后端 DECK_PAGE_SIZE_OPTIONS 一致 */
+const DECK_PAGE_ASPECT_OPTIONS = [
+  { value: '16:9', title: '16:9', hint: '横屏' },
+  { value: '4:3', title: '4:3', hint: '标准' },
+  { value: '9:16', title: '9:16', hint: '竖屏' },
+  { value: '1:1', title: '1:1', hint: '方形' },
+] as const;
+
 type ProjectDetailForManual = {
   project: {
     input_prompt?: string | null;
@@ -19,6 +27,7 @@ type ProjectDetailForManual = {
     deck_style_user_hint?: string | null;
     tts_voice_type?: string | null;
     deck_style_prompt_text?: string | null;
+    deck_page_size?: string | null;
   };
   outline: OutlineNodeApi[];
 };
@@ -952,6 +961,7 @@ export function ManualDeckPagesDialog(props: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [stylePromptText, setStylePromptText] = useState('');
+  const [selectedPageSize, setSelectedPageSize] = useState<string>('16:9');
   const [styleDetailLoading, setStyleDetailLoading] = useState(false);
   const initialPromptRef = useRef(initialDeckStylePromptText);
   initialPromptRef.current = initialDeckStylePromptText;
@@ -971,6 +981,7 @@ export function ManualDeckPagesDialog(props: {
     styleDirtyRef.current = false;
     // 父级若已合并详情则先显示；不把 initial 列入依赖，避免轮询刷新时冲掉正在编辑的内容
     setStylePromptText((initialPromptRef.current ?? '').trim());
+    setSelectedPageSize('16:9');
   }, [open, projectId]);
 
   useEffect(() => {
@@ -983,6 +994,11 @@ export function ManualDeckPagesDialog(props: {
         if (!styleDirtyRef.current) {
           const t = d.project?.deck_style_prompt_text;
           setStylePromptText(t != null ? String(t).trim() : '');
+        }
+        const psz = (d.project?.deck_page_size ?? '').trim();
+        const match = DECK_PAGE_ASPECT_OPTIONS.find((o) => o.value === psz);
+        if (match) {
+          setSelectedPageSize(match.value);
         }
       })
       .catch((e) => {
@@ -1016,7 +1032,7 @@ export function ManualDeckPagesDialog(props: {
         {
           method: 'POST',
           headers: jsonPost(),
-          body: '{}',
+          body: JSON.stringify({ deck_page_size: selectedPageSize }),
         },
       );
       deckPagesKickoffInFlightRef.current = false;
@@ -1112,10 +1128,38 @@ export function ManualDeckPagesDialog(props: {
             </div>
             <label className="flex items-center gap-2 pt-1 text-sm font-medium sf-text-primary">
               <LayoutGrid className="h-3.5 w-3.5 text-purple-400/90 light:text-purple-600" />
+              页面比例（与导出分辨率一致）
+            </label>
+            <p className="text-xs leading-relaxed sf-text-muted">
+              与放映、录屏导出尺寸对齐。若更换比例，将清空已有场景页并按新比例全部重新生成。
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {DECK_PAGE_ASPECT_OPTIONS.map((opt) => {
+                const on = selectedPageSize === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    disabled={busy || styleDetailLoading}
+                    onClick={() => setSelectedPageSize(opt.value)}
+                    className={
+                      on
+                        ? 'rounded-lg border border-violet-500/55 bg-violet-600/25 px-3 py-2 text-left text-sm text-violet-100 light:bg-violet-100 light:text-violet-900'
+                        : 'rounded-lg border border-[var(--sf-border-base)] bg-[var(--sf-surface-elevated)] px-3 py-2 text-left text-sm sf-text-secondary transition-colors hover:border-violet-500/35 hover:sf-text-primary'
+                    }
+                  >
+                    <span className="font-medium">{opt.title}</span>
+                    <span className="ml-1.5 text-xs opacity-80">{opt.hint}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <label className="flex items-center gap-2 pt-3 text-sm font-medium sf-text-primary">
+              <LayoutTemplate className="h-3.5 w-3.5 text-purple-400/90 light:text-purple-600" />
               批量生成各页 HTML
             </label>
             <p className="text-xs leading-relaxed sf-text-muted">
-              确认后将按当前母版与上方风格说明，为大纲中的每一大页生成演示 HTML。
+              确认后将按当前母版、所选比例与上方风格说明，为大纲中的每一大页生成演示 HTML。
             </p>
             <div className="sf-nested-surface-muted rounded-xl border px-3 py-2.5">
               <p className="text-xs leading-relaxed sf-text-secondary">

@@ -222,6 +222,15 @@ class WorkflowStepActionBody(BaseModel):
     )
 
 
+class WorkflowDemoRunRequest(BaseModel):
+    """启动场景页批量生成：可选指定页面比例（写入 projects，与导出尺寸一致）。"""
+
+    deck_page_size: str | None = Field(
+        default=None,
+        description="可选：16:9 | 4:3 | 9:16 | 1:1；若与当前项目不一致则清空各页演示 HTML 后按新比例重生成",
+    )
+
+
 class DeckStylePatch(BaseModel):
     deck_style_preset: str | None = Field(
         default=None,

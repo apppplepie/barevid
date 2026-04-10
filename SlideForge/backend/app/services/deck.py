@@ -77,7 +77,7 @@ async def _project_status_after_user_cancelled_deck(
 _PAGE_SIZE_META: dict[str, dict[str, str]] = {
     "16:9": {"label": "16:9 横屏（1920x1080）", "width": "1920", "height": "1080"},
     "4:3": {"label": "4:3 横屏（1024x768）", "width": "1024", "height": "768"},
-    "9:16": {"label": "9:16 竖屏（1080x1920）", "width": "1080", "height": "1920"},
+    "9:16": {"label": "9:16 竖屏（720x1280）", "width": "720", "height": "1280"},
     "1:1": {"label": "1:1 方形（1080x1080）", "width": "1080", "height": "1080"},
 }
 

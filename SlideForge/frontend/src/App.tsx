@@ -735,9 +735,11 @@ export default function App() {
       deckWatchTimerRef.current = window.setInterval(() => {
         void (async () => {
           try {
-            const d = await apiFetch<{ page_deck_status?: string | null }>(
-              `/api/projects/${pid}/outline-nodes/${pageNodeId}/deck-preview`,
-            );
+            const d = await apiFetch<{
+              page_deck_status?: string | null;
+              html?: string | null;
+              title?: string | null;
+            }>(`/api/projects/${pid}/outline-nodes/${pageNodeId}/deck-preview`);
             const st = (d.page_deck_status || '').trim().toLowerCase();
             if (st === 'ready' || st === 'failed' || st === 'cancelled') {
               if (deckWatchTimerRef.current != null) {
@@ -748,6 +750,27 @@ export default function App() {
               setDeckRegenWatchActive(false);
               setDeckRegenWatchPageNodeId(null);
               persistDeckRegenPending(pid, null);
+              if (st === 'ready') {
+                const html = String(d.html ?? '').trim();
+                const title = String(d.title ?? '').trim();
+                const pageId = `page-${pageNodeId}`;
+                const draftKey = `${pid}:${pageId}`;
+                if (html) {
+                  setDeckDraftMap((prev) => ({
+                    ...prev,
+                    [draftKey]: {
+                      projectId: pid,
+                      pageId,
+                      pageNodeId,
+                      draftMainTitle:
+                        title ||
+                        prev[draftKey]?.draftMainTitle ||
+                        '',
+                      draftHtml: html,
+                    },
+                  }));
+                }
+              }
               reloadEditorWithMessage(
                 st === 'ready'
                   ? '演示页面已更新。'
@@ -2000,12 +2023,14 @@ export default function App() {
           setEditorFlashMessage('配音任务已提交。');
         } else if (stepId === 'pages' || stepId === 'deck_render') {
           setHeaderDeckPagesKickoffPending(true);
+          const deckPs =
+            (currentProject?.screenSize || '16:9').trim() || '16:9';
           await apiFetch(
             `/api/projects/${pid}/workflow/demo/run${consumeDeckBetaVisualQuery()}`,
             {
               method: 'POST',
               headers: jsonHeaders,
-              body: '{}',
+              body: JSON.stringify({ deck_page_size: deckPs }),
             },
           );
           setEditorFlashMessage('演示页生成已启动。');

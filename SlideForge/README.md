@@ -71,3 +71,30 @@ cd D:\workspace\code\test\barevid
 python worker\export_video.py --project-id 123
 ``n
 Output will be written under ackend\storage\projects\<project_id>\exports\....
+
+## Docker（给别人电脑 / 无本机 Python）
+
+**推荐**：需要 **视频导出 Worker** 时，见 **[仓库根 README](../README.md)** 的「Docker 一键」小节，在仓库根用 `docker-compose.yml` 一次 build/up。下面仅描述 **本目录** 单独起 SlideForge（三件套，无 Worker）。
+
+前提：已安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)（Windows 建议 WSL2 后端），并能在终端执行 `docker compose version`。
+
+1. 进入本目录（含 `docker-compose.yml` 的 `SlideForge` 文件夹）：
+
+   ```powershell
+   cd D:\workspace\code\test\barevid\SlideForge
+   ```
+
+2. **后端密钥**：将 `backend\.env.example` 复制为 `backend\.env`，按文件内说明填写 `DEEPSEEK_API_KEY`、豆包 TTS、`EXPORT_WORKER_TOKEN` 等（与上文「准备」一致）。Compose 会挂载 `.\storage` 到容器内 `/data/storage`，并用 `environment` 覆盖 `DATABASE_URL` 为容器内 MySQL，一般无需手改库连接串。
+
+3. **可选**：将本目录 `\.env.example` 复制为 `\.env`，用于改镜像名、对外 `EXPORT_*`、端口绑定等；不复制则使用 `docker-compose.yml` 里的默认值。
+
+4. 拉镜像并启动（**MySQL + backend + frontend**）：
+
+   ```powershell
+   docker compose pull
+   docker compose up -d
+   ```
+
+5. 浏览器打开 `http://127.0.0.1:3000`（前端），API 为 `http://127.0.0.1:8000`。MySQL 映射为宿主机 `127.0.0.1:3307`。
+
+6. **本机构建镜像**（不拉远程镜像时）：`docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build`

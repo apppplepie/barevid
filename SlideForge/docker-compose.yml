@@ -8,6 +8,7 @@
 # 启动：
 #   服务器（只拉镜像、无源码）：docker compose pull && docker compose up -d
 #   本机构建：docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+# 含视频导出 Worker 的完整栈：见仓库根目录 docker-compose.yml（clone 后在根目录 build / up）
 # 修改 backend/.env 后须重建后端容器才会刷新部分变量：docker compose up -d --force-recreate backend
 #
 # 视频导出 Worker 与 API/前端分体部署：
@@ -66,11 +67,6 @@ services:
       mysql:
         condition: service_healthy
     restart: unless-stopped
-    networks:
-      default:
-      shared_proxy:
-        aliases:
-          - barevid-api
 
   frontend:
     image: ${SLIDEFORGE_FRONTEND_IMAGE:-creepender42/barevid-frontend:latest}
@@ -83,31 +79,6 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
-    networks:
-      default:
-      shared_proxy:
-        aliases:
-          - barevid-web
-
-  # 宣传页：仅挂 shared_proxy，供边缘 nginx server_name barevidweb.* 反代；生产不必再用 barevidweb/docker-compose.yml
-  barevidweb:
-    image: ${BAREVIDWEB_IMAGE:-creepender42/barevidweb:latest}
-    container_name: slideforge-barevidweb
-    environment:
-      # 容器内 nginx 的 /api 反代（直连本 compose 的 backend）
-      SLIDEFORGE_API_UPSTREAM: http://backend:8000
-    volumes:
-      # 宿主机放 mp4，对应前端路径 /vidsrc/*.mp4（与仓库 barevidweb/public/vidsrc 一致）
-      - ${BAREVIDWEB_VIDSRC_HOST:-/srv/barevid/barevidweb/public/vidsrc}:/usr/share/nginx/html/vidsrc:ro
-    restart: unless-stopped
-    networks:
-      shared_proxy:
-        aliases:
-          - barevid-promo
 
 volumes:
   mysql_data:
-
-networks:
-  shared_proxy:
-    external: true
