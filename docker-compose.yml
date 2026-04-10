@@ -6,6 +6,9 @@
 #   2) 复制 .env.example -> .env，至少设置 EXPORT_WORKER_TOKEN（须与 backend/.env 一致；也可用根 .env 覆盖注入）
 #   3) docker compose up -d --build --quiet-build
 #      （--quiet-build 抑制镜像构建过程输出，少刷屏；拉镜像可加 --quiet-pull）
+# 服务器已 push 新镜像后更新（根目录执行）：
+#   docker compose pull --policy always && docker compose up -d --build --quiet-build
+#   pull 更新 mysql/backend/frontend；worker 无远程镜像时需 --build 才会重编。
 #
 # 浏览器：http://127.0.0.1:3000 ；仅 SlideForge 三件套（无 Worker）：见 SlideForge/docker-compose.yml
 #

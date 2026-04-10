@@ -102,6 +102,37 @@ barevid/
 
 仅起 SlideForge 三件套（**不要** Worker）、或只拉镜像不 build：见 **[SlideForge/README.md](./SlideForge/README.md)** 的 Docker 小节。
 
+**服务器上**已用 `scripts/dbp.ps1` push 新镜像后要更新容器，在仓库根建议：
+
+```powershell
+docker compose pull --policy always
+docker compose up -d --build --quiet-build
+```
+
+`pull --policy always` 避免 `:latest` 仍用宿主机旧层；含 Worker 时保留 `--build` 以便必要时重编 worker 镜像。
+
+### 服务器目录（扁平部署，不等同于 clone 整仓）
+
+文档里常以仓库里的 **`SlideForge/`** 为「compose 工作目录」。若你在机器上**只同步主应用这一块**，目录可以和仓库不同名，只要 **相对关系与 `SlideForge/docker-compose.yml` 一致** 即可。
+
+示例（常见）：
+
+```
+/srv/barevid/
+├── docker-compose.yml      # 内容与 SlideForge/docker-compose.yml 对齐（或同文件）
+├── docker/                 # 对应仓库 SlideForge/docker/（含 mysql-init/barevid.sql）
+├── storage/                # 对应 SlideForge/storage
+├── backend/                # 对应 SlideForge/backend（含 .env）
+├── barevidweb/             # 可选，对应仓库 barevidweb/（宣传站单独 build，主 compose 可不包含）
+├── .env                    # 可选，给 compose 做变量替换（镜像名、EXPORT_*、bind 等）
+├── backend/.env            # 后端密钥，必填项见 SlideForge/backend/.env.example
+└── nginx-test.conf         # 自建边缘反代时用，与 compose 无强耦合
+```
+
+在此布局下在 **`/srv/barevid`** 执行 `docker compose pull --policy always` 与 `docker compose up -d` 即可；**不要**要求本机必须存在名为 `SlideForge` 的目录，关键是 **`./storage`、`./docker/...`、`backend/.env` 相对 compose 文件的路径正确**。
+
+若你使用**仓库根**的 `docker-compose.yml`（含 Worker、`include`），则仍须在**含 `SlideForge/`、`worker/` 的整仓克隆**下运行；扁平服务器上通常只用 **SlideForge 那份**三件套 compose，Worker 另机跑或再单独同步 `worker/`。
+
 ### 本机开发（无 Docker）
 
 细节以 **[SlideForge/README.md](./SlideForge/README.md)** 为准：

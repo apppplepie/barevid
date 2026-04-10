@@ -6,7 +6,8 @@
 # 更新表结构后请同步 docker/mysql-init/barevid.sql（可与仓库根 barevid.sql 对齐）。
 #
 # 启动：
-#   服务器（只拉镜像、无源码）：docker compose pull && docker compose up -d
+#   服务器（只拉镜像、无源码）：docker compose pull --policy always && docker compose up -d
+#   （--policy always 会重新拉 :latest 的清单，避免宿主机沿用旧层）
 #   本机构建：docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 # 含视频导出 Worker 的完整栈：见仓库根目录 docker-compose.yml（clone 后在根目录 build / up）
 # 修改 backend/.env 后须重建后端容器才会刷新部分变量：docker compose up -d --force-recreate backend

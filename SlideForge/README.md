@@ -76,6 +76,8 @@ Output will be written under ackend\storage\projects\<project_id>\exports\....
 
 **推荐**：需要 **视频导出 Worker** 时，见 **[仓库根 README](../README.md)** 的「Docker 一键」小节，在仓库根用 `docker-compose.yml` 一次 build/up。下面仅描述 **本目录** 单独起 SlideForge（三件套，无 Worker）。
 
+**服务器上**若把本目录内容同步到例如 `/srv/barevid/`（`backend/`、`docker/`、`storage/` 与 `docker-compose.yml` 同级），路径与下文一致，**不必**在机器上再建一层 `SlideForge` 文件夹；详见 **[仓库根 README](../README.md)** 小节「服务器目录（扁平部署，不等同于 clone 整仓）」。
+
 前提：已安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)（Windows 建议 WSL2 后端），并能在终端执行 `docker compose version`。
 
 1. 进入本目录（含 `docker-compose.yml` 的 `SlideForge` 文件夹）：
@@ -91,9 +93,11 @@ Output will be written under ackend\storage\projects\<project_id>\exports\....
 4. 拉镜像并启动（**MySQL + backend + frontend**）：
 
    ```powershell
-   docker compose pull
+   docker compose pull --policy always
    docker compose up -d
    ```
+
+   `--policy always` 会强制向仓库核对 `:latest`，避免本机已有旧镜像时不更新。
 
 5. 浏览器打开 `http://127.0.0.1:3000`（前端），API 为 `http://127.0.0.1:8000`。MySQL 映射为宿主机 `127.0.0.1:3307`。
 
