@@ -337,6 +337,10 @@ async def run_synthesize_project_audio(
     audios: list[AudioPart] = []
 
     try:
+        voice_ov = (project.tts_voice_type or "").strip() or None
+        work: list[
+            tuple[NodeContent, OutlineNode, OutlineNode, int, str, Path, str]
+        ] = []
         for nc, step_node, page_node in pairs:
             seq = nc.audio_sequence
             if seq <= 0:
@@ -346,19 +350,39 @@ async def run_synthesize_project_audio(
                 continue
             name = f"{seq:03d}.mp3"
             path = base / name
-            voice_ov = (project.tts_voice_type or "").strip() or None
+            work.append((nc, step_node, page_node, seq, script, path, name))
+
+        async def _synth_one(
+            item: tuple[NodeContent, OutlineNode, OutlineNode, int, str, Path, str],
+        ) -> tuple[
+            NodeContent,
+            OutlineNode,
+            OutlineNode,
+            int,
+            str,
+            str | None,
+            int,
+        ]:
+            nc, step_node, page_node, seq, script, path, name = item
             async with _TTS_SEMAPHORE:
                 alignment_json = await synthesize_to_file(
                     script, path, voice_override=voice_ov
                 )
             duration_ms = audio_duration_ms(path)
-            t = utc_now()
+            return nc, step_node, page_node, seq, name, alignment_json, duration_ms
+
+        if work:
+            rows = list(await asyncio.gather(*(_synth_one(w) for w in work)))
+            rows.sort(key=lambda r: r[3])
+        else:
+            rows = []
+
+        t = utc_now()
+        for nc, step_node, page_node, seq, name, alignment_json, duration_ms in rows:
             nc.narration_alignment_json = alignment_json
             nc.duration_ms = duration_ms
             nc.updated_at = t
             session.add(nc)
-            await session.commit()
-
             audios.append(
                 AudioPart(
                     index=seq,
@@ -370,6 +394,7 @@ async def run_synthesize_project_audio(
                     main_title=page_node.title,
                 )
             )
+        await session.commit()
 
         project.status = "ready"
         project.updated_at = utc_now()
