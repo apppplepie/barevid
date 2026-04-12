@@ -301,6 +301,10 @@ export default function App() {
   const [userId, setUserId] = useState<number | null>(null);
   /** 避免本地有 token 时首帧仍用未恢复的 userId 打开编辑器 */
   const [sessionReady, setSessionReady] = useState(false);
+  /** 口播目标时长上限（秒），来自 GET /api/public/barevid-stats.max_target_narration_minutes */
+  const [narrationCapSeconds, setNarrationCapSeconds] = useState(180);
+  /** 每账号项目数上限，来自 GET /api/public/barevid-stats.max_projects_per_user；null 表示尚未拉取 */
+  const [maxProjectsPerUser, setMaxProjectsPerUser] = useState<number | null>(null);
   const [currentView, setCurrentView] = useState<'home' | 'editor'>(() =>
     initialRoute.view === 'editor' && !initialRoute.projectId ? 'home' : initialRoute.view,
   );
@@ -1420,6 +1424,26 @@ export default function App() {
   }, [bootstrap]);
 
   useEffect(() => {
+    void apiFetch<{
+      max_target_narration_minutes?: number;
+      max_projects_per_user?: number;
+    }>('/api/public/barevid-stats')
+      .then((s) => {
+        const m = s.max_target_narration_minutes;
+        if (typeof m === 'number' && Number.isFinite(m) && m >= 1) {
+          setNarrationCapSeconds(Math.round(Math.min(120, Math.max(1, m)) * 60));
+        }
+        const mp = s.max_projects_per_user;
+        if (typeof mp === 'number' && Number.isFinite(mp) && mp >= 0) {
+          setMaxProjectsPerUser(Math.min(10_000, Math.round(mp)));
+        }
+      })
+      .catch(() => {
+        /* 保持默认口播上限；项目数上限保持 null */
+      });
+  }, []);
+
+  useEffect(() => {
     try {
       localStorage.setItem(LS_VIEW, currentView);
       if (currentProjectId) {
@@ -2254,7 +2278,12 @@ export default function App() {
         body.deck_style_user_hint = styleHint;
       }
       const tns = newProject.targetNarrationSeconds;
-      if (typeof tns === 'number' && Number.isFinite(tns) && tns >= 10 && tns <= 1800) {
+      if (
+        typeof tns === 'number' &&
+        Number.isFinite(tns) &&
+        tns >= 10 &&
+        tns <= narrationCapSeconds
+      ) {
         body.target_narration_seconds = Math.round(tns);
       }
       // 片头/片尾暂不使用；恢复时与后端 ProjectCreate 字段一并打开
@@ -2522,6 +2551,8 @@ export default function App() {
         <Home
           projects={projects}
           currentUserId={userId}
+          narrationCapSeconds={narrationCapSeconds}
+          maxProjectsPerUser={maxProjectsPerUser}
           createError={createError}
           onCreateProject={handleCreateProject}
           onSelectProject={(id) => {

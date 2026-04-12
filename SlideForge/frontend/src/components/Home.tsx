@@ -26,6 +26,7 @@ import type { ServerWorkflow } from '../utils/workflowFromPipeline';
 import {
   NARRATION_CUSTOM_MINUTES_MAX,
   NARRATION_CUSTOM_MINUTES_MIN,
+  NARRATION_SECONDS_MIN,
   clampNarrationSeconds,
   narrationCharEstimate,
 } from '../utils/narrationLength';
@@ -180,6 +181,10 @@ interface HomeProps {
   projects: Project[];
   /** 已登录时与后端用户 id 一致；未登录为 null */
   currentUserId: number | null;
+  /** 口播目标时长上限（秒），与后端 MAX_TARGET_NARRATION_MINUTES 一致 */
+  narrationCapSeconds?: number;
+  /** 每账号项目数上限（来自公开接口）；null 未拉取；0 表示服务端不限制 */
+  maxProjectsPerUser?: number | null;
   /** 创建项目接口失败时由 App 传入，在表单内展示 */
   createError?: string | null;
   onCreateProject: (project: CreateProjectInput) => void | Promise<void>;
@@ -195,6 +200,8 @@ interface HomeProps {
 export function Home({
   projects,
   currentUserId,
+  narrationCapSeconds: narrationCapSecondsProp,
+  maxProjectsPerUser,
   createError,
   onCreateProject,
   onSelectProject,
@@ -205,6 +212,21 @@ export function Home({
   onUploadProject,
   onDownloadProject,
 }: HomeProps) {
+  const narrationCapSeconds =
+    typeof narrationCapSecondsProp === 'number' &&
+    Number.isFinite(narrationCapSecondsProp) &&
+    narrationCapSecondsProp >= NARRATION_SECONDS_MIN
+      ? narrationCapSecondsProp
+      : 180;
+
+  /** 自选「分钟」上限：不超过服务端配置，且不超过原 15 分钟兜底 */
+  const narrationCustomMinutesCap = Math.min(
+    NARRATION_CUSTOM_MINUTES_MAX,
+    Math.max(0, Math.floor(narrationCapSeconds / 60)),
+  );
+  const narrationCustomAvailable =
+    narrationCustomMinutesCap >= NARRATION_CUSTOM_MINUTES_MIN;
+
   const [newProjectName, setNewProjectName] = useState('');
   /** 与 localStorage 同步；开启后创建（自动流水线）会传 deck_beta_visual，且下一次演示页请求可带 beta_visual */
   const [creativeModeOn, setCreativeModeOn] = useState(() => isDeckBetaVisualArmed());
@@ -304,14 +326,19 @@ export function Home({
     if (!customMinutesTrimmed) return null;
     const n = Math.round(Number(customMinutesTrimmed));
     if (!Number.isFinite(n)) return null;
-    if (n < NARRATION_CUSTOM_MINUTES_MIN || n > NARRATION_CUSTOM_MINUTES_MAX) return null;
+    if (
+      n < NARRATION_CUSTOM_MINUTES_MIN ||
+      n > narrationCustomMinutesCap
+    ) {
+      return null;
+    }
     return n;
   })();
 
   const narrationCustomOverMax =
     narrationLengthPick?.kind === 'custom' &&
     customMinutesNumericLoose !== null &&
-    customMinutesNumericLoose > NARRATION_CUSTOM_MINUTES_MAX;
+    customMinutesNumericLoose > narrationCustomMinutesCap;
   const narrationCustomUnderMin =
     narrationLengthPick?.kind === 'custom' &&
     customMinutesNumericLoose !== null &&
@@ -320,10 +347,12 @@ export function Home({
   const resolvedNarrationSeconds = (() => {
     if (narrationLengthPick?.kind === 'preset') {
       const row = NARRATION_LENGTH_PRESETS.find((p) => p.id === narrationLengthPick.id);
-      return row?.seconds ?? null;
+      return row != null
+        ? clampNarrationSeconds(row.seconds, narrationCapSeconds)
+        : null;
     }
     if (narrationLengthPick?.kind === 'custom' && parsedCustomMinutes != null) {
-      return clampNarrationSeconds(parsedCustomMinutes * 60);
+      return clampNarrationSeconds(parsedCustomMinutes * 60, narrationCapSeconds);
     }
     return null;
   })();
@@ -334,7 +363,7 @@ export function Home({
 
   const narrationEstimate =
     resolvedNarrationSeconds != null
-      ? narrationCharEstimate(resolvedNarrationSeconds)
+      ? narrationCharEstimate(resolvedNarrationSeconds, narrationCapSeconds)
       : null;
 
   const canSubmit =
@@ -367,7 +396,7 @@ export function Home({
     try {
       const narrSec =
         resolvedNarrationSeconds != null
-          ? Math.min(1800, clampNarrationSeconds(resolvedNarrationSeconds))
+          ? clampNarrationSeconds(resolvedNarrationSeconds, narrationCapSeconds)
           : undefined;
       await onCreateProject({
         name: newProjectName.trim(),
@@ -492,6 +521,19 @@ export function Home({
             <div>
               <h1 className="text-3xl font-semibold tracking-tight sf-text-primary">{APP_BRAND}</h1>
               <p className="mt-2 sf-text-muted">创建和管理你的视频工程项目。</p>
+              {currentUserId != null && maxProjectsPerUser != null ? (
+                <p className="mt-1 max-w-xl text-xs leading-relaxed text-zinc-500 light:text-slate-500">
+                  {maxProjectsPerUser === 0 ? (
+                    <>项目数量暂无上限（以服务器配置为准）。</>
+                  ) : (
+                    <>
+                      每账号最多保留 <span className="tabular-nums">{maxProjectsPerUser}</span>{' '}
+                      个项目（由服务器 <code className="rounded bg-zinc-800/80 px-1 font-mono text-[11px] text-zinc-300 light:bg-slate-200 light:text-slate-700">MAX_PROJECTS_PER_USER</code>{' '}
+                      配置；删除项目可释放额度）。
+                    </>
+                  )}
+                </p>
+              ) : null}
             </div>
             <div
               className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${
@@ -774,19 +816,27 @@ export function Home({
                     const on =
                       narrationLengthPick?.kind === 'preset' && narrationLengthPick.id === opt.id;
                     const lockedByCustom = narrationLengthPick?.kind === 'custom';
+                    const overServerCap = opt.seconds > narrationCapSeconds;
+                    const presetDisabled =
+                      creating || lockedByCustom || overServerCap;
                     return (
                       <button
                         key={opt.id}
                         type="button"
+                        title={
+                          overServerCap
+                            ? `当前服务端口播目标上限为 ${Math.floor(narrationCapSeconds / 60)} 分钟`
+                            : undefined
+                        }
                         onClick={() => {
-                          if (creating || lockedByCustom) return;
+                          if (presetDisabled) return;
                           setNarrationLengthPick((cur) => {
                             if (cur?.kind === 'preset' && cur.id === opt.id) return null;
                             return { kind: 'preset', id: opt.id };
                           });
                           setNarrationCustomMinutes('');
                         }}
-                        disabled={creating || lockedByCustom}
+                        disabled={presetDisabled}
                         className={`rounded-xl border px-3 py-2 text-sm transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
                           on
                             ? 'border-amber-500/50 bg-amber-500/10 text-zinc-100 shadow-[0_0_16px_-8px_rgba(245,158,11,0.45)]'
@@ -807,7 +857,7 @@ export function Home({
                     <button
                       type="button"
                       onClick={() => {
-                        if (creating) return;
+                        if (creating || !narrationCustomAvailable) return;
                         if (narrationLengthPick?.kind === 'custom') {
                           setNarrationCustomMinutes('');
                           setNarrationLengthPick(null);
@@ -816,7 +866,12 @@ export function Home({
                         setNarrationCustomMinutes('');
                         setNarrationLengthPick({ kind: 'custom' });
                       }}
-                      disabled={creating}
+                      disabled={creating || !narrationCustomAvailable}
+                      title={
+                        !narrationCustomAvailable
+                          ? '当前口播时长上限过短，不支持自选分钟'
+                          : undefined
+                      }
                       className={`shrink-0 rounded-lg px-2.5 py-1.5 text-sm transition-colors disabled:opacity-50 ${
                         narrationLengthPick?.kind === 'custom'
                           ? 'text-zinc-100 hover:bg-amber-500/15'
@@ -849,7 +904,7 @@ export function Home({
                 </div>
                 {narrationCustomOverMax ? (
                   <p className="text-xs text-amber-200/95" role="alert">
-                    自选口播最长为 {NARRATION_CUSTOM_MINUTES_MAX} 分钟，请改小数值或再次点击「自选」取消。
+                    自选口播最长为 {narrationCustomMinutesCap} 分钟，请改小数值或再次点击「自选」取消。
                   </p>
                 ) : narrationCustomUnderMin ? (
                   <p className="text-xs text-amber-200/95" role="alert">
@@ -857,7 +912,7 @@ export function Home({
                   </p>
                 ) : narrationCustomInvalid ? (
                   <p className="text-xs text-amber-200/95" role="alert">
-                    已选「自选」时，请填写 {NARRATION_CUSTOM_MINUTES_MIN}～{NARRATION_CUSTOM_MINUTES_MAX}{' '}
+                    已选「自选」时，请填写 {NARRATION_CUSTOM_MINUTES_MIN}～{narrationCustomMinutesCap}{' '}
                     之间的整数分钟；再次点击「自选」可取消。
                   </p>
                 ) : null}

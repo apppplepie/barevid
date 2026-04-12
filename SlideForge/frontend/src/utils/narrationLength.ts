@@ -3,7 +3,7 @@
  * 修改时请同步更新后端。
  */
 export const NARRATION_SECONDS_MIN = 10;
-/** 与后端一致：最长 60 分钟 */
+/** 未传入 cap 时 clamp 的兜底上限（秒）；实际以上传 `narrationCapSeconds` 为准 */
 export const NARRATION_SECONDS_MAX = 3600;
 
 /** 自定义口播体量：填分钟 */
@@ -14,18 +14,25 @@ const MIN_CPM = 180;
 const MAX_CPM = 240;
 const MID_CPM = 210;
 
-export function clampNarrationSeconds(seconds: number): number {
+export function clampNarrationSeconds(
+  seconds: number,
+  capSeconds: number = NARRATION_SECONDS_MAX,
+): number {
   const s = Math.trunc(seconds);
-  return Math.min(NARRATION_SECONDS_MAX, Math.max(NARRATION_SECONDS_MIN, s));
+  const cap = Math.max(NARRATION_SECONDS_MIN, capSeconds);
+  return Math.min(cap, Math.max(NARRATION_SECONDS_MIN, s));
 }
 
-export function narrationCharEstimate(seconds: number): {
+export function narrationCharEstimate(
+  seconds: number,
+  capSeconds: number = NARRATION_SECONDS_MAX,
+): {
   seconds: number;
   minChars: number;
   maxChars: number;
   midChars: number;
 } {
-  const s = clampNarrationSeconds(seconds);
+  const s = clampNarrationSeconds(seconds, capSeconds);
   const minChars = Math.floor((s * MIN_CPM) / 60);
   const maxChars = Math.floor((s * MAX_CPM) / 60);
   const midChars = Math.round((s * MID_CPM) / 60);

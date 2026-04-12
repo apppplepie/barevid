@@ -157,7 +157,21 @@ class Settings(BaseSettings):
     cors_extra_origins: str = ""
 
     # 每账号同时存在的项目数上限（删除项目后释放额度）；0 表示不限制。
-    max_projects_per_user: int = Field(default=3, ge=0, le=10_000)
+    # 在 backend/.env 中设置 MAX_PROJECTS_PER_USER=5 等即可覆盖默认值。
+    max_projects_per_user: int = Field(
+        default=3,
+        ge=0,
+        le=10_000,
+        validation_alias=AliasChoices("MAX_PROJECTS_PER_USER"),
+    )
+
+    # 新建项目时「口播目标时长」上限（分钟），与结构化篇幅约束一致；对应秒数 = 分钟×60。
+    max_target_narration_minutes: int = Field(
+        default=3,
+        ge=1,
+        le=120,
+        validation_alias=AliasChoices("MAX_TARGET_NARRATION_MINUTES"),
+    )
 
     # 并发控制：限制重任务同时运行数量，避免数据库锁争用与外部 API 限流。
     # 豆包 TTS 账号级并发常见为 10，请在 .env 设 TTS_CONCURRENCY_LIMIT（勿超过控制台配额）。

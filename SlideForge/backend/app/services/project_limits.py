@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import func
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import settings
@@ -15,20 +16,17 @@ class ProjectQuotaExceededError(RuntimeError):
 
 def _quota_message() -> str:
     n = settings.max_projects_per_user
-    return (
-        f"每个账号最多保留 {n} 个项目，请先删除不再需要的项目后再创建；"
-        "删除后即释放额度。请勿通过重复注册等方式绕过限制。"
-    )
+    return f"项目数量已达上限。请先删除不需要的项目，释放额度后再创建。"
 
 
 async def count_owned_projects(session: AsyncSession, user_id: int) -> int:
     uid = int(user_id)
-    n = (
+    count = (
         await session.exec(
             select(func.count(Project.id)).where(Project.owner_user_id == uid)
         )
     ).one()
-    return int(n)
+    return int(count or 0)
 
 
 async def ensure_project_quota(session: AsyncSession, user_id: int) -> None:

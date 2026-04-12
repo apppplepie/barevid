@@ -159,7 +159,11 @@ from app.services.project_meta import (
     format_deck_master_source_description,
     merge_deck_master_source_id,
 )
-from app.utils.narration_length import clamp_narration_seconds, mid_char_estimate
+from app.utils.narration_length import (
+    clamp_narration_seconds,
+    mid_char_estimate,
+    narration_seconds_cap,
+)
 from app.tts_voice_presets import list_tts_voice_presets
 from app.services.project_pipeline import compute_project_pipeline
 from app.services.workflow_engine import (
@@ -379,8 +383,8 @@ async def project_video_export_jobs(
 
 async def _build_barevid_public_stats(session: AsyncSession) -> BarevidPublicStatsResponse:
     """宣传页统计快照（与长轮询 / 即时 GET 共用）。"""
-    users_n = (await session.exec(select(func.count(User.id)))).one()
-    projects_n = (await session.exec(select(func.count(Project.id)))).one()
+    users_n = int((await session.exec(select(func.count(User.id)))).one() or 0)
+    projects_n = int((await session.exec(select(func.count(Project.id)))).one() or 0)
     workers_n = await export_worker_alive_count()
     api_ds = await get_barevid_deepseek_balance_display()
     fallback = (settings.barevid_deepseek_balance_display or "").strip()
@@ -394,6 +398,8 @@ async def _build_barevid_public_stats(session: AsyncSession) -> BarevidPublicSta
         workers_online=workers_n,
         user_count=int(users_n or 0),
         project_count=int(projects_n or 0),
+        max_projects_per_user=int(settings.max_projects_per_user),
+        max_target_narration_minutes=int(settings.max_target_narration_minutes),
     )
 
 
@@ -607,6 +613,12 @@ async def create_project(
     me: User = Depends(get_current_user),
 ) -> dict:
     """立即创建项目：自动模式为 queued 并由后台跑全流程；手动模式为 draft，由用户在工程内触发各步。"""
+    # 最先校验项目数量上限（额度来自 .env MAX_PROJECTS_PER_USER），再校验表单字段
+    try:
+        await ensure_project_quota(session, int(me.id))
+    except ProjectQuotaExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+
     name = body.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="项目名称不能为空")
@@ -614,17 +626,17 @@ async def create_project(
     if not raw:
         raise HTTPException(status_code=400, detail="raw_text 不能为空")
 
-    try:
-        await ensure_project_quota(session, int(me.id))
-    except ProjectQuotaExceededError as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
-
     target_sec = body.target_narration_seconds
     if target_sec is not None:
-        if target_sec < 10 or target_sec > 1800:
+        cap_sec = narration_seconds_cap()
+        cap_min = max(1, int(settings.max_target_narration_minutes))
+        if target_sec < 10 or target_sec > cap_sec:
             raise HTTPException(
                 status_code=400,
-                detail="target_narration_seconds 应在 10～1800 之间",
+                detail=(
+                    f"口播目标时长须在 10 秒～{cap_min} 分钟（约 {cap_sec} 秒）以内；"
+                    "请改小「口播体量」或在服务器环境变量 MAX_TARGET_NARRATION_MINUTES 中放宽上限。"
+                ),
             )
 
     tsm_store: str | None = None
@@ -779,7 +791,7 @@ async def clone_project_endpoint(
             storage_root=settings.storage_root,
         )
     except ProjectQuotaExceededError as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except OSError as e:
@@ -1982,7 +1994,7 @@ async def generate_outline(
             owner_user_id=int(me.id),
         )
     except ProjectQuotaExceededError as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -2095,7 +2107,7 @@ async def generate(
             owner_user_id=int(me.id),
         )
     except ProjectQuotaExceededError as e:
-        raise HTTPException(status_code=403, detail=str(e)) from e
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:

@@ -10,6 +10,14 @@
 | **源码** | [github.com/apppplepie/barevid](https://github.com/apppplepie/barevid) |
 | **作者博客**（有反馈往这边放，但需要注册账号） | [creepender.top](https://creepender.top/) |
 
+## 线上平台当前小限制
+
+在线版目前先把 **单个视频时长限制在 3 分钟内**。
+
+主要是服务器眼下只剩 **30G 存储空间**，而且还是一台 **4G 小机器**，网络偶尔也会失联术。视频一长，导出文件、缓存、上传下载和重试都会明显变重，所以这个限制属于**迫不得已的求生欲配置**。
+
+如果你是自部署玩家，这个限制可以在后端环境变量里自己调大：`MAX_TARGET_NARRATION_MINUTES`。
+
 ---
 
 ## 我们的优势？

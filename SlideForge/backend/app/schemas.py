@@ -127,6 +127,16 @@ class BarevidPublicStatsResponse(BaseModel):
     workers_online: int = Field(ge=0, description="导出 Worker 内存心跳在线数（单 API 进程）")
     user_count: int = Field(ge=0)
     project_count: int = Field(ge=0)
+    max_projects_per_user: int = Field(
+        ge=0,
+        le=10_000,
+        description="每账号项目数上限，与 MAX_PROJECTS_PER_USER 一致；0 表示不限制",
+    )
+    max_target_narration_minutes: int = Field(
+        ge=1,
+        le=120,
+        description="口播目标时长上限（分钟），与 MAX_TARGET_NARRATION_MINUTES 一致，供前端灰显档位",
+    )
 
 
 class AudioPart(BaseModel):

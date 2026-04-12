@@ -12,6 +12,10 @@ type BarevidPublicStats = {
   workers_online: number;
   user_count: number;
   project_count: number;
+  /** 口播目标时长上限（分钟）；与 SlideForge 后端 MAX_TARGET_NARRATION_MINUTES 一致 */
+  max_target_narration_minutes?: number;
+  /** 每账号项目数上限；与 MAX_PROJECTS_PER_USER 一致，0 表示不限制 */
+  max_projects_per_user?: number;
 };
 
 function apiBase(): string {

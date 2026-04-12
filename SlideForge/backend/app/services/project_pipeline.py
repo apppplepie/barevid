@@ -15,8 +15,8 @@ async def _project_has_step_outline(session: AsyncSession, project_id: int) -> b
         .where(OutlineNode.project_id == project_id)
         .where(OutlineNode.node_kind == KIND_STEP)
     )
-    n = (await session.exec(stmt)).one()
-    return int(n or 0) > 0
+    count = (await session.exec(stmt)).one()
+    return int(count or 0) > 0
 
 
 async def compute_project_pipeline(

@@ -8,11 +8,19 @@ MAX_CHARS_PER_MINUTE = 260
 MID_CHARS_PER_MINUTE = 230
 
 NARRATION_SECONDS_MIN = 10
-NARRATION_SECONDS_MAX = 3600  # 60 分钟上限（与前端自定义分钟一致）
+
+
+def narration_seconds_cap() -> int:
+    """口播目标时长上限（秒），由环境变量 MAX_TARGET_NARRATION_MINUTES 配置。"""
+    from app.config import settings
+
+    m = max(1, int(settings.max_target_narration_minutes))
+    return m * 60
 
 
 def clamp_narration_seconds(seconds: int) -> int:
-    return max(NARRATION_SECONDS_MIN, min(NARRATION_SECONDS_MAX, int(seconds)))
+    cap = narration_seconds_cap()
+    return max(NARRATION_SECONDS_MIN, min(cap, int(seconds)))
 
 
 def char_range_for_seconds(seconds: int) -> tuple[int, int]:

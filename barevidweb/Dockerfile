@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# 不设 # syntax=docker/dockerfile:1，避免构建时向 Docker Hub 拉取 Dockerfile 前端镜像（国内/离线易超时）。
 # 构建上下文：仓库根目录（barevid），例如：
 #   docker build -f barevidweb/Dockerfile -t barevidweb .
 # 根目录须有 .dockerignore，避免把 SlideForge/worker/node_modules 等整库打进 context。
