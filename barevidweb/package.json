@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "vidsrc:manifest": "tsx scripts/generate-vidsrc-manifest.ts",
+    "works:showcase": "tsx scripts/generate-works-showcase.ts",
     "predev": "tsx scripts/generate-vidsrc-manifest.ts",
     "prebuild": "tsx scripts/generate-vidsrc-manifest.ts",
     "dev": "vite --port=3000 --host=0.0.0.0",

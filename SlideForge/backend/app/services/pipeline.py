@@ -38,6 +38,7 @@ from app.schemas import (
     SynthesizeAudioResponse,
 )
 from app.services import workflow_engine as wf_engine
+from app.services.project_limits import ensure_project_quota
 from app.services.workflow_state import (
     STEP_FAILED,
     STEP_RUNNING,
@@ -239,6 +240,7 @@ async def run_generate_outline_only(
     owner_user_id: int,
 ) -> GenerateOutlineResponse:
     """步骤 1：DeepSeek 结构化 + 写入大纲与口播文本，不调用 TTS。成功后项目 status=draft。"""
+    await ensure_project_quota(session, owner_user_id)
     now = utc_now()
     project = Project(
         owner_user_id=owner_user_id,

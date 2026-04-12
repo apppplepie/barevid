@@ -1,11 +1,20 @@
+# syntax=docker/dockerfile:1
 # 构建上下文：仓库根目录（barevid），例如：
 #   docker build -f barevidweb/Dockerfile -t barevidweb .
+# 根目录须有 .dockerignore，避免把 SlideForge/worker/node_modules 等整库打进 context。
 # 使用 20-alpine：与常见本机缓存一致，避免首次构建卡在拉取 node:22
+#
+# 需 BuildKit（Docker Desktop 默认开启）：npm ci 使用缓存挂载，第二次起通常明显快于首次全量拉包。
+# 国内可加速：docker build --build-arg NPM_CONFIG_REGISTRY=https://registry.npmmirror.com ...
 FROM node:20-alpine AS build
 
 WORKDIR /app
 COPY barevidweb/package*.json ./
-RUN npm ci
+# 默认官方源；国内可 docker build --build-arg NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
+ARG NPM_CONFIG_REGISTRY=https://registry.npmjs.org
+ENV npm_config_registry=${NPM_CONFIG_REGISTRY}
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 
 COPY barevidweb/ ./
 ARG VITE_API_BASE_URL=

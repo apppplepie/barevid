@@ -1,0 +1,39 @@
+# barevidweb 镜像：docker build -f barevidweb/Dockerfile .
+# 构建 context 为仓库根目录时，默认会把整库打进 daemon，体积与耗时暴涨。
+# 此处只放行 barevidweb 构建所需内容（配合 COPY barevidweb/）。
+
+# 其它子项目与本镜像无关
+SlideForge/
+worker/
+
+# 仓库元数据（体积大且无用）
+.git/
+.github/
+
+# 本地/工具目录
+.claude/
+.idea/
+.vscode/
+
+# 任意位置的依赖与前端构建产物
+**/node_modules/
+**/dist/
+**/.vite/
+
+# Python 虚拟环境（若曾拷进仓库旁）
+**/.venv/
+**/venv/
+**/__pycache__/
+
+# 仅仓库根目录 scripts（勿写 `scripts/` 以免误排除 barevidweb/scripts）
+/scripts/
+
+# 演示视频体积大：镜像内可不打包，运行时 compose 挂载 vidsrc
+barevidweb/public/vidsrc/*.mp4
+
+# 秘钥
+**/.env
+**/.env.*
+!**/.env.example
+**/*.pem
+**/*.key

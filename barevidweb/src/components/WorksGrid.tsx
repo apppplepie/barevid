@@ -2,11 +2,9 @@ import { Fragment, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { Play, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { WORKS_SHOWCASE, type WorkShowcaseItem } from '../data/worksShowcase';
 
-type ManifestVideo = { file: string; ratio?: string };
-type VidsrcManifest = { videos?: ManifestVideo[] };
-
-type WorkEntry = { id: number; ratio: string; video: string; title: string };
+type WorkEntry = WorkShowcaseItem;
 
 function cssAspectRatioFromLabel(ratio: string): string {
   const parts = ratio.split(':').map((s) => Number.parseFloat(s.trim()));
@@ -16,31 +14,8 @@ function cssAspectRatioFromLabel(ratio: string): string {
   return '16 / 9';
 }
 
-function titleFromFilename(file: string): string {
-  const base = file.replace(/^.*[/\\]/, '');
-  const dot = base.lastIndexOf('.');
-  return dot > 0 ? base.slice(0, dot) : base;
-}
-
-function gcd(a: number, b: number): number {
-  let x = Math.abs(Math.round(a));
-  let y = Math.abs(Math.round(b));
-  while (y) {
-    const t = y;
-    y = x % y;
-    x = t;
-  }
-  return x || 1;
-}
-
-function ratioLabelFromPixels(w: number, h: number): string {
-  const g = gcd(w, h);
-  return `${Math.round(w / g)}:${Math.round(h / g)}`;
-}
-
 function WorkCard({ work, onOpen }: { work: WorkEntry; onOpen: () => void }) {
   const { t } = useTranslation();
-  const [pixelAspect, setPixelAspect] = useState<{ w: number; h: number } | null>(null);
 
   return (
     <div
@@ -54,27 +29,23 @@ function WorkCard({ work, onOpen }: { work: WorkEntry; onOpen: () => void }) {
         }
       }}
       className="relative w-full group overflow-hidden bg-white/5 border border-white/10 p-2 shrink-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black rounded-sm"
-      style={{
-        aspectRatio: pixelAspect
-          ? `${pixelAspect.w} / ${pixelAspect.h}`
-          : cssAspectRatioFromLabel(work.ratio),
-      }}
+      style={{ aspectRatio: cssAspectRatioFromLabel(work.ratio) }}
     >
       <div className="w-full h-full relative overflow-hidden">
         <video
           src={work.video}
+          poster={work.poster}
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
           muted
           loop
           playsInline
-          autoPlay
           preload="metadata"
           aria-label={work.title}
           onLoadedMetadata={(e) => {
-            const v = e.currentTarget;
-            if (v.videoWidth > 0 && v.videoHeight > 0) {
-              setPixelAspect({ w: v.videoWidth, h: v.videoHeight });
-            }
+            void e.currentTarget.play().catch(() => {});
+          }}
+          onCanPlay={(e) => {
+            void e.currentTarget.play().catch(() => {});
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-5 pointer-events-none">
@@ -82,7 +53,7 @@ function WorkCard({ work, onOpen }: { work: WorkEntry; onOpen: () => void }) {
             <div className="min-w-0">
               <span className="font-black text-white tracking-wide text-base md:text-lg block mb-1 break-words">{work.title}</span>
               <span className="text-xs text-primary font-mono bg-primary/10 px-2 py-1 border border-primary/30">
-                {(pixelAspect ? ratioLabelFromPixels(pixelAspect.w, pixelAspect.h) : work.ratio)} • {t('works.clipBadge')}
+                {work.ratio} • {t('works.clipBadge')}
               </span>
             </div>
             <span className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white backdrop-blur-md border border-white/30 group-hover:bg-primary group-hover:border-primary transition-colors">
@@ -100,33 +71,7 @@ function WorkCard({ work, onOpen }: { work: WorkEntry; onOpen: () => void }) {
 export function WorksGrid() {
   const { t } = useTranslation();
   const [lightbox, setLightbox] = useState<WorkEntry | null>(null);
-  const [works, setWorks] = useState<WorkEntry[]>([]);
-  const [galleryState, setGalleryState] = useState<'loading' | 'ready' | 'error'>('loading');
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/vidsrc/manifest.json', { cache: 'no-store' });
-        if (!res.ok) throw new Error(String(res.status));
-        const data = (await res.json()) as VidsrcManifest;
-        if (cancelled) return;
-        const list: WorkEntry[] = (data.videos ?? []).map((v, i) => ({
-          id: i,
-          video: `/vidsrc/${encodeURIComponent(v.file)}`,
-          title: titleFromFilename(v.file),
-          ratio: (v.ratio && v.ratio.trim()) || '16:9',
-        }));
-        setWorks(list);
-        setGalleryState('ready');
-      } catch {
-        if (!cancelled) setGalleryState('error');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const works = WORKS_SHOWCASE;
 
   useEffect(() => {
     if (!lightbox) return;
@@ -158,24 +103,14 @@ export function WorksGrid() {
 
       <div className="max-w-7xl mx-auto w-full h-full px-6 flex flex-col md:flex-row items-center gap-12 relative z-10 py-20">
 
-        {/* Left: Scrolling Gallery (videos from public/vidsrc via manifest.json) */}
+        {/* Left: Scrolling Gallery（静态清单 + /pic 封面，与 Hero 同源路径） */}
         <div className="w-full md:w-7/12 h-[60vh] md:h-[85vh] relative overflow-hidden flex gap-4 md:gap-6 mask-image-vertical">
-          {galleryState === 'loading' && (
-            <div className="flex-1 flex items-center justify-center font-mono text-sm text-white/40 px-4 text-center">
-              {t('works.loadingShowcase')}
-            </div>
-          )}
-          {galleryState === 'error' && (
-            <div className="flex-1 flex items-center justify-center font-mono text-sm text-white/50 px-4 text-center leading-relaxed">
-              {t('works.manifestError')}
-            </div>
-          )}
-          {galleryState === 'ready' && works.length === 0 && (
+          {works.length === 0 && (
             <div className="flex-1 flex items-center justify-center font-mono text-sm text-white/45 px-4 text-center leading-relaxed">
               {t('works.noVideos')}
             </div>
           )}
-          {galleryState === 'ready' && works.length > 0 && (
+          {works.length > 0 && (
             <>
               {/* Column 1 (Scrolls Up) */}
               <div className="flex-1 overflow-hidden min-h-0">
@@ -291,6 +226,7 @@ export function WorksGrid() {
               <video
                 key={lightbox.video}
                 src={lightbox.video}
+                poster={lightbox.poster}
                 className="max-h-[min(80vh,calc(100vw-2rem))] max-w-full w-auto h-auto object-contain"
                 controls
                 playsInline

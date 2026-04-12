@@ -130,6 +130,7 @@ from app.services.pipeline import (
     run_synthesize_project_audio,
     run_text_rebuild_job,
 )
+from app.services.project_limits import ProjectQuotaExceededError, ensure_project_quota
 from app.services.export_worker_registry import (
     export_worker_alive_count,
     record_export_worker_heartbeat,
@@ -613,6 +614,11 @@ async def create_project(
     if not raw:
         raise HTTPException(status_code=400, detail="raw_text 不能为空")
 
+    try:
+        await ensure_project_quota(session, int(me.id))
+    except ProjectQuotaExceededError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+
     target_sec = body.target_narration_seconds
     if target_sec is not None:
         if target_sec < 10 or target_sec > 1800:
@@ -772,6 +778,8 @@ async def clone_project_endpoint(
             new_name=new_name,
             storage_root=settings.storage_root,
         )
+    except ProjectQuotaExceededError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except OSError as e:
@@ -1973,6 +1981,8 @@ async def generate_outline(
             project_name=body.name,
             owner_user_id=int(me.id),
         )
+    except ProjectQuotaExceededError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -2084,6 +2094,8 @@ async def generate(
             project_name=body.name,
             owner_user_id=int(me.id),
         )
+    except ProjectQuotaExceededError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:

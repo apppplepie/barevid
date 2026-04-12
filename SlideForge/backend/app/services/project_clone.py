@@ -20,6 +20,7 @@ from app.db.models import (
     utc_now,
 )
 from app.services.project_meta import clear_deck_master_source_description_if_marker
+from app.services.project_limits import ensure_project_quota
 from app.services.workflow_engine import (
     EXPORT_NOT_EXPORTED,
     ensure_workflow_for_project,
@@ -93,6 +94,8 @@ async def clone_project_deep(
     src = await session.get(Project, source_project_id)
     if src is None:
         raise ValueError("项目不存在")
+
+    await ensure_project_quota(session, new_owner_user_id)
 
     old_pid = int(source_project_id)
     now = utc_now()

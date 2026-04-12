@@ -156,6 +156,9 @@ class Settings(BaseSettings):
     # 逗号分隔的额外 CORS 源，例如 https://barevid.example.com,http://127.0.0.1:9080
     cors_extra_origins: str = ""
 
+    # 每账号同时存在的项目数上限（删除项目后释放额度）；0 表示不限制。
+    max_projects_per_user: int = Field(default=3, ge=0, le=10_000)
+
     # 并发控制：限制重任务同时运行数量，避免数据库锁争用与外部 API 限流。
     # 豆包 TTS 账号级并发常见为 10，请在 .env 设 TTS_CONCURRENCY_LIMIT（勿超过控制台配额）。
     tts_concurrency_limit: int = Field(default=5, ge=1, le=64)

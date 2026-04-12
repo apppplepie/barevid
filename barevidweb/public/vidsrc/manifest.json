@@ -1,26 +1,38 @@
 {
-  "generated": "2026-04-09T05:32:33.757Z",
+  "generated": "2026-04-11T14:25:09.889Z",
   "videos": [
     {
-      "file": "1.mp4"
+      "file": "1：1神经网络.mp4"
     },
     {
-      "file": "2.mp4"
+      "file": "4：3神经网络.mp4"
     },
     {
-      "file": "3.mp4"
+      "file": "神经网络粉色版本.mp4"
     },
     {
-      "file": "4.mp4"
+      "file": "数据规模.mp4"
     },
     {
-      "file": "5.mp4"
+      "file": "治愈风格.mp4"
     },
     {
-      "file": "方形.mp4"
+      "file": "Coqui.mp4"
+    },
+    {
+      "file": "Crew Ai.mp4"
     },
     {
       "file": "Hero.mp4"
+    },
+    {
+      "file": "pic.mp4"
+    },
+    {
+      "file": "scs.mp4"
+    },
+    {
+      "file": "university.mp4"
     }
   ]
 }
