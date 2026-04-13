@@ -12,6 +12,7 @@ interface TopBarProps {
   /** 与后端 pipeline.video 一致：有成片时顶栏为「下载」，否则为「导出」 */
   videoReady?: boolean;
   downloadLoading?: boolean;
+  downloadPreparing?: boolean;
   onDownloadClick?: () => void;
   onRetryWorkflowStep?: (stepId: string) => void;
   retryingWorkflowStepId?: string | null;
@@ -37,6 +38,7 @@ export function TopBar({
   downloadEnabled = false,
   videoReady = false,
   downloadLoading = false,
+  downloadPreparing = false,
   onDownloadClick,
   onRetryWorkflowStep,
   retryingWorkflowStepId = null,
@@ -134,6 +136,7 @@ export function TopBar({
             downloadEnabled={downloadEnabled}
             videoReady={videoReady}
             downloadLoading={downloadLoading}
+            downloadPreparing={downloadPreparing}
             onDownloadClick={onDownloadClick}
             onRetryStep={onRetryWorkflowStep}
             retryingStepId={retryingWorkflowStepId}

@@ -436,6 +436,7 @@ export default function App() {
 
   const [createError, setCreateError] = useState<string | null>(null);
   const [exportSubmitting, setExportSubmitting] = useState(false);
+  const [downloadSubmitting, setDownloadSubmitting] = useState(false);
   const [exportChoiceOpen, setExportChoiceOpen] = useState(false);
   const [exportStatusOpen, setExportStatusOpen] = useState(false);
   /** 正在跟进的导出任务（含项目 id，支持首页下载入口入队后不在编辑器也能收到完成事件） */
@@ -1909,7 +1910,7 @@ export default function App() {
 
   const handleDownloadVideoClick = useCallback(
     async (opts?: { forceReexport?: boolean }) => {
-      if (exportSubmitting || !currentProjectId) return;
+      if (exportSubmitting || downloadSubmitting || !currentProjectId) return;
       setEditorFlashDownloadUrl(null);
       setExportFailed(false);
       const project = projects.find((p) => p.id === currentProjectId);
@@ -1927,7 +1928,12 @@ export default function App() {
       const pid = Number(currentProjectId);
       if (!Number.isFinite(pid)) return;
       const forceReexport = Boolean(opts?.forceReexport);
-      setExportSubmitting(true);
+      const requestDownloadsExistingVideo = Boolean(project?.pipeline?.video) && !forceReexport;
+      if (requestDownloadsExistingVideo) {
+        setDownloadSubmitting(true);
+      } else {
+        setExportSubmitting(true);
+      }
       try {
         const res = await apiFetch<{
           output_url: string;
@@ -1983,11 +1989,13 @@ export default function App() {
           .catch(() => {});
       } finally {
         setExportSubmitting(false);
+        setDownloadSubmitting(false);
       }
     },
     [
       applyExportVideoResponse,
       currentProjectId,
+      downloadSubmitting,
       exportSubmitting,
       postExportVideoBody,
       projects,
@@ -2513,9 +2521,13 @@ export default function App() {
         (exportJobForTracking.status === 'queued' ||
           exportJobForTracking.status === 'running')));
 
+  const headerVideoDownloadPreparing =
+    serverExportVideoReady && downloadSubmitting && !headerVideoActionLoading;
+
   /** 导出中（无成片）也允许点击打开状态面板；仅有成片时的短请求仍禁用防重复点 */
   const headerVideoMainButtonEnabled =
     preExportAllSuccess &&
+    !downloadSubmitting &&
     (!headerVideoActionLoading || !serverExportVideoReady);
 
   const editorFlashTone: 'success' | 'error' | null = editorFlashMessage
@@ -2598,6 +2610,7 @@ export default function App() {
         downloadEnabled={headerVideoMainButtonEnabled}
         videoReady={workflowModel.videoReady}
         downloadLoading={headerVideoActionLoading}
+        downloadPreparing={headerVideoDownloadPreparing}
         onDownloadClick={() => {
           if (headerVideoActionLoading && !serverExportVideoReady) {
             setExportStatusOpen(true);

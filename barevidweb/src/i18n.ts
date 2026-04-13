@@ -106,7 +106,8 @@ const resources = {
         proxyDesc1: "Network acting up? Don't want to deploy? Not sure how to prompt it?",
         proxyDesc2:
           "A friend of mine takes private orders there and can help people get videos out fast. I'll pretend this recommendation is totally objective.",
-        visitStore: "Open shop",
+        visitXianyu: "Open Xianyu",
+        visitXiaohongshu: "Open REDnote",
         hireDev: "Hire a developer",
         hireDesc1: "Thinking about building automated AI agents?",
         hireDesc2:
@@ -219,7 +220,8 @@ const resources = {
         proxyService: "咸鱼的店",
         proxyDesc1: "网络打不开？不会部署？懒得自己折腾提示词？",
         proxyDesc2: "可以去这家闲鱼店看看，我朋友在上面接私人定制，适合想快速出片的人。我会假装这不是熟人推荐。",
-        visitStore: "打开店铺",
+        visitXianyu: "打开闲鱼",
+        visitXiaohongshu: "打开小红书",
         hireDev: "雇佣开发者",
         hireDesc1: "正在考虑自动化 AI Agent 的开发？",
         hireDesc2: "联系我，乐意帮你实现，给我一个可以报销token的工位，因为我不会古法编程。",

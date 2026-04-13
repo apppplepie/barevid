@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { WORKS_SHOWCASE, type WorkShowcaseItem } from '../data/worksShowcase';
 
 type WorkEntry = WorkShowcaseItem;
+const WORKS_AUTOPLAY_DELAY_MS = 5000;
 
 function cssAspectRatioFromLabel(ratio: string): string {
   const parts = ratio.split(':').map((s) => Number.parseFloat(s.trim()));
@@ -14,7 +15,15 @@ function cssAspectRatioFromLabel(ratio: string): string {
   return '16 / 9';
 }
 
-function WorkCard({ work, onOpen }: { work: WorkEntry; onOpen: () => void }) {
+function WorkCard({
+  work,
+  onOpen,
+  autoplayEnabled,
+}: {
+  work: WorkEntry;
+  onOpen: () => void;
+  autoplayEnabled: boolean;
+}) {
   const { t } = useTranslation();
 
   return (
@@ -39,12 +48,14 @@ function WorkCard({ work, onOpen }: { work: WorkEntry; onOpen: () => void }) {
           muted
           loop
           playsInline
-          preload="metadata"
+          preload={autoplayEnabled ? "metadata" : "none"}
           aria-label={work.title}
           onLoadedMetadata={(e) => {
+            if (!autoplayEnabled) return;
             void e.currentTarget.play().catch(() => {});
           }}
           onCanPlay={(e) => {
+            if (!autoplayEnabled) return;
             void e.currentTarget.play().catch(() => {});
           }}
         />
@@ -71,7 +82,15 @@ function WorkCard({ work, onOpen }: { work: WorkEntry; onOpen: () => void }) {
 export function WorksGrid() {
   const { t } = useTranslation();
   const [lightbox, setLightbox] = useState<WorkEntry | null>(null);
+  const [autoplayEnabled, setAutoplayEnabled] = useState(false);
   const works = WORKS_SHOWCASE;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setAutoplayEnabled(true);
+    }, WORKS_AUTOPLAY_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!lightbox) return;
@@ -118,14 +137,22 @@ export function WorksGrid() {
                   <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
                     {col1Works.map((work) => (
                       <Fragment key={`col1-a-${work.id}-${work.video}`}>
-                        <WorkCard work={work} onOpen={() => setLightbox(work)} />
+                        <WorkCard
+                          work={work}
+                          onOpen={() => setLightbox(work)}
+                          autoplayEnabled={autoplayEnabled}
+                        />
                       </Fragment>
                     ))}
                   </div>
                   <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
                     {col1Works.map((work) => (
                       <Fragment key={`col1-b-${work.id}-${work.video}`}>
-                        <WorkCard work={work} onOpen={() => setLightbox(work)} />
+                        <WorkCard
+                          work={work}
+                          onOpen={() => setLightbox(work)}
+                          autoplayEnabled={autoplayEnabled}
+                        />
                       </Fragment>
                     ))}
                   </div>
@@ -138,14 +165,22 @@ export function WorksGrid() {
                   <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
                     {col2Works.map((work) => (
                       <Fragment key={`col2-a-${work.id}-${work.video}`}>
-                        <WorkCard work={work} onOpen={() => setLightbox(work)} />
+                        <WorkCard
+                          work={work}
+                          onOpen={() => setLightbox(work)}
+                          autoplayEnabled={autoplayEnabled}
+                        />
                       </Fragment>
                     ))}
                   </div>
                   <div className="flex flex-col gap-4 md:gap-6 pb-4 md:pb-6">
                     {col2Works.map((work) => (
                       <Fragment key={`col2-b-${work.id}-${work.video}`}>
-                        <WorkCard work={work} onOpen={() => setLightbox(work)} />
+                        <WorkCard
+                          work={work}
+                          onOpen={() => setLightbox(work)}
+                          autoplayEnabled={autoplayEnabled}
+                        />
                       </Fragment>
                     ))}
                   </div>

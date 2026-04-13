@@ -40,6 +40,9 @@ worker/worker_tasks.db-shm
 # barevidweb: 演示用视频体积大，勿提交（本地或 CDN；GitHub clone 更轻）
 barevidweb/public/vidsrc/*.mp4
 
+# README 演示：mp4 易超 GitHub 100MB 上限；gif 可入库（仍建议 <50MB）
+docs/demo/*.mp4
+
 # Node / frontend build
 **/node_modules/
 **/dist/

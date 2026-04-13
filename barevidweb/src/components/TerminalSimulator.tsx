@@ -13,11 +13,21 @@ export function TerminalSimulator({ videoSrc }: TerminalSimulatorProps) {
   const [progress, setProgress] = useState(0);
   const [logs, setLogs] = useState<string[]>([]);
   const heroVideoRef = useRef<HTMLVideoElement>(null);
+  const [heroVideoReady, setHeroVideoReady] = useState(false);
   const [heroPlaybackStarted, setHeroPlaybackStarted] = useState(false);
   const [heroExpandOpen, setHeroExpandOpen] = useState(false);
 
   useEffect(() => {
+    setHeroVideoReady(false);
     setHeroPlaybackStarted(false);
+  }, [videoSrc]);
+
+  useEffect(() => {
+    if (!videoSrc) return;
+    const el = heroVideoRef.current;
+    if (!el) return;
+    // 页面一打开就先请求视频主体，把前 3.5s 真正用来给 hero 预缓冲。
+    el.load();
   }, [videoSrc]);
 
   useEffect(() => {
@@ -71,7 +81,7 @@ export function TerminalSimulator({ videoSrc }: TerminalSimulatorProps) {
 
   const isComplete = progress >= 100;
 
-  const showHeroLoader = Boolean(videoSrc && (!isComplete || !heroPlaybackStarted));
+  const showHeroLoader = Boolean(videoSrc && (!isComplete || !heroVideoReady));
   const heroVideoInteractive = Boolean(videoSrc && !showHeroLoader);
 
   /** Hero 视频：等底部日志跑完再播放 */
@@ -143,8 +153,10 @@ export function TerminalSimulator({ videoSrc }: TerminalSimulatorProps) {
               muted
               loop
               playsInline
-              preload="metadata"
+              preload="auto"
               aria-label="BareVid demo"
+              onLoadedData={() => setHeroVideoReady(true)}
+              onCanPlay={() => setHeroVideoReady(true)}
               onPlaying={() => setHeroPlaybackStarted(true)}
             />
             <div

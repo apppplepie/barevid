@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 /** 与后端默认一致；须小于边缘 nginx 的 proxy_read_timeout（常见 60s） */
 const STATS_WAIT_TIMEOUT_SEC = 55;
 const XIAN_YU_SHOP_URL = 'https://m.tb.cn/h.inNhqmi?tk=xeeZ5UCPdRn';
+const XIAO_HONG_SHU_URL = 'https://xhslink.com/m/7hKGwAtfMbf';
 
 type BarevidPublicStats = {
   deepseek_balance_display: string;
@@ -229,9 +230,14 @@ export function ServerStatus() {
               <br/><br/>
               <span className="text-white/50 text-sm">{t('status.proxyDesc2')}</span>
             </p>
-            <a href={XIAN_YU_SHOP_URL} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full py-3 bg-secondary/10 border border-secondary/50 text-secondary hover:bg-secondary hover:text-black transition-all font-bold uppercase tracking-widest text-sm">
-              {t('status.visitStore')} <ExternalLink size={14} />
-            </a>
+            <div className="grid grid-cols-2 gap-3">
+              <a href={XIAN_YU_SHOP_URL} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full py-3 bg-secondary/10 border border-secondary/50 text-secondary hover:bg-secondary hover:text-black transition-all font-bold uppercase tracking-widest text-sm">
+                {t('status.visitXianyu')} <ExternalLink size={14} />
+              </a>
+              <a href={XIAO_HONG_SHU_URL} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full py-3 bg-secondary/10 border border-secondary/50 text-secondary hover:bg-secondary hover:text-black transition-all font-bold uppercase tracking-widest text-sm">
+                {t('status.visitXiaohongshu')} <ExternalLink size={14} />
+              </a>
+            </div>
           </CyberCard>
 
           {/* Hire Me */}

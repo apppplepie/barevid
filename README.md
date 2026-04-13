@@ -1,12 +1,34 @@
-# Barevid · 白板影像
+# Barevid · 白板影像 · Whiteboard Video
+
+<div align="center">
+
+**[中文](#readme-zh)** · **[English](#readme-en)**
+
+</div>
+
+<a id="readme-zh"></a>
+
+## 中文
 
 **Barevid** 是一套「**大段文章/一句话指令 → 带配音的幻灯片视频**」的开源自动化方案。放弃每秒钟生成像素点，改用 **结构化讲稿 + 分页放映 + TTS** 做出 **讲解型** 的小视频——**一次生成10分钟的视频成本几乎只要0.1元**。
+
+<p align="center">
+  <img src="docs/demo/barevid.gif" alt="Barevid 界面与导出演示" width="720" />
+</p>
+
+### 演示小视频放哪里？
+
+- **项目讲解 / 在线试用演示（B 站）**：[开源一个放映式 AI 生成视频项目【Barevid】在线平台可试用！](https://b23.tv/vvnQNTF)
+- **仓库内（推荐给 README / 文档引用）**：`docs/demo/`。可放 **gif / mp4 / webm**（本 README 上图即为 `docs/demo/barevid.gif`）；单文件若较大，建议用 **Git LFS** 或放在 **Release / 网盘 / 对象存储**，README 里用**相对路径或外链**引用。
+- **在 README 里展示**：可用 Markdown 图片语法引用仓库内 **gif / 静态图**，或使用 HTML `<video controls src="docs/demo/xxx.mp4" width="600"></video>`（GitHub 对内嵌视频的支持以当前平台为准）。
+- **宣传站 barevidweb**：演示成片放在 **`barevidweb/public/vidsrc/`**（站内示例列表见同目录 **`manifest.json`**）；其他静态资源可放 **`barevidweb/public/`** 下任意子目录，用站内 URL 引用。
 
 
 | 入口 | 链接 |
 |------|------|
 | **宣传站**（介绍、定价叙事、状态页） | [barevidweb.creepender.top](https://barevidweb.creepender.top/) |
 | **在线应用**（直接做项目、出片） | [barevid.creepender.top](https://barevid.creepender.top/) |
+| **演示视频**（B 站 · 项目讲解与试用） | [b23.tv/vvnQNTF](https://b23.tv/vvnQNTF) |
 | **源码** | [github.com/apppplepie/barevid](https://github.com/apppplepie/barevid) |
 | **作者博客**（有反馈往这边放，但需要注册账号） | [creepender.top](https://creepender.top/) |
 
@@ -26,9 +48,10 @@
 - 不想自己部署，也不想慢慢研究环境变量
 - 只想赶紧把片子做出来
 
-那也可以直接走一个省心路线：我朋友在闲鱼接 **Barevid 私人定制代做**，适合想快速出片的人。
+那也可以直接走一个省心路线：我朋友在闲鱼和小红书都接 **Barevid 私人定制代做**，适合想快速出片的人。
 
 - 闲鱼店链接：[这是我的闲鱼号，快来看看吧](https://m.tb.cn/h.inNhqmi?tk=xeeZ5UCPdRn)
+- 小红书主页：我已入驻 REDCity，来看看我的主页 >> [点击打开](https://xhslink.com/m/7hKGwAtfMbf)
 
 收费的，但胜在省事。
 
@@ -76,6 +99,7 @@
 barevid/
 ├── docker-compose.yml   # 根目录一键：MySQL + SlideForge 后端/前端 + 导出 Worker（推荐）
 ├── barevidweb/          # 可选：对外宣传站（Vite/React）；默认 compose 不包含，需单独部署见该目录
+├── docs/demo/           # 可选：README/文档用的演示短视频（mp4/webm）
 ├── SlideForge/          # 主应用：FastAPI 后端 + Vite/React 前端（亦可单独 docker compose）
 ├── worker/              # 导出 Worker：Playwright + ffmpeg；根 compose 会构建并运行
 └── README.md            # 本文件
@@ -180,3 +204,77 @@ docker compose up -d --build --quiet-build
 ### 参考：市面「像素视频」定价量级（以官网为准，会变）
 
 对比用时请自行查阅各平台当前价目：例如 Runway API 文档中的 [pricing 说明](https://docs.dev.runwayml.com/guides/pricing/)（credits/秒一类）。Barevid 不替代电影感镜头工具，只是 **另一条更省钱、更可控的赛道**。
+
+<a id="readme-en"></a>
+
+## English
+
+**Barevid** is an open automation stack that turns **long-form text or a one-shot prompt** into **narrated slide-style videos**. Instead of paying per second of generated pixels, it uses **structured narration + paginated playback + TTS** for **explainer-style** clips—roughly **~¥0.1 for a ~10-minute render** in typical API pricing ballparks.
+
+<p align="center">
+  <img src="docs/demo/barevid.gif" alt="Barevid UI and export demo" width="720" />
+</p>
+
+### Where to put demo clips
+
+- **Walkthrough (Bilibili, Chinese)**: [Barevid — open-source slide-style AI video + online trial](https://b23.tv/vvnQNTF)
+- **In-repo (for README / docs)**: use **`docs/demo/`** for **gif / mp4 / webm** (the GIF above is **`docs/demo/barevid.gif`**). If files are large, prefer **Git LFS**, **GitHub Releases**, or external hosting; link from the README with a **relative path or URL**.
+- **Embedding in README**: use Markdown images for **gif** or stills, or HTML `<video controls src="docs/demo/example.mp4" width="600"></video>` for video (GitHub rendering rules may change).
+- **Marketing site (barevidweb)**: put demo MP4s under **`barevidweb/public/vidsrc/`** and list them in **`manifest.json`** in that folder; other static assets can live under **`barevidweb/public/`**.
+
+| Entry | Link |
+|------|------|
+| **Landing** | [barevidweb.creepender.top](https://barevidweb.creepender.top/) |
+| **App** | [barevid.creepender.top](https://barevid.creepender.top/) |
+| **Demo (Bilibili)** | [b23.tv/vvnQNTF](https://b23.tv/vvnQNTF) |
+| **Source** | [github.com/apppplepie/barevid](https://github.com/apppplepie/barevid) |
+| **Author blog** | [creepender.top](https://creepender.top/) |
+
+### Current online limits
+
+The hosted app currently caps **single export length at ~3 minutes**, mainly due to **~30 GB disk** and a **4 GB RAM** box plus flaky network—longer videos stress storage, cache, upload/download, and retries. Self-hosters can raise **`MAX_TARGET_NARRATION_MINUTES`** in backend env.
+
+### What’s in the repo?
+
+```
+barevid/
+├── docker-compose.yml   # Root: MySQL + SlideForge + export Worker (recommended)
+├── barevidweb/          # Optional marketing site (Vite/React); not in default compose
+├── docs/demo/           # Optional: short demo clips for README/docs (mp4/webm)
+├── SlideForge/          # Main app: FastAPI + Vite/React (or its own compose)
+├── worker/              # Export worker: Playwright + ffmpeg
+└── README.md
+```
+
+- **SlideForge** is the historical folder name for the main app; it is still **Barevid** in product terms.
+- **worker** runs heavy export off the API process; one machine or many workers can pull jobs (shared secret with the backend).
+
+Typical pipeline: messy text → LLM structures content → TTS per segment → LLM writes HTML per slide → frontend follows a real timeline → (optional) worker records/encodes **mp4**.
+
+### Quick start (Docker, SlideForge + Worker)
+
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows: WSL2 backend recommended).
+2. Copy `SlideForge/backend/.env.example` → `SlideForge/backend/.env` (keys per [SlideForge/README.md](./SlideForge/README.md)).
+3. Copy repo root `.env.example` → `.env`; align **`EXPORT_WORKER_TOKEN`** with the backend file.
+4. From the **repo root**:
+
+   ```powershell
+   docker compose up -d --build --quiet-build
+   ```
+
+5. Open **`http://127.0.0.1:3000`** (app), **`http://127.0.0.1:8000`** (API), MySQL **`127.0.0.1:3307`**.
+
+See **[SlideForge/README.md](./SlideForge/README.md)** for variants (no worker, pull-only, etc.).
+
+### Naming
+
+- **Barevid**: product name (“whiteboard video” / 白板影像).
+- **SlideForge**: directory name for the main stack; server paths and image tags may still say SlideForge.
+
+### License / openness
+
+Maintained as open source. PRs welcome: docs, i18n, Coqui TTS examples, Docker polish, etc.
+
+### Reference: “pixel video” pricing (check vendors)
+
+Example: Runway API [pricing](https://docs.dev.runwayml.com/guides/pricing/) (credits per second). Barevid is a **different, cheaper, more controllable** lane for explainer slides—not a replacement for cinematic generators.
