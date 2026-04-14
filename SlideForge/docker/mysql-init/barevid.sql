@@ -135,6 +135,20 @@ CREATE TABLE `projects`  (
 ) ENGINE = InnoDB AUTO_INCREMENT = 5 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
+-- Table structure for project_shares
+-- ----------------------------
+DROP TABLE IF EXISTS `project_shares`;
+CREATE TABLE `project_shares`  (
+  `token` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `project_id` int NOT NULL,
+  `created_at` datetime NOT NULL,
+  `expires_at` datetime NULL DEFAULT NULL,
+  PRIMARY KEY (`token`) USING BTREE,
+  INDEX `ix_project_shares_project_id`(`project_id` ASC) USING BTREE,
+  CONSTRAINT `project_shares_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+
+-- ----------------------------
 -- Table structure for users
 -- ----------------------------
 DROP TABLE IF EXISTS `users`;

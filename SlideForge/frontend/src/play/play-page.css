@@ -294,3 +294,44 @@
   opacity: 1;
   z-index: 2;
 }
+
+/* ── 手动放映模式 ─────────────────────────────────────────────────────────── */
+
+.sf-controls--manual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.sf-manual-nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.sf-manual-btn {
+  min-width: 100px;
+}
+
+.sf-manual-page-label {
+  font-size: 0.9rem;
+  color: var(--sf-text-muted, #94a3b8);
+  min-width: 140px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sf-manual-hint {
+  font-size: 0.72rem;
+  color: var(--sf-text-muted, #94a3b8);
+  opacity: 0.6;
+  margin: 0;
+}
+
+.sf-play-main--manual {
+  cursor: pointer;
+}

@@ -20,6 +20,7 @@ import {
   MoreVertical,
   Download,
   Check,
+  Link,
 } from 'lucide-react';
 import { WorkflowStep } from './WorkflowProgressBar';
 import type { ServerWorkflow } from '../utils/workflowFromPipeline';
@@ -253,6 +254,8 @@ export function Home({
   const [managingProjectId, setManagingProjectId] = useState<string | null>(null);
   const [manageError, setManageError] = useState<string | null>(null);
   const [copyingProjectId, setCopyingProjectId] = useState<string | null>(null);
+  const [sharingProjectId, setSharingProjectId] = useState<string | null>(null);
+  const [copiedShareId, setCopiedShareId] = useState<string | null>(null);
   const [renameDialog, setRenameDialog] = useState<{ id: string; currentName: string } | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [deleteDialog, setDeleteDialog] = useState<{ id: string; name: string } | null>(null);
@@ -508,6 +511,25 @@ export function Home({
       await withManage(async () => onCopyProject(projectId));
     } finally {
       setCopyingProjectId(null);
+    }
+  };
+
+  const handleShareLink = async (projectId: string) => {
+    if (sharingProjectId) return;
+    setSharingProjectId(projectId);
+    setManagingProjectId(null);
+    try {
+      const res = await apiFetch<{ token: string }>(`/api/projects/${projectId}/share`, {
+        method: 'POST',
+      });
+      const shareUrl = `${window.location.origin}/share/${res.token}`;
+      await navigator.clipboard.writeText(shareUrl);
+      setCopiedShareId(projectId);
+      setTimeout(() => setCopiedShareId(null), 2500);
+    } catch (e) {
+      setManageError(e instanceof Error ? e.message : '生成分享链接失败');
+    } finally {
+      setSharingProjectId(null);
     }
   };
 
@@ -1137,6 +1159,25 @@ export function Home({
                               <Copy className="h-3.5 w-3.5" />
                             )}
                             {copyingProjectId === project.id ? '复制中…' : '复制项目'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={sharingProjectId === project.id}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-200 light:text-slate-700 transition-colors hover:bg-zinc-800 light:hover:bg-slate-50"
+                            onClick={() => void handleShareLink(project.id)}
+                          >
+                            {sharingProjectId === project.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : copiedShareId === project.id ? (
+                              <Check className="h-3.5 w-3.5 text-green-400" />
+                            ) : (
+                              <Link className="h-3.5 w-3.5" />
+                            )}
+                            {sharingProjectId === project.id
+                              ? '生成中…'
+                              : copiedShareId === project.id
+                                ? '链接已复制！'
+                                : '复制分享链接'}
                           </button>
                           {project.pipeline?.video ? (
                             <button

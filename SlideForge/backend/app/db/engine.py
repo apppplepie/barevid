@@ -353,6 +353,15 @@ async def _migrate_sqlite(conn) -> None:
         FOREIGN KEY(workflow_run_id) REFERENCES workflow_runs(id)
     )
     """
+    _project_shares = """
+    CREATE TABLE IF NOT EXISTS project_shares (
+        token VARCHAR(64) PRIMARY KEY,
+        project_id INTEGER NOT NULL,
+        created_at DATETIME NOT NULL,
+        expires_at DATETIME,
+        FOREIGN KEY(project_id) REFERENCES projects(id)
+    )
+    """
     for ddl in (_wf_run, _wf_step, _wf_export, _wf_art):
         try:
             await conn.execute(text(ddl))
@@ -360,6 +369,20 @@ async def _migrate_sqlite(conn) -> None:
             err = str(e).lower()
             if "already exists" not in err:
                 raise
+    try:
+        await conn.execute(text(_project_shares))
+    except OperationalError as e:
+        err = str(e).lower()
+        if "already exists" not in err:
+            raise
+    try:
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_project_shares_project_id ON project_shares(project_id)"
+            )
+        )
+    except OperationalError:
+        pass
     for ix_sql in (
         "CREATE INDEX IF NOT EXISTS ix_workflow_step_runs_workflow_run_id ON workflow_step_runs(workflow_run_id)",
         "CREATE INDEX IF NOT EXISTS ix_workflow_step_runs_step_key ON workflow_step_runs(step_key)",

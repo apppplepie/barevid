@@ -6,6 +6,7 @@ import { APP_BRAND } from './brand';
 import { PlayLayout } from './play/PlayLayout';
 import PresentPage from './play/present-page';
 import PlayPage from './play/page';
+import SharePage from './play/SharePage';
 import { ThemeProvider } from './ThemeContext';
 import './index.css';
 
@@ -22,6 +23,8 @@ const router = createBrowserRouter([
       { path: 'debug', element: <PlayPage /> },
     ],
   },
+  // 公开分享放映页，无需登录
+  { path: '/share/:token', element: <SharePage /> },
 ]);
 
 createRoot(document.getElementById('root')!).render(

@@ -52,6 +52,7 @@ from app.db.models import (
     NodeContent,
     OutlineNode,
     Project,
+    ProjectShare,
     ProjectStyle,
     User,
     VideoExportJob,
@@ -813,6 +814,90 @@ async def get_play_manifest(
     return await build_play_manifest(
         session,
         project_id,
+        project.name,
+        settings.storage_root,
+    )
+
+
+# ── 分享链接 ──────────────────────────────────────────────────────────────────
+
+@app.post("/api/projects/{project_id}/share")
+async def create_share_link(
+    project_id: int,
+    session: AsyncSession = Depends(get_session),
+    me: User = Depends(get_current_user),
+) -> dict:
+    """生成项目分享 token（仅项目所有者可操作）。"""
+    project = await session.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    if project.owner_user_id != int(me.id):
+        raise HTTPException(status_code=403, detail="仅项目所有者可创建分享链接")
+
+    # 幂等：已有 token 直接返回
+    existing = await session.exec(
+        select(ProjectShare).where(ProjectShare.project_id == project_id)
+    )
+    share = existing.first()
+    if share is None:
+        share = ProjectShare(
+            token=uuid.uuid4().hex + uuid.uuid4().hex,  # 64 位 hex
+            project_id=project_id,
+        )
+        session.add(share)
+        await session.commit()
+        await session.refresh(share)
+
+    return {"token": share.token, "project_id": project_id}
+
+
+@app.delete("/api/projects/{project_id}/share")
+async def revoke_share_link(
+    project_id: int,
+    session: AsyncSession = Depends(get_session),
+    me: User = Depends(get_current_user),
+) -> dict:
+    """撤销项目分享 token。"""
+    project = await session.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    if project.owner_user_id != int(me.id):
+        raise HTTPException(status_code=403, detail="仅项目所有者可撤销分享链接")
+
+    existing = await session.exec(
+        select(ProjectShare).where(ProjectShare.project_id == project_id)
+    )
+    share = existing.first()
+    if share:
+        await session.delete(share)
+        await session.commit()
+
+    return {"ok": True}
+
+
+@app.get("/api/share/{token}/manifest")
+async def get_shared_manifest(
+    token: str,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """
+    公开接口，无需登录。
+    持有效 token 即可获取项目 play-manifest（用于分享放映页）。
+    """
+    share = await session.get(ProjectShare, token)
+    if share is None:
+        raise HTTPException(status_code=404, detail="分享链接不存在或已失效")
+
+    if share.expires_at is not None and share.expires_at < utc_now():
+        raise HTTPException(status_code=410, detail="分享链接已过期")
+
+    project = await session.get(Project, share.project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="项目不存在")
+
+    return await build_play_manifest(
+        session,
+        share.project_id,
         project.name,
         settings.storage_root,
     )

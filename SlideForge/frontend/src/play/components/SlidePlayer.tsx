@@ -59,6 +59,7 @@ export function SlidePlayer({
   autoPlay,
   useTimelineClock = false,
   exportMode = false,
+  manualMode = false,
   showNativeCaption = true,
   /** false 时在 iframe 内显示 deck 自带讲稿区 */
   hideDeckNarrationChrome = true,
@@ -68,6 +69,8 @@ export function SlidePlayer({
   autoPlay?: boolean;
   useTimelineClock?: boolean;
   exportMode?: boolean;
+  /** 手动放映模式：隐藏音频/时间轴控件，只保留大页翻页按钮 + 键盘导航 */
+  manualMode?: boolean;
   showNativeCaption?: boolean;
   hideDeckNarrationChrome?: boolean;
 }) {
@@ -339,6 +342,33 @@ export function SlidePlayer({
     }
   }, [activePageIndex, selectedPageIndex]);
 
+  // 手动模式：大页跳转
+  const goNextPage = useCallback(() => {
+    const next = pageMeta[activePageIndex + 1];
+    if (next) goTo(next.firstStepIndex);
+  }, [pageMeta, activePageIndex, goTo]);
+
+  const goPrevPage = useCallback(() => {
+    const prev = pageMeta[activePageIndex - 1];
+    if (prev) goTo(prev.firstStepIndex);
+  }, [pageMeta, activePageIndex, goTo]);
+
+  // 手动模式键盘导航
+  useEffect(() => {
+    if (!manualMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight" || e.key === " ") {
+        e.preventDefault();
+        goNextPage();
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goPrevPage();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [manualMode, goNextPage, goPrevPage]);
+
   const scopeStartMs =
     scope === "page" && selectedPage
       ? steps[selectedPage.firstStepIndex]?.start_ms ?? 0
@@ -393,6 +423,76 @@ export function SlidePlayer({
     const el = root.children[activeCueIndex] as HTMLElement | undefined;
     el?.scrollIntoView({ block: "nearest", behavior: "auto" });
   }, [activeCueIndex, currentStep]);
+
+  // 手动放映模式：简洁翻页 footer
+  if (manualMode) {
+    return (
+      <SlideView
+        deckTitle={deckTitle}
+        footer={
+          <div className="sf-controls sf-controls--manual">
+            <div className="sf-manual-nav">
+              <button
+                type="button"
+                className="sf-btn sf-btn-ghost sf-manual-btn"
+                onClick={goPrevPage}
+                disabled={activePageIndex <= 0}
+                aria-label="上一页"
+              >
+                ← 上一页
+              </button>
+              <span className="sf-manual-page-label">
+                {activePageIndex + 1} / {pageMeta.length}
+                {pageMeta[activePageIndex]?.title
+                  ? `  ${pageMeta[activePageIndex].title}`
+                  : ""}
+              </span>
+              <button
+                type="button"
+                className="sf-btn sf-manual-btn"
+                onClick={goNextPage}
+                disabled={activePageIndex >= pageMeta.length - 1}
+                aria-label="下一页"
+              >
+                下一页 →
+              </button>
+            </div>
+            <p className="sf-manual-hint">← → 或空格翻页 · 点击幻灯片进入下一页</p>
+          </div>
+        }
+      >
+        <div
+          className="sf-play-main sf-play-main--manual"
+          onClick={goNextPage}
+          style={{ cursor: activePageIndex < pageMeta.length - 1 ? "pointer" : "default" }}
+          role="button"
+          tabIndex={-1}
+          aria-label="点击进入下一页"
+        >
+          <div className="sf-play-main-right">
+            <div className="sf-play-main-body">
+              {domStage ? (
+                <iframe
+                  ref={deckIframeRef}
+                  title={activePage.title || "Deck"}
+                  className="sf-deck-iframe sf-html-stage"
+                  aria-live="polite"
+                  sandbox="allow-scripts allow-same-origin allow-forms"
+                  onLoad={handleIframeLoad}
+                />
+              ) : (
+                Object.entries(visible).map(([k, action]) => (
+                  <Fragment key={k}>
+                    <ElementRenderer action={action as StepAction} />
+                  </Fragment>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </SlideView>
+    );
+  }
 
   return (
     <SlideView

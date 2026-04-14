@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import Column, Text, UniqueConstraint
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, SQLModel, Index
 
 
 def utc_now() -> datetime:
@@ -281,3 +281,14 @@ class NodeContent(SQLModel, table=True):
     exit_transition: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+
+
+class ProjectShare(SQLModel, table=True):
+    """项目分享 token：持 token 即可无需登录访问对应项目的 play-manifest。"""
+
+    __tablename__ = "project_shares"
+
+    token: str = Field(primary_key=True, max_length=64)
+    project_id: int = Field(foreign_key="projects.id", index=True)
+    created_at: datetime = Field(default_factory=utc_now)
+    expires_at: Optional[datetime] = Field(default=None)  # None = 永不过期
