@@ -6,8 +6,9 @@
  *   1. 读/写本地配置（后端 URL、worker key 等）
  *   2. 检测 ffmpeg / Python / Playwright Chromium
  *   3. 如果 Chromium 缺失 → 显示安装进度窗口，安装完毕后继续
- *   4. 启动本地 HTTP server（前端静态文件 + API 代理 + 导出拦截）
- *   5. 打开主窗口加载 http://127.0.0.1:<port>
+ *   4. 若 resources/barevid-api/barevid-api.exe 存在 → 启动捆绑 FastAPI（SQLite 在 userData）
+ *   5. 启动本地 HTTP server（前端静态文件 + API 代理 + 导出拦截）
+ *   6. 打开主窗口加载 http://127.0.0.1:<port>
  */
 
 import {
@@ -22,6 +23,7 @@ import {
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import { randomBytes } from 'crypto';
 
 import {
   runChecks,
@@ -29,13 +31,25 @@ import {
   resolveFfmpeg,
   resolvePython,
 } from './checker';
-import { startLocalServer } from './server';
+import {
+  startLocalServer,
+  getFreePort,
+} from './server';
+import {
+  BUNDLED_API_PORT,
+  resolveBundledBackendExe,
+  startBundledBackend,
+  waitForBundledApiReady,
+  type BundledBackendHandle,
+} from './bundledBackend';
 import { ExportManager } from './export';
 
 // ── 配置文件 ─────────────────────────────────────────────────────────────────
 
 interface AppConfig {
   backendUrl: string;  // 云端后端，如 https://api.barevid.com
+  /** 与 SlideForge EXPORT_WORKER_TOKEN 一致；捆绑后端时必填 */
+  exportWorkerToken?: string;
 }
 
 function configPath(): string {
@@ -59,11 +73,23 @@ function saveConfig(cfg: AppConfig): void {
   fs.writeFileSync(configPath(), JSON.stringify(cfg, null, 2), 'utf-8');
 }
 
+function ensureExportWorkerToken(cfg: AppConfig): string {
+  const cur = (cfg.exportWorkerToken ?? '').trim();
+  if (cur.length >= 16) {
+    return cur;
+  }
+  const token = randomBytes(24).toString('hex');
+  cfg.exportWorkerToken = token;
+  saveConfig(cfg);
+  return token;
+}
+
 // ── 全局状态 ─────────────────────────────────────────────────────────────────
 
 let mainWindow: BrowserWindow | null = null;
 let setupWindow: BrowserWindow | null = null;
 let localPort: number | null = null;
+let bundledBackendHandle: BundledBackendHandle | null = null;
 
 // ── App 生命周期 ──────────────────────────────────────────────────────────────
 
@@ -74,6 +100,13 @@ app.whenReady().then(bootstrap).catch((err) => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('will-quit', () => {
+  if (bundledBackendHandle) {
+    bundledBackendHandle.kill();
+    bundledBackendHandle = null;
+  }
 });
 
 app.on('activate', () => {
@@ -89,6 +122,7 @@ async function bootstrap(): Promise<void> {
   Menu.setApplicationMenu(buildMenu());
 
   const cfg = loadConfig();
+  let backendUrl = cfg.backendUrl;
 
   // 1. 检测依赖
   const checks = await runChecks();
@@ -113,6 +147,34 @@ async function bootstrap(): Promise<void> {
     await showSetupAndInstall(checks.python);
   }
 
+  // 依赖就绪后再占端口并启动捆绑后端，缩短「端口已分配但未监听」的窗口
+  const bundledExe = resolveBundledBackendExe();
+  const expressListenPort = await getFreePort();
+
+  if (bundledExe) {
+    const token = ensureExportWorkerToken(cfg);
+    bundledBackendHandle = startBundledBackend(bundledExe, {
+      expressPort: expressListenPort,
+      exportWorkerToken: token,
+      apiPort: BUNDLED_API_PORT,
+    });
+    backendUrl = `http://127.0.0.1:${BUNDLED_API_PORT}`;
+    cfg.backendUrl = backendUrl;
+    saveConfig(cfg);
+    try {
+      await waitForBundledApiReady(BUNDLED_API_PORT);
+    } catch (e) {
+      bundledBackendHandle.kill();
+      bundledBackendHandle = null;
+      dialog.showErrorBox(
+        '后端启动失败',
+        `无法连接捆绑的 API（${backendUrl}）。请确认已按 electron/scripts/build-backend.ps1 构建 barevid-api.exe 并放入 resources/barevid-api/。\n\n${String(e)}`
+      );
+      app.quit();
+      return;
+    }
+  }
+
   // 3. 准备 ExportManager
   const ffmpeg = resolveFfmpeg() ?? 'ffmpeg';
   const python = resolvePython() ?? 'python';
@@ -123,11 +185,13 @@ async function bootstrap(): Promise<void> {
     pythonOrWorker: python,
     exportScript,
     frontendUrl: `http://127.0.0.1:__PORT__`, // 稍后替换
-    backendUrl: cfg.backendUrl,
+    backendUrl,
   });
 
-  // 4. 启动本地 server
-  const srv = await startLocalServer(cfg.backendUrl, exportManager);
+  // 4. 启动本地 server（端口需与捆绑后端的 EXPORT_FRONTEND_URL 一致）
+  const srv = await startLocalServer(backendUrl, exportManager, {
+    listenPort: expressListenPort,
+  });
   localPort = srv.port;
 
   // 把真实端口注入 exportManager（用于 Playwright 录制本地前端）

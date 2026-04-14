@@ -9,6 +9,7 @@
     "dev": "tsc && electron dist/main.js",
     "build:ts": "tsc",
     "build:frontend": "cd ../SlideForge/frontend && npm run build",
+    "build:backend": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-backend.ps1",
     "build": "npm run build:frontend && npm run build:ts && electron-builder",
     "build:win": "npm run build:frontend && npm run build:ts && electron-builder --win",
     "pack": "npm run build:ts && electron-builder --dir"
@@ -44,6 +45,11 @@
       {
         "from": "resources/ffmpeg.exe",
         "to": "ffmpeg.exe"
+      },
+      {
+        "from": "resources/barevid-api",
+        "to": "barevid-api",
+        "filter": ["**/*"]
       }
     ],
     "win": {

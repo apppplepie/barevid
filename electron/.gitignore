@@ -3,3 +3,5 @@ dist/
 release/
 resources/ffmpeg.exe
 resources/icon.ico
+# PyInstaller 产物（由 npm run build:backend 生成，勿入库）
+resources/barevid-api/barevid-api.exe

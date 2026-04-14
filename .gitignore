@@ -20,6 +20,12 @@ worker/test.conf
 # PowerShell worker 日志（本机调试用）
 ps_worker_err.txt
 ps_worker_out.txt
+_api_err.txt
+_api_out.txt
+_tmp_smoke.db
+_tmp_smoke.db-shm
+_tmp_smoke.db-wal
+_tmp_storage/
 
 # 本地脚本（含 Docker 一键构建等，不入库）
 scripts/
@@ -36,6 +42,10 @@ worker/worker_tasks.db-shm
 **/*.py[cod]
 *.egg-info/
 .eggs/
+
+# SlideForge backend：PyInstaller 中间产物与每次构建重写的 spec（源码入口为 barevid_api_entry.py）
+SlideForge/backend/build/
+SlideForge/backend/barevid-api.spec
 
 # barevidweb: 演示用视频体积大，勿提交（本地或 CDN；GitHub clone 更轻）
 barevidweb/public/vidsrc/*.mp4

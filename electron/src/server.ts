@@ -11,8 +11,7 @@
 import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
-import { app } from 'electron';
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response } from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import type { ExportManager } from './export';
 
@@ -30,9 +29,15 @@ export interface LocalServer {
   close: () => Promise<void>;
 }
 
+export interface StartLocalServerOptions {
+  /** 若指定，在此端口监听本地 Express（否则随机端口） */
+  listenPort?: number;
+}
+
 export async function startLocalServer(
   backendUrl: string,
-  exportManager: ExportManager
+  exportManager: ExportManager,
+  opts?: StartLocalServerOptions
 ): Promise<LocalServer> {
   const expressApp = express();
   expressApp.use(express.json());
@@ -107,8 +112,11 @@ export async function startLocalServer(
     });
   }
 
-  // ── 4. 监听随机端口 ──────────────────────────────────────────────────────
-  const port = await getFreePport();
+  // ── 4. 监听端口（可指定，便于与捆绑 API 的 EXPORT_FRONTEND_URL 对齐）────────
+  const port =
+    typeof opts?.listenPort === 'number' && opts.listenPort > 0
+      ? opts.listenPort
+      : await getFreePort();
   const server = http.createServer(expressApp);
 
   await new Promise<void>((resolve, reject) => {
@@ -122,7 +130,7 @@ export async function startLocalServer(
   };
 }
 
-function getFreePport(): Promise<number> {
+export function getFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const srv = http.createServer();
     srv.listen(0, '127.0.0.1', () => {
