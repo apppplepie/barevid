@@ -1,0 +1,60 @@
+{
+  "name": "barevid-desktop",
+  "productName": "Barevid",
+  "version": "0.1.0",
+  "description": "Barevid Desktop – 本地渲染节点 + 应用窗口",
+  "main": "dist/main.js",
+  "private": true,
+  "scripts": {
+    "dev": "tsc && electron dist/main.js",
+    "build:ts": "tsc",
+    "build:frontend": "cd ../SlideForge/frontend && npm run build",
+    "build": "npm run build:frontend && npm run build:ts && electron-builder",
+    "build:win": "npm run build:frontend && npm run build:ts && electron-builder --win",
+    "pack": "npm run build:ts && electron-builder --dir"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "http-proxy-middleware": "^3.0.5"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.0.0",
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "~5.8.2"
+  },
+  "build": {
+    "appId": "com.barevid.desktop",
+    "productName": "Barevid",
+    "copyright": "Copyright © 2025 Barevid",
+    "directories": {
+      "output": "release",
+      "buildResources": "resources"
+    },
+    "files": [
+      "dist/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../SlideForge/frontend/dist",
+        "to": "frontend",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "resources/ffmpeg.exe",
+        "to": "ffmpeg.exe"
+      }
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "resources/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerLanguages": ["zh_CN", "en_US"],
+      "language": "2052"
+    }
+  }
+}
