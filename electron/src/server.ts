@@ -3,7 +3,7 @@
  * 在 Electron 主进程里跑一个本地 HTTP server：
  *  - 静态文件服务：serve SlideForge/frontend/dist（SPA fallback 到 index.html）
  *  - API 代理：/api/* 和 /media/* 透传到云端后端
- *  - 导出拦截：POST /api/projects/*/export-video 由本地 worker 接管
+ *  - 导出拦截：POST /api/projects/:id/export-video 由本地 worker 接管
  *
  * 返回实际监听的端口号。
  */
