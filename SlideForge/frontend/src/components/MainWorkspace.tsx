@@ -116,6 +116,9 @@ export function MainWorkspace({
   const subtitleLine = useMemo(() => {
     const st = activePlayStep;
     if (!st || st.kind === 'pause') return '';
+    if (!(st.audio_url || '').trim()) {
+      return (st.narration_text || '').trim();
+    }
     const clipElapsedMs = Math.max(0, globalMs - st.start_ms);
     const sentenceCues = parseDoubaoSentenceCues(st.narration_alignment);
     if (sentenceCues && sentenceCues.length > 0) {

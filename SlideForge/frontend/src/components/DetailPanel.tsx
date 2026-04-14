@@ -146,13 +146,16 @@ function AudioDetails({
     return `00:${mins}:${secs}`;
   };
 
+  /** 仅有真实音频文件时才按句高亮；仅有估算 alignment 时整段展示口播 */
+  const hasAudioFile = Boolean((step?.audio_url || '').trim());
+
   const sentenceCues = useMemo(() => {
-    if (!step?.narration_alignment) return null;
+    if (!hasAudioFile || !step?.narration_alignment) return null;
     return parseDoubaoSentenceCues(step.narration_alignment);
-  }, [step?.narration_alignment]);
+  }, [hasAudioFile, step?.narration_alignment]);
 
   const activeCueIndex =
-    sentenceCues && isActiveStep
+    hasAudioFile && sentenceCues && isActiveStep
       ? activeSentenceIndex(sentenceCues, clipElapsedMs)
       : -1;
 
@@ -249,10 +252,10 @@ function AudioDetails({
 
       <div className="flex min-h-0 flex-1 flex-col gap-3">
         <div className="flex shrink-0 items-center justify-between text-xs font-medium uppercase tracking-wider text-zinc-500 light:text-slate-500">
-          <span>实时字幕</span>
+          <span>{hasAudioFile ? '实时字幕' : '口播全文'}</span>
         </div>
         <div className="flex min-h-[120px] min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-zinc-800/80 light:border-slate-200 bg-zinc-950/50 light:bg-slate-50 text-sm text-zinc-300 light:text-slate-700 break-words">
-          {sentenceCues && sentenceCues.length > 0 ? (
+          {hasAudioFile && sentenceCues && sentenceCues.length > 0 ? (
             <div
               ref={captionScrollRef}
               className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 pr-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"

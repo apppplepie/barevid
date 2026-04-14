@@ -79,6 +79,7 @@ export function SlidePlayer({
   const [detailFocus, setDetailFocus] = useState<"video" | "audio">("video");
 
   const selectedPage = pageMeta[selectedPageIndex];
+
   const range =
     scope === "page" && selectedPage
       ? {
@@ -122,6 +123,21 @@ export function SlidePlayer({
     preloadNextClip: exportMode,
     onLastAudioClipEnded: exportMode ? markExportPlaybackDone : undefined,
   });
+
+  /** 任一步有真实 mp3 才启用「音频轨道」与句级口播栏；纯估算时间轴时不展示 */
+  const manifestHasAudio = useMemo(
+    () =>
+      steps.some(
+        (s) => s.kind !== "pause" && Boolean((s.audio_url || "").trim()),
+      ),
+    [steps],
+  );
+
+  useEffect(() => {
+    if (!manifestHasAudio) {
+      setDetailFocus("video");
+    }
+  }, [manifestHasAudio]);
 
   const [audioErr, setAudioErr] = useState<string | null>(null);
   /** 浏览器实测时长（秒），用于修正与 manifest duration_ms 不一致 */
@@ -522,53 +538,55 @@ export function SlidePlayer({
               </span>
             </div>
           </div>
-          <div
-            className={`sf-timeline-row${detailFocus === "audio" ? " sf-timeline-row--focus-audio" : ""}`}
-          >
-            <div className="sf-progress-label sf-progress-label--timeline">
-              音频轨道
-              <span className="sf-timeline-hint">点选片段 → 左侧跟口播</span>
-            </div>
-            <div className="sf-progress-row sf-progress-row--timeline">
-              <div
-                className="sf-timeline-track"
-                role="listbox"
-                aria-label="音频轨道分段"
-              >
+          {manifestHasAudio ? (
+            <div
+              className={`sf-timeline-row${detailFocus === "audio" ? " sf-timeline-row--focus-audio" : ""}`}
+            >
+              <div className="sf-progress-label sf-progress-label--timeline">
+                音频轨道
+                <span className="sf-timeline-hint">点选片段 → 左侧跟口播</span>
+              </div>
+              <div className="sf-progress-row sf-progress-row--timeline">
                 <div
-                  className="sf-timeline-underlay"
-                  style={{ width: `${scopeProgress}%` }}
-                  aria-hidden
-                />
-                {scopeTotalMs > 0
-                  ? scopeStepIndices.map((i) => {
-                      const st = steps[i];
-                      if (!st) return null;
-                      const left =
-                        ((st.start_ms - scopeStartMs) / scopeTotalMs) * 100;
-                      const width = Math.max(
-                        0.45,
-                        (st.duration_ms / scopeTotalMs) * 100
-                      );
-                      return (
-                        <button
-                          key={`a-${i}`}
-                          type="button"
-                          className={`sf-timeline-seg sf-timeline-seg--audio${i === currentStep ? " sf-timeline-seg--current" : ""}`}
-                          style={{ left: `${left}%`, width: `${width}%` }}
-                          title={`音频段 ${i + 1} · ${st.subtitle || st.kind}`}
-                          aria-current={i === currentStep ? "true" : undefined}
-                          onClick={() => {
-                            setDetailFocus("audio");
-                            goTo(i);
-                          }}
-                        />
-                      );
-                    })
-                  : null}
+                  className="sf-timeline-track"
+                  role="listbox"
+                  aria-label="音频轨道分段"
+                >
+                  <div
+                    className="sf-timeline-underlay"
+                    style={{ width: `${scopeProgress}%` }}
+                    aria-hidden
+                  />
+                  {scopeTotalMs > 0
+                    ? scopeStepIndices.map((i) => {
+                        const st = steps[i];
+                        if (!st) return null;
+                        const left =
+                          ((st.start_ms - scopeStartMs) / scopeTotalMs) * 100;
+                        const width = Math.max(
+                          0.45,
+                          (st.duration_ms / scopeTotalMs) * 100
+                        );
+                        return (
+                          <button
+                            key={`a-${i}`}
+                            type="button"
+                            className={`sf-timeline-seg sf-timeline-seg--audio${i === currentStep ? " sf-timeline-seg--current" : ""}`}
+                            style={{ left: `${left}%`, width: `${width}%` }}
+                            title={`音频段 ${i + 1} · ${st.subtitle || st.kind}`}
+                            aria-current={i === currentStep ? "true" : undefined}
+                            onClick={() => {
+                              setDetailFocus("audio");
+                              goTo(i);
+                            }}
+                          />
+                        );
+                      })
+                    : null}
+                </div>
               </div>
             </div>
-          </div>
+          ) : null}
           <div className="sf-progress-label">
             本段进度{cur?.subtitle ? ` · ${cur.subtitle}` : ""}
           </div>
@@ -650,12 +668,14 @@ export function SlidePlayer({
       <div className="sf-play-main">
         {showNativeCaption && steps.length > 0 ? (
           <aside
-            className={`sf-caption-bar sf-detail-panel${cur?.kind === "pause" ? " sf-caption-bar--muted" : ""}${detailFocus === "video" ? " sf-detail-panel--video" : " sf-detail-panel--audio"}`}
+            className={`sf-caption-bar sf-detail-panel${cur?.kind === "pause" ? " sf-caption-bar--muted" : ""}${detailFocus === "video" || !manifestHasAudio ? " sf-detail-panel--video" : " sf-detail-panel--audio"}`}
             aria-label={
-              detailFocus === "video" ? "视频轨道详情" : "口播与字幕详情"
+              detailFocus === "video" || !manifestHasAudio
+                ? "视频轨道详情"
+                : "口播与字幕详情"
             }
           >
-            {detailFocus === "video" ? (
+            {detailFocus === "video" || !manifestHasAudio ? (
               <>
                 <div className="sf-caption-title">视频轨道</div>
                 {cur?.kind === "pause" ? (
@@ -693,6 +713,15 @@ export function SlidePlayer({
                         （本段无结构化提要）
                       </p>
                     )}
+                    {!manifestHasAudio &&
+                    (cur?.narration_text || "").trim() ? (
+                      <div className="sf-detail-brief-wrap sf-detail-narration-full">
+                        <span className="sf-detail-k">口播全文</span>
+                        <p className="sf-detail-brief">
+                          {(cur?.narration_text || "").trim()}
+                        </p>
+                      </div>
+                    ) : null}
                   </>
                 )}
               </>
@@ -705,7 +734,9 @@ export function SlidePlayer({
                 )}
                 {cur?.kind === "pause" ? (
                   <div className="sf-caption-text">停顿</div>
-                ) : sentenceCues && sentenceCues.length > 0 ? (
+                ) : sentenceCues &&
+                  sentenceCues.length > 0 &&
+                  hasAudioClip ? (
                   <div className="sf-caption-lines" ref={captionLinesRef}>
                     {sentenceCues.map((s, i) => (
                       <p

@@ -121,6 +121,12 @@
   margin-top: 0.25rem;
 }
 
+.sf-detail-narration-full {
+  margin-top: 0.55rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--sf-caption-border);
+}
+
 .sf-detail-brief {
   margin: 0.25rem 0 0;
   font-size: 0.88rem;
