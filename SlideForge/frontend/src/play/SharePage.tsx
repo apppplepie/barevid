@@ -1,7 +1,7 @@
 /**
  * SharePage.tsx
  * 公开分享放映页：/share/:token
- * 无需登录，通过 token 获取 manifest，手动翻页放映。
+ * 无需登录，通过 token 获取 manifest，全屏展示幻灯片，点击/键盘手动切换，无音频无字幕。
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -82,7 +82,7 @@ export default function SharePage() {
   }
 
   return (
-    <div className="sf-play-route-root sf-play-present">
+    <div className="sf-play-route-root sf-play-present sf-play-export">
       <SlidePlayer
         deckTitle={manifest.title}
         slide={flattened}

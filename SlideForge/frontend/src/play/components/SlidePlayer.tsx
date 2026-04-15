@@ -52,6 +52,32 @@ function mediaErrorLabel(el: HTMLAudioElement): string {
   }
 }
 
+const MANUAL_NAV_NEXT_KEYS = new Set([
+  "ArrowRight",
+  "ArrowDown",
+  " ",
+  "PageDown",
+  "Enter",
+]);
+const MANUAL_NAV_PREV_KEYS = new Set(["ArrowLeft", "ArrowUp", "PageUp"]);
+
+/** 手动翻页：焦点在 iframe 内时父 window 收不到 keydown，需在 iframe 内同步监听（capture） */
+function handleManualNavKeydown(
+  e: KeyboardEvent,
+  goNext: () => void,
+  goPrev: () => void,
+  opts?: { stopPropagation?: boolean },
+): void {
+  if (MANUAL_NAV_NEXT_KEYS.has(e.key)) {
+    e.preventDefault();
+    if (opts?.stopPropagation) e.stopPropagation();
+    goNext();
+  } else if (MANUAL_NAV_PREV_KEYS.has(e.key)) {
+    e.preventDefault();
+    if (opts?.stopPropagation) e.stopPropagation();
+    goPrev();
+  }
+}
 
 export function SlidePlayer({
   deckTitle,
@@ -127,7 +153,7 @@ export function SlidePlayer({
     onLastAudioClipEnded: exportMode ? markExportPlaybackDone : undefined,
   });
 
-  /** 任一步有真实 mp3 才启用「音频轨道」与句级口播栏；纯估算时间轴时不展示 */
+  /** 任一步有真实 mp3：句级对齐字幕 + 第二轨标题为「音频轨道」；无配音时仍展示口播占位轨 */
   const manifestHasAudio = useMemo(
     () =>
       steps.some(
@@ -135,6 +161,7 @@ export function SlidePlayer({
       ),
     [steps],
   );
+  const showNarrationTimeline = steps.length > 0;
 
   useEffect(() => {
     if (!manifestHasAudio) {
@@ -353,21 +380,61 @@ export function SlidePlayer({
     if (prev) goTo(prev.firstStepIndex);
   }, [pageMeta, activePageIndex, goTo]);
 
-  // 手动模式键盘导航
+  /**
+   * 滚动当前 iframe 页面；滚到顶/底时才真正翻页。
+   * iframe 用 srcdoc + allow-same-origin，可直接访问 contentDocument。
+   */
+  const scrollOrNext = useCallback(() => {
+    const iframe = deckIframeRef.current;
+    if (domStage && iframe) {
+      const doc = iframe.contentDocument;
+      const win = iframe.contentWindow;
+      if (doc && win) {
+        const el = doc.scrollingElement ?? doc.documentElement;
+        const h = el.clientHeight;
+        // 对齐到下一个整屏边界（100vh snap）
+        const nextTop = Math.ceil((el.scrollTop + 1) / h) * h;
+        if (nextTop < el.scrollHeight - 8) {
+          win.scrollTo({ top: nextTop, behavior: "smooth" });
+          return;
+        }
+      }
+    }
+    goNextPage();
+  }, [domStage, goNextPage]);
+
+  const scrollOrPrev = useCallback(() => {
+    const iframe = deckIframeRef.current;
+    if (domStage && iframe) {
+      const doc = iframe.contentDocument;
+      const win = iframe.contentWindow;
+      if (doc && win) {
+        const el = doc.scrollingElement ?? doc.documentElement;
+        const h = el.clientHeight;
+        // 对齐到上一个整屏边界
+        const prevTop = Math.floor((el.scrollTop - 1) / h) * h;
+        if (prevTop > 0) {
+          win.scrollTo({ top: prevTop, behavior: "smooth" });
+          return;
+        }
+        if (el.scrollTop > 8) {
+          win.scrollTo({ top: 0, behavior: "smooth" });
+          return;
+        }
+      }
+    }
+    goPrevPage();
+  }, [domStage, goPrevPage]);
+
+  // 手动模式：始终在 window 挂键盘监听，不依赖焦点
   useEffect(() => {
     if (!manualMode) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight" || e.key === " ") {
-        e.preventDefault();
-        goNextPage();
-      } else if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        goPrevPage();
-      }
+    const onKeyWindow = (e: KeyboardEvent) => {
+      handleManualNavKeydown(e, scrollOrNext, scrollOrPrev);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [manualMode, goNextPage, goPrevPage]);
+    window.addEventListener("keydown", onKeyWindow);
+    return () => window.removeEventListener("keydown", onKeyWindow);
+  }, [manualMode, scrollOrNext, scrollOrPrev]);
 
   const scopeStartMs =
     scope === "page" && selectedPage
@@ -457,38 +524,66 @@ export function SlidePlayer({
                 下一页 →
               </button>
             </div>
-            <p className="sf-manual-hint">← → 或空格翻页 · 点击幻灯片进入下一页</p>
+            <p className="sf-manual-hint">
+              方向键、空格、PgUp/PgDn、Enter 翻页；点击画面上任意处下一页
+            </p>
           </div>
         }
       >
-        <div
-          className="sf-play-main sf-play-main--manual"
-          onClick={goNextPage}
-          style={{ cursor: activePageIndex < pageMeta.length - 1 ? "pointer" : "default" }}
-          role="button"
-          tabIndex={-1}
-          aria-label="点击进入下一页"
-        >
+        <div className="sf-play-main sf-play-main--manual">
           <div className="sf-play-main-right">
             <div className="sf-play-main-body">
               {domStage ? (
-                <iframe
-                  ref={deckIframeRef}
-                  title={activePage.title || "Deck"}
-                  className="sf-deck-iframe sf-html-stage"
-                  aria-live="polite"
-                  sandbox="allow-scripts allow-same-origin allow-forms"
-                  onLoad={handleIframeLoad}
-                />
+                <div className="sf-manual-deck-shell">
+                  <iframe
+                    ref={deckIframeRef}
+                    title={activePage.title || "Deck"}
+                    className="sf-deck-iframe sf-html-stage"
+                    aria-live="polite"
+                    tabIndex={-1}
+                    sandbox="allow-scripts allow-same-origin allow-forms"
+                    onLoad={handleIframeLoad}
+                    style={{ pointerEvents: "none" }}
+                  />
+                </div>
               ) : (
-                Object.entries(visible).map(([k, action]) => (
-                  <Fragment key={k}>
-                    <ElementRenderer action={action as StepAction} />
-                  </Fragment>
-                ))
+                <div
+                  className="sf-manual-legacy-stage"
+                  role="presentation"
+                >
+                  {Object.entries(visible).map(([k, action]) => (
+                    <Fragment key={k}>
+                      <ElementRenderer action={action as StepAction} />
+                    </Fragment>
+                  ))}
+                </div>
               )}
             </div>
           </div>
+        </div>
+        {/* 悬浮翻页按钮，始终在最顶层 */}
+        <div className="sf-manual-float-nav">
+          <button
+            type="button"
+            className="sf-manual-float-btn"
+            onClick={scrollOrPrev}
+            disabled={activePageIndex <= 0}
+            aria-label="上一页"
+          >
+            ‹
+          </button>
+          <span className="sf-manual-float-label">
+            {activePageIndex + 1} / {pageMeta.length}
+          </span>
+          <button
+            type="button"
+            className="sf-manual-float-btn sf-manual-float-btn--next"
+            onClick={scrollOrNext}
+            disabled={activePageIndex >= pageMeta.length - 1}
+            aria-label="下一页"
+          >
+            ›
+          </button>
         </div>
       </SlideView>
     );
@@ -638,19 +733,25 @@ export function SlidePlayer({
               </span>
             </div>
           </div>
-          {manifestHasAudio ? (
+          {showNarrationTimeline ? (
             <div
               className={`sf-timeline-row${detailFocus === "audio" ? " sf-timeline-row--focus-audio" : ""}`}
             >
               <div className="sf-progress-label sf-progress-label--timeline">
-                音频轨道
-                <span className="sf-timeline-hint">点选片段 → 左侧跟口播</span>
+                {manifestHasAudio ? "音频轨道" : "口播轨道"}
+                <span className="sf-timeline-hint">
+                  {manifestHasAudio
+                    ? "点选片段 → 左侧跟口播"
+                    : "无配音 · 占位时长 · 点选片段"}
+                </span>
               </div>
               <div className="sf-progress-row sf-progress-row--timeline">
                 <div
                   className="sf-timeline-track"
                   role="listbox"
-                  aria-label="音频轨道分段"
+                  aria-label={
+                    manifestHasAudio ? "音频轨道分段" : "口播占位分段"
+                  }
                 >
                   <div
                     className="sf-timeline-underlay"

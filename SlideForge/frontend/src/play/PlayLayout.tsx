@@ -14,11 +14,15 @@ export function PlayLayout() {
     };
   }, [location.search]);
 
-  const hideChrome = flags.clean || flags.exporting;
+  /** 公开分享链接 /share/:token：与录屏导出页一致，全屏、无顶栏 */
+  const sharePresentation = location.pathname.startsWith("/share/");
+
+  const hideChrome = flags.clean || flags.exporting || sharePresentation;
+  const exportLayout = flags.exporting || sharePresentation;
 
   return (
     <div
-      className={`sf-play-app${flags.exporting ? " sf-play-layout--export" : ""}${hideChrome ? " sf-play-layout--chrome-hidden" : ""}`}
+      className={`sf-play-app${exportLayout ? " sf-play-layout--export" : ""}${hideChrome ? " sf-play-layout--chrome-hidden" : ""}`}
     >
       {!hideChrome ? (
         <header className="sf-play-app-header">

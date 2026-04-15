@@ -23,8 +23,12 @@ const router = createBrowserRouter([
       { path: 'debug', element: <PlayPage /> },
     ],
   },
-  // 公开分享放映页，无需登录
-  { path: '/share/:token', element: <SharePage /> },
+  // 公开分享放映页，无需登录（与录屏导出共用 PlayLayout 全屏）
+  {
+    path: '/share/:token',
+    element: <PlayLayout />,
+    children: [{ index: true, element: <SharePage /> }],
+  },
 ]);
 
 createRoot(document.getElementById('root')!).render(

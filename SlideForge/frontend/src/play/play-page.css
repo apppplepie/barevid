@@ -333,5 +333,94 @@
 }
 
 .sf-play-main--manual {
+  min-height: 0;
+}
+
+/* DOM deck：iframe pointer-events:none，点击由外层 shell 收 */
+.sf-manual-deck-shell {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
   cursor: pointer;
+  outline: none;
+  border: none;
+  background: transparent;
+}
+
+.sf-manual-deck-shell:focus-visible {
+  outline: none;
+}
+
+.sf-manual-deck-shell .sf-deck-iframe {
+  outline: none;
+  border: none;
+}
+
+.sf-manual-legacy-stage {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 悬浮翻页按钮 */
+.sf-manual-float-nav {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+}
+
+.sf-manual-float-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #e2e8f0;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sf-manual-float-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.sf-manual-float-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.sf-manual-float-btn--next {
+  color: #93c5fd;
+}
+
+.sf-manual-float-btn--next:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.25);
+  color: #bfdbfe;
+}
+
+.sf-manual-float-label {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  min-width: 3rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
 }

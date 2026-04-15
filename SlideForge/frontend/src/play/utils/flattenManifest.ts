@@ -6,6 +6,9 @@ import type {
   StepAction,
 } from '../types/slide';
 
+/** 与 playManifest.buildTimelineFromPlayManifest 一致：无时长且无音频占位时用于可播放时间轴 */
+const FALLBACK_STEP_MS = 3000;
+
 /**
  * 将 API 的 pages[] 压成 SlidePlayer 用的单轨 PlaySlide（全局 step 下标与 deck 一致）。
  */
@@ -36,7 +39,13 @@ export function flattenManifestForPlayer(manifest: PlayManifest): PlaySlide {
     for (const st of page.steps) {
       const baseDur = Math.max(0, st.duration_ms ?? 0);
       const effectiveDur =
-        st.kind === 'pause' && baseDur === 0 ? 500 : baseDur;
+        st.kind === 'pause'
+          ? baseDur > 0
+            ? baseDur
+            : 500
+          : baseDur > 0
+            ? baseDur
+            : FALLBACK_STEP_MS;
       const subtitle =
         (st.title || '').trim() ||
         (st.kind === 'pause' ? '（停顿）' : '（无小标题）');
