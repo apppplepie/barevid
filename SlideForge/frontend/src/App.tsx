@@ -70,10 +70,19 @@ function parseDeckMasterSourceProjectId(v: unknown): number | null {
   return null;
 }
 
+function coerceExportTime(v: unknown): string | null {
+  if (typeof v === 'string' && v.trim()) return v.trim();
+  if (typeof v === 'number' && Number.isFinite(v)) return new Date(v).toISOString();
+  return null;
+}
+
 function mapVideoExportJob(raw: unknown): VideoExportJobInfo | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
-  const status = o.status;
+  let status = o.status;
+  if (status === 'cancelled') {
+    status = 'failed';
+  }
   if (
     status !== 'queued' &&
     status !== 'running' &&
@@ -85,16 +94,31 @@ function mapVideoExportJob(raw: unknown): VideoExportJobInfo | null {
   const jobId = o.job_id;
   if (typeof jobId !== 'number' || !Number.isFinite(jobId)) return null;
   const st = status as VideoExportJobInfo['status'];
+  const wid =
+    typeof o.worker_id === 'string'
+      ? o.worker_id === 'barevid-desktop'
+        ? '本机（内嵌）'
+        : o.worker_id
+      : null;
   return {
     job_id: jobId,
     status: st,
-    worker_id: typeof o.worker_id === 'string' ? o.worker_id : null,
-    created_at: typeof o.created_at === 'string' ? o.created_at : null,
-    started_at: typeof o.started_at === 'string' ? o.started_at : null,
-    finished_at: typeof o.finished_at === 'string' ? o.finished_at : null,
+    worker_id: wid,
+    created_at: coerceExportTime(o.created_at),
+    started_at: coerceExportTime(o.started_at),
+    finished_at: coerceExportTime(o.finished_at),
     output_url: typeof o.output_url === 'string' ? o.output_url : undefined,
-    error_message: typeof o.error_message === 'string' ? o.error_message : null,
+    error_message:
+      o.status === 'cancelled'
+        ? (typeof o.error_message === 'string' ? o.error_message : '已取消')
+        : typeof o.error_message === 'string'
+          ? o.error_message
+          : null,
   };
+}
+
+function isBarevidDesktop(): boolean {
+  return typeof window !== 'undefined' && window.electronAPI?.isDesktop === true;
 }
 
 type ProjectListItem = {
@@ -138,7 +162,11 @@ type ProjectDetailApi = {
   };
 };
 
-function mergeProjectFromDetailApi(p: Project, data: ProjectDetailApi): Project {
+function mergeProjectFromDetailApi(
+  p: Project,
+  data: ProjectDetailApi,
+  opts?: { retainLocalVideoExportJob?: boolean },
+): Project {
   const pl = {
     outline: Boolean(data.pipeline?.outline),
     audio: Boolean(data.pipeline?.audio),
@@ -147,7 +175,11 @@ function mergeProjectFromDetailApi(p: Project, data: ProjectDetailApi): Project 
   };
   const ds = data.project.deck_status || 'idle';
   const wf = data.workflow ?? null;
-  const vej = mapVideoExportJob(data.video_export_job);
+  let vej = mapVideoExportJob(data.video_export_job);
+  // Electron 本机导出：FastAPI 无 video_export_job，勿用 null 冲掉乐观态 / 本地轮询前的 UI
+  if (opts?.retainLocalVideoExportJob && vej == null && p.videoExportJob != null) {
+    vej = p.videoExportJob;
+  }
   const outlineNodes =
     data.outline != null && Array.isArray(data.outline) ? data.outline : p.outlineNodes;
   const ttsVt = data.project.tts_voice_type;
@@ -444,6 +476,38 @@ export default function App() {
     projectId: number;
     jobId: number;
   } | null>(null);
+  /** 桌面端：本机 export-video/status 轮询结果（与服务器 video_export_job 无关） */
+  const [desktopExportJob, setDesktopExportJob] = useState<VideoExportJobInfo | null>(null);
+
+  /** 合并项目详情时：桌面端正在本机导出则勿用服务端的 null 覆盖本地任务 UI */
+  const detailMergeOptsForProject = useCallback(
+    (
+      projectIdStr: string,
+    ): { retainLocalVideoExportJob: true } | undefined =>
+      isBarevidDesktop() &&
+      exportTracking &&
+      String(exportTracking.projectId) === projectIdStr
+        ? { retainLocalVideoExportJob: true }
+        : undefined,
+    [exportTracking],
+  );
+
+  /** 桌面端导出弹窗专用：轮询结果未到前用占位任务，避免「闪一下又变 —」 */
+  const desktopExportJobForDialog = useMemo((): VideoExportJobInfo | null => {
+    if (!isBarevidDesktop() || !exportTracking) return null;
+    if (desktopExportJob && desktopExportJob.job_id === exportTracking.jobId) {
+      return desktopExportJob;
+    }
+    return {
+      job_id: exportTracking.jobId,
+      status: 'queued',
+      worker_id: '本机（内嵌）',
+      created_at: null,
+      started_at: null,
+      finished_at: null,
+    };
+  }, [exportTracking, desktopExportJob]);
+
   const [exportFailed, setExportFailed] = useState(false);
   const [editorFlashMessage, setEditorFlashMessage] = useState<string | null>(null);
   const [editorFlashDownloadUrl, setEditorFlashDownloadUrl] = useState<string | null>(null);
@@ -1695,7 +1759,9 @@ export default function App() {
         .then((data) => {
           setProjects((prev) =>
             prev.map((p) =>
-              p.id === String(pid) ? mergeProjectFromDetailApi(p, data) : p,
+              p.id === String(pid)
+                ? mergeProjectFromDetailApi(p, data, detailMergeOptsForProject(p.id))
+                : p,
             ),
           );
         })
@@ -1708,9 +1774,17 @@ export default function App() {
       return () => {};
     }
 
-    const t = window.setInterval(sync, 4000);
+    // 桌面端：导出在 Electron 子进程完成，编辑器轮询仅用于同步流水线；略拉长间隔减轻本机 API 日志刷屏
+    const pollMs = isBarevidDesktop() ? 8000 : 4000;
+    const t = window.setInterval(sync, pollMs);
     return () => window.clearInterval(t);
-  }, [currentView, currentProjectId, shouldPollProjectDetail, editorDataVersion]);
+  }, [
+    currentView,
+    currentProjectId,
+    shouldPollProjectDetail,
+    editorDataVersion,
+    detailMergeOptsForProject,
+  ]);
 
   useEffect(() => {
     if (currentView !== 'editor' || userId === null) return;
@@ -1982,7 +2056,9 @@ export default function App() {
           .then((data) => {
             setProjects((prev) =>
               prev.map((p) =>
-                p.id === String(pid) ? mergeProjectFromDetailApi(p, data) : p,
+                p.id === String(pid)
+                  ? mergeProjectFromDetailApi(p, data, detailMergeOptsForProject(p.id))
+                  : p,
               ),
             );
           })
@@ -1995,6 +2071,7 @@ export default function App() {
     [
       applyExportVideoResponse,
       currentProjectId,
+      detailMergeOptsForProject,
       downloadSubmitting,
       exportSubmitting,
       postExportVideoBody,
@@ -2416,12 +2493,18 @@ export default function App() {
   /** 有导出任务跟进时，定时拉取该项目详情，保证列表/任务状态与 worker 队列同步（不仅依赖编辑器内轮询） */
   useEffect(() => {
     if (!exportTracking) return;
+    // 桌面端导出由本机拦截，服务器无 video_export_job；改由下方轮询 /export-video/status，避免无意义刷屏请求
+    if (isBarevidDesktop()) return;
     const pid = exportTracking.projectId;
     const refresh = () => {
       void apiFetch<ProjectDetailApi>(`/api/projects/${pid}`)
         .then((data) => {
           setProjects((prev) =>
-            prev.map((p) => (p.id === String(pid) ? mergeProjectFromDetailApi(p, data) : p)),
+            prev.map((p) =>
+              p.id === String(pid)
+                ? mergeProjectFromDetailApi(p, data, detailMergeOptsForProject(p.id))
+                : p,
+            ),
           );
         })
         .catch(() => {});
@@ -2429,15 +2512,45 @@ export default function App() {
     refresh();
     const t = window.setInterval(refresh, 2500);
     return () => window.clearInterval(t);
+  }, [exportTracking, detailMergeOptsForProject]);
+
+  /** 桌面端：轮询本机 Express 的导出状态（任务 id 与 FastAPI 队列无关） */
+  useEffect(() => {
+    if (!exportTracking || !isBarevidDesktop()) return;
+    const pid = exportTracking.projectId;
+    let cancelled = false;
+    const tick = () => {
+      void fetch(`/api/projects/${pid}/export-video/status`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((raw) => {
+          if (cancelled || raw == null) return;
+          setDesktopExportJob(mapVideoExportJob(raw));
+        })
+        .catch(() => {});
+    };
+    tick();
+    const t = window.setInterval(tick, 1500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(t);
+      setDesktopExportJob(null);
+    };
+  }, [exportTracking]);
+
+  useEffect(() => {
+    if (!exportTracking) setDesktopExportJob(null);
   }, [exportTracking]);
 
   const exportTrackedJob = useMemo(() => {
     if (!exportTracking) return null;
+    if (isBarevidDesktop() && desktopExportJobForDialog) {
+      return { job: desktopExportJobForDialog, projectId: exportTracking.projectId };
+    }
     const p = projects.find((x) => x.id === String(exportTracking.projectId));
     const j = p?.videoExportJob;
     if (!j || j.job_id !== exportTracking.jobId) return null;
     return { job: j, projectId: exportTracking.projectId };
-  }, [projects, exportTracking]);
+  }, [projects, exportTracking, desktopExportJobForDialog]);
 
   useEffect(() => {
     if (!exportTrackedJob) return;
@@ -2449,14 +2562,18 @@ export default function App() {
       setExportStatusOpen(false);
       void apiFetch<ProjectDetailApi>(`/api/projects/${pid}`).then((data) => {
         setProjects((prev) =>
-          prev.map((p) => (p.id === String(pid) ? mergeProjectFromDetailApi(p, data) : p)),
+          prev.map((p) =>
+            p.id === String(pid) ? mergeProjectFromDetailApi(p, data) : p,
+          ),
         );
         const rawUrl = job.output_url?.trim();
-        if (rawUrl) {
+        if (rawUrl && !isBarevidDesktop()) {
           setEditorFlashDownloadUrl(apiUrl(rawUrl));
         }
         setEditorFlashMessage(
-          '导出已完成：worker 已回传成片。可点击顶栏下载或使用下方链接。',
+          isBarevidDesktop()
+            ? '导出已完成：视频已写入本机「视频/Barevid」目录（应用可能已打开资源管理器）。'
+            : '导出已完成：worker 已回传成片。可点击顶栏下载或使用下方链接。',
         );
       });
     } else if (job.status === 'failed') {
@@ -2466,7 +2583,9 @@ export default function App() {
       setEditorFlashMessage(job.error_message || '视频导出失败');
       void apiFetch<ProjectDetailApi>(`/api/projects/${pid}`).then((data) => {
         setProjects((prev) =>
-          prev.map((p) => (p.id === String(pid) ? mergeProjectFromDetailApi(p, data) : p)),
+          prev.map((p) =>
+            p.id === String(pid) ? mergeProjectFromDetailApi(p, data) : p,
+          ),
         );
       });
     }
@@ -2475,10 +2594,13 @@ export default function App() {
   const exportJobForTracking = useMemo(() => {
     if (!exportTracking || !currentProjectId) return null;
     if (String(exportTracking.projectId) !== currentProjectId) return null;
+    if (isBarevidDesktop() && desktopExportJobForDialog) {
+      return desktopExportJobForDialog;
+    }
     const j = currentProject?.videoExportJob;
     if (!j || j.job_id !== exportTracking.jobId) return null;
     return j;
-  }, [currentProject?.videoExportJob, currentProjectId, exportTracking]);
+  }, [currentProject?.videoExportJob, currentProjectId, exportTracking, desktopExportJobForDialog]);
 
   const pl = currentProject?.pipeline;
   const serverPipelineSatisfied = Boolean(pl?.outline && pl?.audio && pl?.deck);
@@ -2649,6 +2771,7 @@ export default function App() {
           null
         }
         workflowExporting={headerExportStepState === 'running' && !serverExportVideoReady}
+        localDesktopWorker={isBarevidDesktop()}
       />
       <CancelRunningPipelineStepDialog
         open={confirmDialog.kind === 'cancel'}

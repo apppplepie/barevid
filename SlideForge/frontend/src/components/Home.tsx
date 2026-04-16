@@ -21,6 +21,7 @@ import {
   Download,
   Check,
   Link,
+  KeyRound,
 } from 'lucide-react';
 import { WorkflowStep } from './WorkflowProgressBar';
 import type { ServerWorkflow } from '../utils/workflowFromPipeline';
@@ -49,6 +50,7 @@ import {
   projectPipelineTagTone,
 } from '../utils/projectPipelineTagTone';
 import { SfTag } from './ui/SfTag';
+import { DesktopApiSecretsDialog } from './DesktopApiSecretsDialog';
 
 export interface Project {
   id: string;
@@ -261,8 +263,28 @@ export function Home({
   const [deleteDialog, setDeleteDialog] = useState<{ id: string; name: string } | null>(null);
   const [exportWorkerAlive, setExportWorkerAlive] = useState<number | null>(null);
   const [exportWorkerStatusErr, setExportWorkerStatusErr] = useState(false);
+  const [apiSecretsOpen, setApiSecretsOpen] = useState(false);
+
+  /** Electron：视频导出由本机子进程完成，不依赖向 FastAPI 心跳的「远程 Worker」 */
+  const isBarevidDesktop =
+    typeof window !== 'undefined' && Boolean(window.electronAPI?.isDesktop);
 
   useEffect(() => {
+    if (!isBarevidDesktop) return;
+    const unsub = window.electronAPI?.onOpenApiSecrets?.(() =>
+      setApiSecretsOpen(true),
+    );
+    return () => {
+      unsub?.();
+    };
+  }, [isBarevidDesktop]);
+
+  useEffect(() => {
+    if (isBarevidDesktop) {
+      setExportWorkerAlive(1);
+      setExportWorkerStatusErr(false);
+      return;
+    }
     let cancelled = false;
     const tick = async () => {
       try {
@@ -284,7 +306,7 @@ export function Home({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, []);
+  }, [isBarevidDesktop]);
 
   useEffect(() => {
     if (currentUserId == null) return;
@@ -559,40 +581,48 @@ export function Home({
             </div>
             <div
               className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${
-                exportWorkerStatusErr || exportWorkerAlive === null
-                  ? 'border-zinc-600/50 bg-zinc-900/50 text-zinc-400 light:border-slate-300 light:bg-slate-100 light:text-slate-600'
-                  : exportWorkerAlive > 0
-                    ? 'border-emerald-500/35 bg-emerald-950/25 text-emerald-300/95 light:border-emerald-600/30 light:bg-emerald-50 light:text-emerald-800'
-                    : 'border-red-500/40 bg-red-950/25 text-red-200/95 light:border-red-300 light:bg-red-50 light:text-red-800'
+                isBarevidDesktop
+                  ? 'border-emerald-500/35 bg-emerald-950/25 text-emerald-300/95 light:border-emerald-600/30 light:bg-emerald-50 light:text-emerald-800'
+                  : exportWorkerStatusErr || exportWorkerAlive === null
+                    ? 'border-zinc-600/50 bg-zinc-900/50 text-zinc-400 light:border-slate-300 light:bg-slate-100 light:text-slate-600'
+                    : exportWorkerAlive > 0
+                      ? 'border-emerald-500/35 bg-emerald-950/25 text-emerald-300/95 light:border-emerald-600/30 light:bg-emerald-50 light:text-emerald-800'
+                      : 'border-red-500/40 bg-red-950/25 text-red-200/95 light:border-red-300 light:bg-red-50 light:text-red-800'
               }`}
               title={
-                exportWorkerStatusErr
-                  ? '无法连接服务器获取导出 Worker 状态'
-                  : exportWorkerAlive === null
-                    ? '正在检测导出 Worker 状态'
-                    : exportWorkerAlive > 0
-                      ? '有在线导出 Worker，视频导出任务可排队处理'
-                      : '当前无在线导出 Worker，视频将无法导出'
+                isBarevidDesktop
+                  ? '桌面版使用应用内嵌的导出进程（Python/worker.exe + Playwright），不向服务器注册「远程 Worker」；此处不表示远程队列。'
+                  : exportWorkerStatusErr
+                    ? '无法连接服务器获取导出 Worker 状态'
+                    : exportWorkerAlive === null
+                      ? '正在检测导出 Worker 状态'
+                      : exportWorkerAlive > 0
+                        ? '有在线导出 Worker，视频导出任务可排队处理'
+                        : '当前无在线导出 Worker，视频将无法导出'
               }
             >
               <span
                 className={`h-2 w-2 shrink-0 rounded-full ${
-                  exportWorkerStatusErr || exportWorkerAlive === null
-                    ? 'bg-zinc-500 light:bg-slate-400'
-                    : exportWorkerAlive > 0
-                      ? 'bg-emerald-400 light:bg-emerald-500'
-                      : 'bg-red-400 light:bg-red-500'
+                  isBarevidDesktop
+                    ? 'bg-emerald-400 light:bg-emerald-500'
+                    : exportWorkerStatusErr || exportWorkerAlive === null
+                      ? 'bg-zinc-500 light:bg-slate-400'
+                      : exportWorkerAlive > 0
+                        ? 'bg-emerald-400 light:bg-emerald-500'
+                        : 'bg-red-400 light:bg-red-500'
                 }`}
                 aria-hidden
               />
               <span>
-                {exportWorkerStatusErr
-                  ? 'Worker 状态未知'
-                  : exportWorkerAlive === null
-                    ? '正在检测 Worker状态…'
-                    : exportWorkerAlive > 0
-                      ? `有 ${exportWorkerAlive} 个在线 Worker`
-                      : '无在线 Worker（无法导出视频）'}
+                {isBarevidDesktop
+                  ? '桌面版 · 本机导出可用'
+                  : exportWorkerStatusErr
+                    ? 'Worker 状态未知'
+                    : exportWorkerAlive === null
+                      ? '正在检测 Worker状态…'
+                      : exportWorkerAlive > 0
+                        ? `有 ${exportWorkerAlive} 个在线 Worker`
+                        : '无在线 Worker（无法导出视频）'}
               </span>
             </div>
           </div>
@@ -1045,6 +1075,21 @@ export function Home({
               </div>
             </div>
 
+            {isBarevidDesktop ? (
+              <button
+                type="button"
+                title="DeepSeek 与豆包语音密钥"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setApiSecretsOpen(true);
+                }}
+                className="pointer-events-auto absolute left-4 top-4 z-[60] inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-zinc-600/60 bg-zinc-900/90 px-3 py-1.5 text-xs font-medium text-zinc-200 shadow-sm backdrop-blur-sm transition select-none hover:border-violet-500/45 hover:bg-violet-950/30 hover:text-violet-100 light:border-slate-300 light:bg-white/95 light:text-slate-700 light:hover:border-violet-400 light:hover:bg-violet-50 light:hover:text-violet-900 light:shadow-slate-200/40"
+              >
+                <KeyRound className="h-3.5 w-3.5" aria-hidden />
+                API 密钥
+              </button>
+            ) : null}
             <button
               type="button"
               aria-pressed={creativeModeOn}
@@ -1429,6 +1474,10 @@ export function Home({
           </div>
         </div>
       ) : null}
+      <DesktopApiSecretsDialog
+        open={apiSecretsOpen}
+        onClose={() => setApiSecretsOpen(false)}
+      />
     </div>
   );
 }

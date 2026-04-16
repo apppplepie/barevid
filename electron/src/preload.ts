@@ -6,9 +6,24 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 
+export interface ApiSecretsPayload {
+  deepseekApiKey: string;
+  doubaoTtsAppId: string;
+  doubaoTtsAccessToken: string;
+}
+
 export interface ElectronAPI {
   /** 取当前配置的云端后端 URL */
   getBackendUrl: () => Promise<string>;
+  /** DeepSeek / 豆包 TTS（与 userData 下 api-secrets.env 同步） */
+  getApiSecrets: () => Promise<ApiSecretsPayload>;
+  setApiSecrets: (s: Partial<ApiSecretsPayload>) => Promise<void>;
+  /** 用系统默认程序打开 api-secrets.env */
+  openSecretsEnvFile: () => Promise<void>;
+  /** 在资源管理器中打开应用数据目录（含 config.json） */
+  revealUserDataFolder: () => Promise<void>;
+  /** 主菜单「API 密钥…」打开设置面板 */
+  onOpenApiSecrets: (cb: () => void) => () => void;
   /** 手动触发一个导出（通常由拦截的 API 自动触发，这个供调试用） */
   exportVideo: (projectId: number, params?: Record<string, unknown>) => Promise<number>;
   /** 取消导出 */
@@ -29,6 +44,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   isDesktop: true,
 
   getBackendUrl: () => ipcRenderer.invoke('cfg:getBackendUrl'),
+
+  getApiSecrets: () => ipcRenderer.invoke('cfg:getApiSecrets'),
+
+  setApiSecrets: (s: Partial<ApiSecretsPayload>) =>
+    ipcRenderer.invoke('cfg:setApiSecrets', s),
+
+  openSecretsEnvFile: () => ipcRenderer.invoke('cfg:openSecretsEnvFile'),
+
+  revealUserDataFolder: () => ipcRenderer.invoke('cfg:revealUserDataFolder'),
+
+  onOpenApiSecrets: (cb: () => void) => {
+    const handler = () => cb();
+    ipcRenderer.on('open-api-secrets', handler);
+    return () => ipcRenderer.removeListener('open-api-secrets', handler);
+  },
 
   exportVideo: (projectId: number, params?: Record<string, unknown>) =>
     ipcRenderer.invoke('export:start', { projectId, params }),

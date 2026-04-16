@@ -23,30 +23,50 @@ function fmtTime(iso: string | null | undefined): string {
 }
 
 /** 入队即视为「进行中」（排队等 worker 亦为进行中） */
-function phaseLabel(job: VideoExportJobInfo | null, workflowExporting: boolean): string {
+function phaseLabel(
+  job: VideoExportJobInfo | null,
+  workflowExporting: boolean,
+  localDesktopWorker: boolean,
+): string {
   if (job?.status === 'succeeded') return '已完成';
   if (job?.status === 'failed') return '失败';
-  if (job?.status === 'running') return '进行中（worker 处理）';
-  if (job?.status === 'queued') return '进行中（排队）';
+  if (job?.status === 'running') {
+    return localDesktopWorker ? '进行中（本机导出）' : '进行中（worker 处理）';
+  }
+  if (job?.status === 'queued') {
+    return localDesktopWorker ? '进行中（本机排队）' : '进行中（排队）';
+  }
   if (workflowExporting) return '已提交';
   return '—';
 }
 
-function phaseDetail(job: VideoExportJobInfo | null, workflowExporting: boolean): string {
+function phaseDetail(
+  job: VideoExportJobInfo | null,
+  workflowExporting: boolean,
+  localDesktopWorker: boolean,
+): string {
   if (job?.status === 'succeeded') {
-    return 'worker 已成功上传成片，流水线已更新。可使用顶栏下载或下方链接。';
+    return localDesktopWorker
+      ? '本机导出已完成，视频已写入「视频/Barevid」目录。流水线状态稍后会与服务器同步。'
+      : 'worker 已成功上传成片，流水线已更新。可使用顶栏下载或下方链接。';
   }
   if (job?.status === 'failed') {
     return (job.error_message || '').trim() || '导出失败，请查看错误信息或重试。';
   }
   if (job?.status === 'running') {
-    return '远程 worker 已领取任务，正在浏览器中录制与合成。请保持 worker 进程运行。';
+    return localDesktopWorker
+      ? '应用内置导出进程正在用浏览器录制画面并调用 ffmpeg 合成，请保持 Barevid 运行（可最小化）。'
+      : '远程 worker 已领取任务，正在浏览器中录制与合成。请保持 worker 进程运行。';
   }
   if (job?.status === 'queued') {
-    return '任务在服务器队列中，等待 worker 领取；领取后即开始处理。请保持 worker 运行。';
+    return localDesktopWorker
+      ? '任务已进入本机导出队列，即将开始处理。'
+      : '任务在服务器队列中，等待 worker 领取；领取后即开始处理。请保持 worker 运行。';
   }
   if (workflowExporting) {
-    return '导出请求已发送，正在与服务器同步任务状态…';
+    return localDesktopWorker
+      ? '正在拉取本机导出任务状态…'
+      : '导出请求已发送，正在与服务器同步任务状态…';
   }
   return '';
 }
@@ -57,6 +77,8 @@ interface ExportVideoStatusDialogProps {
   job: VideoExportJobInfo | null;
   /** workflow 已标为 exporting 但尚未拿到 job 摘要时 */
   workflowExporting: boolean;
+  /** Electron 桌面版：导出由本机子进程完成，非服务器 worker 队列 */
+  localDesktopWorker?: boolean;
 }
 
 export function ExportVideoStatusDialog({
@@ -64,11 +86,12 @@ export function ExportVideoStatusDialog({
   onClose,
   job,
   workflowExporting,
+  localDesktopWorker = false,
 }: ExportVideoStatusDialogProps) {
   if (!open) return null;
 
-  const title = phaseLabel(job, workflowExporting);
-  const detail = phaseDetail(job, workflowExporting);
+  const title = phaseLabel(job, workflowExporting, localDesktopWorker);
+  const detail = phaseDetail(job, workflowExporting, localDesktopWorker);
   const inProgress =
     job?.status === 'queued' ||
     job?.status === 'running' ||
@@ -132,9 +155,13 @@ export function ExportVideoStatusDialog({
             <dt className="text-zinc-500 light:text-slate-500">队列状态</dt>
             <dd className="text-zinc-200 light:text-slate-800">
               {job?.status === 'queued'
-                ? '进行中 · 等待 worker'
+                ? localDesktopWorker
+                  ? '进行中 · 本机队列'
+                  : '进行中 · 等待 worker'
                 : job?.status === 'running'
-                  ? '进行中 · worker 执行'
+                  ? localDesktopWorker
+                    ? '进行中 · 本机导出'
+                    : '进行中 · worker 执行'
                   : job?.status === 'succeeded'
                     ? '已完成'
                     : job?.status === 'failed'
@@ -173,13 +200,23 @@ export function ExportVideoStatusDialog({
           ) : null}
         </dl>
 
-        <p className="mt-3 text-xs text-zinc-500 light:text-slate-500">
-          若长时间停在排队，请检查 worker 与服务器{' '}
-          <code className="rounded bg-zinc-800 light:bg-slate-100 px-1 py-0.5 text-[10px] text-zinc-400 light:text-slate-600">
-            EXPORT_WORKER_TOKEN
-          </code>{' '}
-          是否一致。
-        </p>
+        {localDesktopWorker ? (
+          <p className="mt-3 text-xs text-zinc-500 light:text-slate-500">
+            桌面版由应用内嵌的导出进程处理（Python/worker.exe + Playwright），无需单独启动远程 worker，也无需配置{' '}
+            <code className="rounded bg-zinc-800 light:bg-slate-100 px-1 py-0.5 text-[10px] text-zinc-400 light:text-slate-600">
+              EXPORT_WORKER_TOKEN
+            </code>
+            。
+          </p>
+        ) : (
+          <p className="mt-3 text-xs text-zinc-500 light:text-slate-500">
+            若长时间停在排队，请检查 worker 与服务器{' '}
+            <code className="rounded bg-zinc-800 light:bg-slate-100 px-1 py-0.5 text-[10px] text-zinc-400 light:text-slate-600">
+              EXPORT_WORKER_TOKEN
+            </code>{' '}
+            是否一致。
+          </p>
+        )}
 
         <div className="mt-5 flex justify-end">
           <button

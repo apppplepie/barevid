@@ -2,6 +2,10 @@ node_modules/
 dist/
 release/
 resources/ffmpeg.exe
+resources/ffprobe.exe
 resources/icon.ico
-# PyInstaller 产物（由 npm run build:backend 生成，勿入库）
+# PyInstaller 产物（由 npm run build:backend / build:worker 生成，勿入库）
 resources/barevid-api/barevid-api.exe
+resources/worker.exe
+# Playwright 下载的浏览器体积大，不提交；保留目录占位
+resources/playwright-browsers/chromium-*

@@ -4,7 +4,13 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
 export function apiUrl(path: string): string {
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  return `${API_BASE}${path}`;
+  const p = path.startsWith('/') ? path : `/${path}`;
+  if (!API_BASE) return p;
+  // 避免 VITE_API_BASE_URL 以 /api 结尾时又拼 /api/... → /api/api/...
+  if (API_BASE.endsWith('/api') && p.startsWith('/api/')) {
+    return `${API_BASE}${p.slice(4)}`;
+  }
+  return `${API_BASE}${p}`;
 }
 
 export function getStoredAuthToken(): string | null {

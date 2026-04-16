@@ -82,6 +82,12 @@ export interface StartBundledBackendParams {
   /** 与后端 EXPORT_WORKER_TOKEN 一致 */
   exportWorkerToken: string;
   apiPort?: number;
+  /** 与 FastAPI Settings 一致，经环境变量注入（见 backend/app/config.py） */
+  apiSecrets?: {
+    deepseekApiKey?: string;
+    doubaoTtsAppId?: string;
+    doubaoTtsAccessToken?: string;
+  };
 }
 
 /**
@@ -101,6 +107,7 @@ export function startBundledBackend(
   const apiOrigin = `http://127.0.0.1:${apiPort}`;
   const feOrigin = `http://127.0.0.1:${params.expressPort}`;
 
+  const sk = params.apiSecrets;
   const env = {
     ...process.env,
     BAREVID_API_PORT: String(apiPort),
@@ -112,6 +119,14 @@ export function startBundledBackend(
     EXPORT_WORKER_TOKEN: params.exportWorkerToken,
     SLIDEFORGE_WORKER_KEY: params.exportWorkerToken,
     SLIDEFORGE_PUBLIC_BASE_URL: apiOrigin,
+    /** 显式写入（含空串）避免子进程继承 shell 里残留的同名变量 */
+    ...(sk
+      ? {
+          DEEPSEEK_API_KEY: (sk.deepseekApiKey ?? '').trim(),
+          DOUBAO_TTS_APP_ID: (sk.doubaoTtsAppId ?? '').trim(),
+          DOUBAO_TTS_ACCESS_TOKEN: (sk.doubaoTtsAccessToken ?? '').trim(),
+        }
+      : {}),
   };
 
   const child = cp.spawn(exePath, [], {

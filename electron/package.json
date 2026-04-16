@@ -6,13 +6,20 @@
   "main": "dist/main.js",
   "private": true,
   "scripts": {
-    "dev": "tsc && electron dist/main.js",
+    "dev": "concurrently -k -n api,el \"npm run dev:api\" \"npm run dev:electron\"",
+    "dev:api": "cd ../SlideForge/backend && python -m uvicorn app.main:app --host 127.0.0.1 --port 8000",
+    "dev:electron": "wait-on http-get://127.0.0.1:8000/api/health && tsc && electron dist/main.js",
+    "dev:only": "tsc && electron dist/main.js",
     "build:ts": "tsc",
     "build:frontend": "cd ../SlideForge/frontend && npm run build",
     "build:backend": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-backend.ps1",
+    "build:worker": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-worker.ps1",
     "build": "npm run build:frontend && npm run build:ts && electron-builder",
-    "build:win": "npm run build:frontend && npm run build:ts && electron-builder --win",
-    "pack": "npm run build:ts && electron-builder --dir"
+    "build:win": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-win-full.ps1",
+    "build:win:nobackend": "npm run build:frontend && npm run build:ts && electron-builder --win",
+    "build:win:proxy": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-win-proxy.ps1",
+    "pack": "npm run build:ts && electron-builder --dir",
+    "clean:release": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/clean-release.ps1"
   },
   "dependencies": {
     "express": "^4.21.2",
@@ -21,9 +28,11 @@
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node": "^22.0.0",
+    "concurrently": "^9.2.1",
     "electron": "^33.4.0",
     "electron-builder": "^25.1.8",
-    "typescript": "~5.8.2"
+    "typescript": "~5.8.2",
+    "wait-on": "^9.0.5"
   },
   "build": {
     "appId": "com.barevid.desktop",
@@ -40,26 +49,57 @@
       {
         "from": "../SlideForge/frontend/dist",
         "to": "frontend",
-        "filter": ["**/*"]
-      },
-      {
-        "from": "resources/ffmpeg.exe",
-        "to": "ffmpeg.exe"
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "resources/barevid-api",
         "to": "barevid-api",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources",
+        "to": ".",
+        "filter": [
+          "worker.exe",
+          "ffmpeg.exe",
+          "ffprobe.exe"
+        ]
+      },
+      {
+        "from": "resources/playwright-browsers",
+        "to": "playwright-browsers",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "extraFiles": [
+      {
+        "from": "resources/env.example",
+        "to": "env.example"
       }
     ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
-      "icon": "resources/icon.ico"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerLanguages": ["zh_CN", "en_US"],
+      "installerLanguages": [
+        "zh_CN",
+        "en_US"
+      ],
       "language": "2052"
     }
   }

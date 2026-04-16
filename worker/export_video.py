@@ -25,7 +25,20 @@ def _barevid_root() -> Path:
 
 
 def _default_storage_root() -> Path:
+    """与 FastAPI 的 STORAGE_ROOT 对齐；Electron 会通过环境变量注入 userData/storage。"""
+    for key in ("STORAGE_ROOT", "SLIDEFORGE_STORAGE_ROOT"):
+        raw = (os.environ.get(key) or "").strip()
+        if raw:
+            return Path(raw)
     return _barevid_root() / "SlideForge" / "backend" / "storage"
+
+
+def _resolve_dotenv_path() -> Path:
+    """优先 Barevid.exe 同目录（BAREVID_DOTENV_DIR）；开发时默认 worker/.env。"""
+    d = (os.environ.get("BAREVID_DOTENV_DIR") or "").strip()
+    if d:
+        return Path(d) / ".env"
+    return Path(__file__).resolve().parent / ".env"
 
 
 def _which(cmd: str) -> str | None:
@@ -780,7 +793,7 @@ def _export_timeline_clock_enabled() -> bool:
 
 
 def main(argv: Iterable[str] | None = None) -> int:
-    env_path = Path(__file__).resolve().parent / ".env"
+    env_path = _resolve_dotenv_path()
     if load_dotenv is not None:
         load_dotenv(env_path)
 

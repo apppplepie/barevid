@@ -4,11 +4,10 @@
  *
  * 启动流程：
  *   1. 读/写本地配置（后端 URL、worker key 等）
- *   2. 检测 ffmpeg / Python / Playwright Chromium
- *   3. 如果 Chromium 缺失 → 显示安装进度窗口，安装完毕后继续
- *   4. 若 resources/barevid-api/barevid-api.exe 存在 → 启动捆绑 FastAPI（SQLite 在 userData）
- *   5. 启动本地 HTTP server（前端静态文件 + API 代理 + 导出拦截）
- *   6. 打开主窗口加载 http://127.0.0.1:<port>
+ *   2. ffmpeg / Playwright Chromium 由用户按需自行安装；仅在导出时检测并提示
+ *   3. 若 resources/barevid-api/barevid-api.exe 存在 → 启动捆绑 FastAPI（SQLite 在 userData）
+ *   4. 启动本地 HTTP server（前端静态文件 + API 代理 + 导出拦截）
+ *   5. 打开主窗口加载 http://127.0.0.1:<port>
  */
 
 import {
@@ -25,12 +24,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { randomBytes } from 'crypto';
 
-import {
-  runChecks,
-  installChromium,
-  resolveFfmpeg,
-  resolvePython,
-} from './checker';
+import { resolveFfmpeg, resolvePython } from './checker';
 import {
   startLocalServer,
   getFreePort,
@@ -50,27 +44,103 @@ interface AppConfig {
   backendUrl: string;  // 云端后端，如 https://api.barevid.com
   /** 与 SlideForge EXPORT_WORKER_TOKEN 一致；捆绑后端时必填 */
   exportWorkerToken?: string;
+  /** 与 backend DEEPSEEK_API_KEY 等一致；另有一份 api-secrets.env 供手动编辑 */
+  deepseekApiKey?: string;
+  doubaoTtsAppId?: string;
+  doubaoTtsAccessToken?: string;
 }
 
 function configPath(): string {
   return path.join(app.getPath('userData'), 'config.json');
 }
 
+/** 与 config.json 同目录，KEY=value 形式；存在时覆盖 json 里同名三项（便于记事本编辑） */
+function secretsEnvPath(): string {
+  return path.join(app.getPath('userData'), 'api-secrets.env');
+}
+
+function parseDotEnvContent(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const line of text.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) continue;
+    const eq = t.indexOf('=');
+    if (eq <= 0) continue;
+    const k = t.slice(0, eq).trim();
+    let v = t.slice(eq + 1).trim();
+    if (
+      (v.startsWith('"') && v.endsWith('"')) ||
+      (v.startsWith("'") && v.endsWith("'"))
+    ) {
+      v = v.slice(1, -1);
+    }
+    out[k] = v;
+  }
+  return out;
+}
+
+function readSecretsEnvOverlay(): Partial<
+  Pick<AppConfig, 'deepseekApiKey' | 'doubaoTtsAppId' | 'doubaoTtsAccessToken'>
+> {
+  const p = secretsEnvPath();
+  if (!fs.existsSync(p)) return {};
+  try {
+    const parsed = parseDotEnvContent(fs.readFileSync(p, 'utf-8'));
+    const o: Partial<
+      Pick<AppConfig, 'deepseekApiKey' | 'doubaoTtsAppId' | 'doubaoTtsAccessToken'>
+    > = {};
+    if (Object.prototype.hasOwnProperty.call(parsed, 'DEEPSEEK_API_KEY')) {
+      o.deepseekApiKey = parsed.DEEPSEEK_API_KEY ?? '';
+    }
+    if (Object.prototype.hasOwnProperty.call(parsed, 'DOUBAO_TTS_APP_ID')) {
+      o.doubaoTtsAppId = parsed.DOUBAO_TTS_APP_ID ?? '';
+    }
+    if (Object.prototype.hasOwnProperty.call(parsed, 'DOUBAO_TTS_ACCESS_TOKEN')) {
+      o.doubaoTtsAccessToken = parsed.DOUBAO_TTS_ACCESS_TOKEN ?? '';
+    }
+    return o;
+  } catch {
+    return {};
+  }
+}
+
+function formatEnvLine(key: string, value: string): string {
+  if (value === '') return `${key}=`;
+  if (/^[\w.@+-]+$/.test(value)) return `${key}=${value}`;
+  return `${key}="${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function writeSecretsEnvFile(cfg: AppConfig): void {
+  const body = [
+    '# Barevid 桌面端 — DeepSeek 与豆包语音；与设置界面同步。',
+    '# 修改后请重启应用，捆绑后端 barevid-api 才会加载新密钥。',
+    formatEnvLine('DEEPSEEK_API_KEY', cfg.deepseekApiKey ?? ''),
+    formatEnvLine('DOUBAO_TTS_APP_ID', cfg.doubaoTtsAppId ?? ''),
+    formatEnvLine('DOUBAO_TTS_ACCESS_TOKEN', cfg.doubaoTtsAccessToken ?? ''),
+    '',
+  ].join('\n');
+  fs.mkdirSync(path.dirname(secretsEnvPath()), { recursive: true });
+  fs.writeFileSync(secretsEnvPath(), body, 'utf-8');
+}
+
 function loadConfig(): AppConfig {
   const defaults: AppConfig = {
     backendUrl: 'http://127.0.0.1:8000',
   };
+  let base: AppConfig;
   try {
     const raw = fs.readFileSync(configPath(), 'utf-8');
-    return { ...defaults, ...(JSON.parse(raw) as Partial<AppConfig>) };
+    base = { ...defaults, ...(JSON.parse(raw) as Partial<AppConfig>) };
   } catch {
-    return defaults;
+    base = { ...defaults };
   }
+  return { ...base, ...readSecretsEnvOverlay() };
 }
 
 function saveConfig(cfg: AppConfig): void {
   fs.mkdirSync(path.dirname(configPath()), { recursive: true });
   fs.writeFileSync(configPath(), JSON.stringify(cfg, null, 2), 'utf-8');
+  writeSecretsEnvFile(cfg);
 }
 
 function ensureExportWorkerToken(cfg: AppConfig): string {
@@ -87,7 +157,6 @@ function ensureExportWorkerToken(cfg: AppConfig): string {
 // ── 全局状态 ─────────────────────────────────────────────────────────────────
 
 let mainWindow: BrowserWindow | null = null;
-let setupWindow: BrowserWindow | null = null;
 let localPort: number | null = null;
 let bundledBackendHandle: BundledBackendHandle | null = null;
 
@@ -124,30 +193,7 @@ async function bootstrap(): Promise<void> {
   const cfg = loadConfig();
   let backendUrl = cfg.backendUrl;
 
-  // 1. 检测依赖
-  const checks = await runChecks();
-
-  if (checks.errors.length > 0) {
-    const msg = checks.errors.join('\n');
-    const choice = await dialog.showMessageBox({
-      type: 'warning',
-      title: '依赖缺失',
-      message: '部分依赖未就绪，导出功能将不可用：\n\n' + msg,
-      buttons: ['仍然启动', '退出'],
-      defaultId: 0,
-    });
-    if (choice.response === 1) {
-      app.quit();
-      return;
-    }
-  }
-
-  // 2. 如果 Chromium 缺失，弹安装进度窗口
-  if (!checks.chromiumReady && checks.python) {
-    await showSetupAndInstall(checks.python);
-  }
-
-  // 依赖就绪后再占端口并启动捆绑后端，缩短「端口已分配但未监听」的窗口
+  // 占端口并启动捆绑后端，缩短「端口已分配但未监听」的窗口
   const bundledExe = resolveBundledBackendExe();
   const expressListenPort = await getFreePort();
 
@@ -157,6 +203,11 @@ async function bootstrap(): Promise<void> {
       expressPort: expressListenPort,
       exportWorkerToken: token,
       apiPort: BUNDLED_API_PORT,
+      apiSecrets: {
+        deepseekApiKey: cfg.deepseekApiKey,
+        doubaoTtsAppId: cfg.doubaoTtsAppId,
+        doubaoTtsAccessToken: cfg.doubaoTtsAccessToken,
+      },
     });
     backendUrl = `http://127.0.0.1:${BUNDLED_API_PORT}`;
     cfg.backendUrl = backendUrl;
@@ -173,9 +224,19 @@ async function bootstrap(): Promise<void> {
       app.quit();
       return;
     }
+  } else if (backendUrlConflictsWithExpressPort(backendUrl, expressListenPort)) {
+    dialog.showErrorBox(
+      '后端地址配置错误',
+      `当前「后端 URL」(${backendUrl}) 与 Electron 本地页面端口（${expressListenPort}）相同，API 请求会代理到自己，导致注册/登录失败。\n\n` +
+        '请把后端改为 FastAPI 地址，例如：http://127.0.0.1:8000（或捆绑后端 http://127.0.0.1:18080），\n' +
+        '并先在本机启动 uvicorn / barevid-api。\n\n' +
+        '可删除用户目录下的 config.json 中的 backendUrl 后重试。'
+    );
+    app.quit();
+    return;
   }
 
-  // 3. 准备 ExportManager
+  // 2. 准备 ExportManager
   const ffmpeg = resolveFfmpeg() ?? 'ffmpeg';
   const python = resolvePython() ?? 'python';
   const exportScript = resolveExportScript();
@@ -188,7 +249,7 @@ async function bootstrap(): Promise<void> {
     backendUrl,
   });
 
-  // 4. 启动本地 server（端口需与捆绑后端的 EXPORT_FRONTEND_URL 一致）
+  // 3. 启动本地 server（端口需与捆绑后端的 EXPORT_FRONTEND_URL 一致）
   const srv = await startLocalServer(backendUrl, exportManager, {
     listenPort: expressListenPort,
   });
@@ -197,86 +258,11 @@ async function bootstrap(): Promise<void> {
   // 把真实端口注入 exportManager（用于 Playwright 录制本地前端）
   (exportManager as any).frontendUrl = `http://127.0.0.1:${localPort}`;
 
-  // 5. 打开主窗口
+  // 4. 打开主窗口
   createMainWindow(localPort);
 
-  // 6. 注册 IPC handlers
+  // 5. 注册 IPC handlers
   registerIpc(cfg, exportManager);
-}
-
-// ── 安装进度窗口 ──────────────────────────────────────────────────────────────
-
-function showSetupAndInstall(python: string): Promise<void> {
-  return new Promise((resolve) => {
-    setupWindow = new BrowserWindow({
-      width: 540,
-      height: 360,
-      resizable: false,
-      title: 'Barevid – 首次初始化',
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-      },
-    });
-
-    const html = buildSetupHtml();
-    setupWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-    setupWindow.setMenu(null);
-
-    setupWindow.webContents.once('did-finish-load', async () => {
-      const send = (msg: string) => {
-        setupWindow?.webContents.executeJavaScript(
-          `document.getElementById('log').textContent += ${JSON.stringify(msg + '\n')};` +
-          `document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;`
-        ).catch(() => {});
-      };
-
-      send('正在安装 Playwright Chromium，首次约需下载 150MB...');
-
-      try {
-        await installChromium(python, (line) => send(line.trimEnd()));
-        send('\n✅ Chromium 安装完成，正在启动应用...');
-        await new Promise((r) => setTimeout(r, 1200));
-      } catch (err) {
-        send(`\n❌ 安装失败：${err}`);
-        await dialog.showMessageBox(setupWindow!, {
-          type: 'error',
-          title: '安装失败',
-          message: `Playwright Chromium 安装失败：\n${err}\n\n导出功能不可用。`,
-          buttons: ['继续'],
-        });
-      } finally {
-        setupWindow?.close();
-        setupWindow = null;
-        resolve();
-      }
-    });
-  });
-}
-
-function buildSetupHtml(): string {
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8"/>
-<title>初始化</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #0d1117; color: #e6edf3; font-family: 'Segoe UI', system-ui, sans-serif;
-         display: flex; flex-direction: column; height: 100vh; padding: 24px; }
-  h2 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; color: #58a6ff; }
-  p  { font-size: 0.8rem; color: #8b949e; margin-bottom: 16px; }
-  #log { flex: 1; background: #161b22; border: 1px solid #30363d; border-radius: 6px;
-         padding: 12px; font-family: monospace; font-size: 0.75rem; line-height: 1.6;
-         white-space: pre-wrap; overflow-y: auto; color: #c9d1d9; }
-</style>
-</head>
-<body>
-  <h2>⚙️ 首次初始化</h2>
-  <p>正在准备视频渲染所需的 Chromium 浏览器，仅需执行一次。</p>
-  <div id="log">请稍候...</div>
-</body>
-</html>`;
 }
 
 // ── 主窗口 ────────────────────────────────────────────────────────────────────
@@ -327,10 +313,58 @@ function registerIpc(cfg: AppConfig, exportManager: ExportManager): void {
     }
   );
 
+  ipcMain.handle('cfg:getApiSecrets', () => {
+    const m = loadConfig();
+    return {
+      deepseekApiKey: m.deepseekApiKey ?? '',
+      doubaoTtsAppId: m.doubaoTtsAppId ?? '',
+      doubaoTtsAccessToken: m.doubaoTtsAccessToken ?? '',
+    };
+  });
+
+  ipcMain.handle(
+    'cfg:setApiSecrets',
+    (
+      _e,
+      s: {
+        deepseekApiKey?: string;
+        doubaoTtsAppId?: string;
+        doubaoTtsAccessToken?: string;
+      }
+    ) => {
+      cfg.deepseekApiKey = s.deepseekApiKey ?? '';
+      cfg.doubaoTtsAppId = s.doubaoTtsAppId ?? '';
+      cfg.doubaoTtsAccessToken = s.doubaoTtsAccessToken ?? '';
+      saveConfig(cfg);
+    }
+  );
+
+  ipcMain.handle('cfg:openSecretsEnvFile', () => {
+    const p = secretsEnvPath();
+    shell.openPath(p);
+  });
+
+  ipcMain.handle('cfg:revealUserDataFolder', () => {
+    shell.openPath(app.getPath('userData'));
+  });
+
   ipcMain.handle(
     'export:start',
-    (_e, { projectId, params }: { projectId: number; params?: Record<string, unknown> }) => {
-      return exportManager.enqueue(projectId, params ?? {});
+    (
+      _e,
+      {
+        projectId,
+        params,
+        authorization,
+      }: {
+        projectId: number;
+        params?: Record<string, unknown>;
+        authorization?: string;
+      }
+    ) => {
+      return exportManager.enqueue(projectId, params ?? {}, {
+        authorization,
+      });
     }
   );
 
@@ -352,6 +386,12 @@ function buildMenu(): Electron.Menu {
     {
       label: '文件',
       submenu: [
+        {
+          label: 'API 密钥与语音服务…',
+          click: () => {
+            mainWindow?.webContents.send('open-api-secrets');
+          },
+        },
         {
           label: '打开导出目录',
           click: () => {
@@ -398,6 +438,28 @@ function buildMenu(): Electron.Menu {
 }
 
 // ── 工具 ──────────────────────────────────────────────────────────────────────
+
+/** 后端 URL 误填成与 Electron 本地 HTTP 同一端口时，代理会打到页面服务自身 */
+function backendUrlConflictsWithExpressPort(
+  apiUrlStr: string,
+  expressPort: number
+): boolean {
+  try {
+    const u = new URL(apiUrlStr);
+    const h = u.hostname.toLowerCase();
+    if (h !== '127.0.0.1' && h !== 'localhost') {
+      return false;
+    }
+    const port = u.port
+      ? Number(u.port)
+      : u.protocol === 'https:'
+        ? 443
+        : 80;
+    return port === expressPort;
+  } catch {
+    return false;
+  }
+}
 
 function resolveExportScript(): string {
   // 打包后 worker.exe 不需要指向 .py 文件
