@@ -47,6 +47,9 @@ worker/worker_tasks.db-shm
 SlideForge/backend/build/
 SlideForge/backend/barevid-api.spec
 
+# Worker：PyInstaller 构建目录（体积大，勿入库；由 worker/worker.spec 本地构建）
+worker/build/
+
 # barevidweb: 演示用视频体积大，勿提交（本地或 CDN；GitHub clone 更轻）
 barevidweb/public/vidsrc/*.mp4
 
