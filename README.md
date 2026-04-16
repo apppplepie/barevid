@@ -101,6 +101,7 @@ barevid/
 ├── barevidweb/          # 可选：对外宣传站（Vite/React）；默认 compose 不包含，需单独部署见该目录
 ├── docs/demo/           # 可选：README/文档用的演示短视频（mp4/webm）
 ├── SlideForge/          # 主应用：FastAPI 后端 + Vite/React 前端（亦可单独 docker compose）
+├── electron/            # 可选：Barevid 桌面端（Electron，Windows 安装包）
 ├── worker/              # 导出 Worker：Playwright + ffmpeg；根 compose 会构建并运行
 └── README.md            # 本文件
 ```
@@ -120,7 +121,7 @@ barevid/
 2. **声线克隆 / 自定义音色**：这意味着你可以克隆自己的语音假装视频是自己古法制作~~更好的糊弄任务~~。
 3. **自动塞图**：提示词或规则驱动，把给定素材 **插进对应页**。
 4. **自动图表**：数据进来 → 页面上 **出图、出表**，更精准的数据对比。
-5. **打包做成桌面应用**：完全实现私人部署（然而我本身是写前端的，实现这个完全取决于我的 AI 能不能自己写完）。
+5. **打包做成桌面应用**：仓库已含 **Windows 桌面端**（`electron/`，见下「桌面客户端」）；完全私人部署仍可按需组合 Docker / 本机后端。
 
 欢迎 PR：**文档、国际化、Coqui 集成示例、Docker Compose 一键起全栈** 等。
 
@@ -186,6 +187,26 @@ docker compose up -d --build --quiet-build
 1. 配置并启动 **SlideForge/backend**（Python）与 **SlideForge/frontend**（Node）。
 2. 按需配置 **worker/.env** 与后端的导出相关环境变量，启动 `worker_export_video.py`。
 
+### 桌面客户端（Electron · Windows）
+
+仓库内 **`electron/`** 提供 **Barevid 桌面版**：内置本地页面与 API 代理，可选捆绑本机 API / 导出能力（以你本地的 `electron-builder` 与脚本配置为准）。**在 `electron/` 目录下**执行（需已安装 Node）：
+
+| 命令 | 说明 |
+|------|------|
+| `npm install` | 安装依赖（首次） |
+| `npm run build` | 构建前端 + 编译 TS + **打 Windows 安装包**（NSIS），产物在 **`electron/release/`** |
+| `npm run build:win:nobackend` | 同上，但不走完整 `build-win-full.ps1`（仅前端 + 打包） |
+| `npm run build:win` | 走 **`scripts/build-win-full.ps1`** 的完整流程（含后端/worker 等约定步骤） |
+
+安装包文件名类似 **`Barevid Setup 0.1.0.exe`**（版本以 **`electron/package.json`** 的 `version` 为准）。首次使用需在应用内填写 **DeepSeek / 豆包 TTS** 密钥，或编辑用户数据目录下的 **`api-secrets.env`**（与界面保存同步）。
+
+**发布到 GitHub（New release）可参考：**
+
+1. **Tag**：与桌面版版本对齐，例如 **`v0.1.0`**（与 `electron/package.json` 的 `version` 一致，便于对照）。
+2. **Title（标题）**：例如 **`Barevid Desktop v0.1.0 · Windows x64`**。
+3. **Release notes（正文）**可写清：支持系统（如 Windows 10/11 x64）、这是 **实验性/首个** 桌面构建、主要功能（本地打开应用、配置 API 密钥、导出等）、**已知问题**。（校验哈希不必写，需要时自行补充即可。）
+4. **Assets**：把 **`electron/release/`** 里生成的 **`*.exe`**（以及可选的 `latest.yml` 若你做自动更新）拖到 Release 附件；**不要把真实 API 密钥写进 Release 说明**。
+
 ---
 
 ## 命名约定（给协作者扫盲）
@@ -242,6 +263,7 @@ barevid/
 ├── barevidweb/          # Optional marketing site (Vite/React); not in default compose
 ├── docs/demo/           # Optional: short demo clips for README/docs (mp4/webm)
 ├── SlideForge/          # Main app: FastAPI + Vite/React (or its own compose)
+├── electron/            # Optional: Barevid Desktop (Electron, Windows installer)
 ├── worker/              # Export worker: Playwright + ffmpeg
 └── README.md
 ```
@@ -265,6 +287,16 @@ Typical pipeline: messy text → LLM structures content → TTS per segment → 
 5. Open **`http://127.0.0.1:3000`** (app), **`http://127.0.0.1:8000`** (API), MySQL **`127.0.0.1:3307`**.
 
 See **[SlideForge/README.md](./SlideForge/README.md)** for variants (no worker, pull-only, etc.).
+
+### Desktop app (Electron · Windows)
+
+The **`electron/`** folder builds a **Barevid Desktop** installer. From **`electron/`**:
+
+- **`npm run build`** — build web app + TypeScript + **electron-builder** → output under **`electron/release/`** (e.g. **`Barevid Setup x.y.z.exe`**; version from **`electron/package.json`**).
+- **`npm run build:win:nobackend`** — same without the full `build-win-full.ps1` script.
+- **`npm run build:win`** — runs **`scripts/build-win-full.ps1`** (full pipeline as maintained in-repo).
+
+**GitHub Release:** use a tag like **`v0.1.0`**, title e.g. **`Barevid Desktop v0.1.0 · Windows x64`**, describe OS support + highlights + known issues, attach the **`*.exe`** from **`electron/release/`**, and **never** paste real API keys in release notes.
 
 ### Naming
 
