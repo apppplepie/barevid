@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Github, Terminal, Globe } from 'lucide-react';
+import { Github, Globe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { BAREVID_APP_URL, BAREVID_REPO_URL, CREEPENDER_BLOG_URL } from '../externalLinks';
@@ -18,8 +18,8 @@ export function Header() {
           animate={{ opacity: 1, x: 0 }}
           className="flex items-center gap-3 text-xl font-black tracking-tighter group cursor-pointer"
         >
-          <div className="w-8 h-8 bg-primary/10 flex items-center justify-center rounded border border-primary/30 group-hover:border-primary/80 group-hover:shadow-[0_0_15px_rgba(176,38,255,0.4)] transition-all duration-300">
-            <Terminal className="text-primary w-4 h-4" />
+          <div className="w-8 h-8 overflow-hidden rounded border border-primary/30 bg-primary/10 flex items-center justify-center group-hover:border-primary/80 group-hover:shadow-[0_0_15px_rgba(176,38,255,0.4)] transition-all duration-300">
+            <img src="/favicon.ico" alt="" className="h-full w-full object-contain" width={32} height={32} />
           </div>
           <span className="text-white uppercase tracking-widest text-lg">
             Bare<span className="text-primary">Vid</span>

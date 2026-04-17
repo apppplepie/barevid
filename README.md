@@ -1,4 +1,41 @@
-# Barevid · 白板影像 · Whiteboard Video
+# Barevid
+
+**Paste any article → One Barevid project gives you three ways to use the same content:**
+
+- **A video** — timed playback with **TTS voiceover**, **subtitles**, and animated slides (in the editor / export pipeline, and **mp4** export when you need a file).  
+- **A slide deck** — a **public share URL** (`/share/:token`): open in the browser, **flip slides** with keyboard or buttons—**PowerPoint-style**. The share player is **manual and presentation-first** (no autoplay narration in that view—see [`SharePage.tsx`](SlideForge/frontend/src/play/SharePage.tsx)).  
+- **A speech coach** — AI-generated **script** plus **reference audio** from the pipeline: listen and imitate, copy or export the narration text, rehearse, then **you** present live against the share link (great for English talks and pronunciation drills).
+
+**Same pipeline. Three workflows.** **~$0.015 per 10 minutes** of typical API spend—on the order of **3000× cheaper** than Runway-style per-second pixel billing (see the charts below).
+
+[▶ Try online](https://barevid.creepender.top) · [🌐 Marketing site](https://barevidweb.creepender.top/) · [📦 Desktop app](https://github.com/apppplepie/barevid/releases) · [🎬 See it in action](https://b23.tv/vvnQNTF)
+
+![demo](docs/demo/barevid.gif)
+
+<p align="center">
+  <img src="docs/cost.cn.png" alt="成本对比（中文）" width="720" />
+</p>
+<p align="center">
+  <img src="docs/cost.en.png" alt="Cost comparison (English)" width="720" />
+</p>
+
+---
+
+## Who is this for?
+
+- **Short-form / edu creators** — turn long articles into publishable explainer videos  
+- **Presenters** — one link opens fullscreen paging with **slide animations** built in; no PowerPoint install for the audience  
+- **English learners** — same topic: **native-sounding VO + script** for listen-and-repeat, then present from memory  
+- **Teachers** — materials work as self-study video *and* as a **click-through web deck**  
+- **Anyone** paying **~$50/month** for Gamma / HeyGen / Runway when all you need is **clear narration + voice + slides**  
+
+---
+
+## Why Barevid?
+
+Instead of burning credits generating pixel-perfect video frames, Barevid uses **structured narration + paginated slides + TTS** for explainer-style clips—the cost scales with **tokens and speech**, not fake video seconds.
+
+**Shareable playback:** A public **`/share/:token`** link loads a **fullscreen, chromeless** player (no editor chrome—[`PlayLayout.tsx`](SlideForge/frontend/src/play/PlayLayout.tsx)). The share route uses **manual paging** and is optimized like a **web slide deck** ([`SharePage.tsx`](SlideForge/frontend/src/play/SharePage.tsx)). For **TTS + subtitles + timeline**, use the normal play/export flows or the **mp4** output. Query flags like `?clean=1` or `?export=1` also strip chrome for clean screen capture.
 
 <div align="center">
 
@@ -10,52 +47,27 @@
 
 ## 中文
 
-**Barevid** 是一套「**大段文章/一句话指令 → 带配音的幻灯片视频**」的开源自动化方案。放弃每秒钟生成像素点，改用 **结构化讲稿 + 分页放映 + TTS** 做出 **讲解型** 的小视频——**一次生成10分钟的视频成本几乎只要0.1元**。
+**Barevid** 是一套「**大段文章/一句话指令 → 带配音的幻灯片视频**」的开源自动化方案。放弃每秒钟生成像素点，改用 **结构化讲稿 + 分页放映 + TTS** 做出 **讲解型** 的小视频。
 
-<p align="center">
-  <img src="docs/demo/barevid.gif" alt="Barevid 界面与导出演示" width="720" />
-</p>
+**一条内容，三种用法：** 同一套工程既可 **导出/播放带配音字幕的小视频**，也可发 **`/share/:token` 公开链接** 让对方像 **PPT 一样手动翻页**（分享页当前为手动放映、偏演示）；也可以**导出台词**，再自己对着分享页练习讲演。
 
-### 演示小视频放哪里？
+### 适合谁？
 
-- **项目讲解 / 在线试用演示（B 站）**：[开源一个放映式 AI 生成视频项目【Barevid】在线平台可试用！](https://b23.tv/vvnQNTF)
-- **仓库内（推荐给 README / 文档引用）**：`docs/demo/`。可放 **gif / mp4 / webm**（本 README 上图即为 `docs/demo/barevid.gif`）；单文件若较大，建议用 **Git LFS** 或放在 **Release / 网盘 / 对象存储**，README 里用**相对路径或外链**引用。
-- **在 README 里展示**：可用 Markdown 图片语法引用仓库内 **gif / 静态图**，或使用 HTML `<video controls src="docs/demo/xxx.mp4" width="600"></video>`（GitHub 对内嵌视频的支持以当前平台为准）。
-- **宣传站 barevidweb**：演示成片放在 **`barevidweb/public/vidsrc/`**（站内示例列表见同目录 **`manifest.json`**）；其他静态资源可放 **`barevidweb/public/`** 下任意子目录，用站内 URL 引用。
+- **做短视频/知识向内容的创作者**——把长文变成可发的讲解视频  
+- **要讲 PPT 的人**——一条链接打开全屏翻页，自带动画，不必每人装 PowerPoint  
+- **学英语的学生**——同一主题下拿 **母语感口播 + 文稿** 当听力/跟读材料，再脱稿自己讲  
+- **老师做课**——既是自学向视频，又能当 **可点击放映的网页幻灯**  
+- **受够了 Gamma / HeyGen / Runway 按月几十刀**、但只需要「讲清楚 + 配音 + 幻灯」的人  
 
 
 | 入口 | 链接 |
 |------|------|
 | **宣传站**（介绍、定价叙事、状态页） | [barevidweb.creepender.top](https://barevidweb.creepender.top/) |
 | **在线应用**（直接做项目、出片） | [barevid.creepender.top](https://barevid.creepender.top/) |
+| **桌面版安装包** | [GitHub Releases](https://github.com/apppplepie/barevid/releases) |
 | **演示视频**（B 站 · 项目讲解与试用） | [b23.tv/vvnQNTF](https://b23.tv/vvnQNTF) |
 | **源码** | [github.com/apppplepie/barevid](https://github.com/apppplepie/barevid) |
 | **作者博客**（有反馈往这边放，但需要注册账号） | [creepender.top](https://creepender.top/) |
-
-## 线上平台当前小限制
-
-在线版目前先把 **单个视频时长限制在 3 分钟内**。
-
-主要是服务器眼下只剩 **30G 存储空间**，而且还是一台 **4G 小机器**，网络偶尔也会失联术。视频一长，导出文件、缓存、上传下载和重试都会明显变重，所以这个限制属于**迫不得已的配置**。
-
-如果你是自部署玩家，这个限制可以在后端环境变量里自己调大：`MAX_TARGET_NARRATION_MINUTES`。
-
-## 不想折腾？有代办
-
-如果你现在的情况是：
-
-- 网络时好时坏，在线平台不一定稳稳打开
-- 不想自己部署，也不想慢慢研究环境变量
-- 只想赶紧把片子做出来
-
-那也可以直接走一个省心路线：我朋友在闲鱼和小红书都接 **Barevid 私人定制代做**，适合想快速出片的人。
-
-- 闲鱼店链接：[这是我的闲鱼号，快来看看吧](https://m.tb.cn/h.inNhqmi?tk=xeeZ5UCPdRn)
-- 小红书主页：我已入驻 REDCity，来看看我的主页 >> [点击打开](https://xhslink.com/m/7hKGwAtfMbf)
-
-收费的，但胜在省事。
-
----
 
 ## 我们的优势？
 
@@ -89,7 +101,7 @@
 
 ## 也有代价!
 
-省钱的代价是 **时间**。从「各段合成好了」到「手里有一个可下载的成片」，中间还要 **导出编码（常见是 Worker 按真实时间轴录屏 + ffmpeg）** 和 **传到你本地**，整体体感经常是：**等多久 ≈ 成片时长的 1.5 倍左右**（机器负载、分辨率、网络会有浮动）。也就是10min的时间可能需要15min才能合成好，视频越长合成的时间越长，如果要自行调整将会耗时更长，如果你懒得登上网站等待，也可以直接走上面的[闲鱼代做](https://m.tb.cn/h.inNhqmi?tk=xeeZ5UCPdRn)路线（当然这是收费的）。
+省钱的代价是 **时间**。从「各段合成好了」到「手里有一个可下载的成片」，中间还要 **导出编码（常见是 Worker 按真实时间轴录屏 + ffmpeg）** 和 **传到你本地**，整体体感经常是：**等多久 ≈ 成片时长的 1.5 倍左右**（机器负载、分辨率、网络会有浮动）。也就是10min的时间可能需要15min才能合成好，视频越长合成的时间越长，如果要自行调整将会耗时更长。
 
 ---
 
@@ -121,7 +133,6 @@ barevid/
 2. **声线克隆 / 自定义音色**：这意味着你可以克隆自己的语音假装视频是自己古法制作~~更好的糊弄任务~~。
 3. **自动塞图**：提示词或规则驱动，把给定素材 **插进对应页**。
 4. **自动图表**：数据进来 → 页面上 **出图、出表**，更精准的数据对比。
-5. **打包做成桌面应用**：仓库已含 **Windows 桌面端**（`electron/`，见下「桌面客户端」）；完全私人部署仍可按需组合 Docker / 本机后端。
 
 欢迎 PR：**文档、国际化、Coqui 集成示例、Docker Compose 一键起全栈** 等。
 
@@ -139,7 +150,7 @@ barevid/
 4. 在**仓库根目录**执行：
 
    ```powershell
-   cd D:\workspace\code\test\barevid
+   cd <你的仓库根目录>
    docker compose up -d --build --quiet-build
    ```
 
@@ -209,6 +220,35 @@ docker compose up -d --build --quiet-build
 
 ---
 
+## 线上平台当前小限制
+
+在线版目前先把 **单个视频时长限制在 3 分钟内**。
+
+主要是服务器眼下只剩 **30G 存储空间**，而且还是一台 **4G 小机器**，网络偶尔也会失联术。视频一长，导出文件、缓存、上传下载和重试都会明显变重，所以这个限制属于**迫不得已的配置**。
+
+worker节点没办法放在我的服务器上，只能放在我本地cpu好一点的主机上，但是由于我晚上要睡觉，主机吵的我睡不着，只有白天的时候worker才开着。这意味着**导出视频前需要先看worker是否在线，如果不在线，那就无法导出视频**。
+
+如果你是自部署玩家，这个限制可以在后端环境变量里自己调大：`MAX_TARGET_NARRATION_MINUTES`。
+
+## 不想折腾？有代办
+
+如果你现在的情况是：
+
+- 网络时好时坏，在线平台不一定稳稳打开
+- 不想自己部署，也不想慢慢研究环境变量
+- 只想赶紧把片子做出来
+
+那也可以直接走一个省心路线：我朋友在闲鱼和小红书都接 **Barevid 私人定制代做**，适合想快速出片的人。
+
+- 闲鱼店链接：[这是我的闲鱼号，快来看看吧](https://m.tb.cn/h.inNhqmi?tk=xeeZ5UCPdRn)
+- 小红书主页：我已入驻 REDCity，来看看我的主页 >> [点击打开](https://xhslink.com/m/7hKGwAtfMbf)
+
+收费的，但胜在省事。
+
+（上文「也有代价」一节提到的等待时间若不想自己盯，也可以考虑这条代办路线。）
+
+---
+
 ## 命名约定（给协作者扫盲）
 
 - **Barevid**：产品 / 仓库对外名称（「白板影像」）。
@@ -230,30 +270,68 @@ docker compose up -d --build --quiet-build
 
 ## English
 
-**Barevid** is an open automation stack that turns **long-form text or a one-shot prompt** into **narrated slide-style videos**. Instead of paying per second of generated pixels, it uses **structured narration + paginated playback + TTS** for **explainer-style** clips—roughly **~¥0.1 for a ~10-minute render** in typical API pricing ballparks.
+**Barevid** is an open automation stack that turns **long-form text or a one-shot prompt** into **narrated slide-style explainer videos**. Instead of generating pixels every second, it uses **structured narration + paginated playback + TTS**.
 
-<p align="center">
-  <img src="docs/demo/barevid.gif" alt="Barevid UI and export demo" width="720" />
-</p>
+**One project, three workflows:** export or play a **short video with voiceover and subtitles**; share a public **`/share/:token`** link so others can **page through like PowerPoint** (the share view is manual and presentation-focused); or **export the narration script** and rehearse against that link on your own.
 
-### Where to put demo clips
+### Who is this for?
 
-- **Walkthrough (Bilibili, Chinese)**: [Barevid — open-source slide-style AI video + online trial](https://b23.tv/vvnQNTF)
-- **In-repo (for README / docs)**: use **`docs/demo/`** for **gif / mp4 / webm** (the GIF above is **`docs/demo/barevid.gif`**). If files are large, prefer **Git LFS**, **GitHub Releases**, or external hosting; link from the README with a **relative path or URL**.
-- **Embedding in README**: use Markdown images for **gif** or stills, or HTML `<video controls src="docs/demo/example.mp4" width="600"></video>` for video (GitHub rendering rules may change).
-- **Marketing site (barevidweb)**: put demo MP4s under **`barevidweb/public/vidsrc/`** and list them in **`manifest.json`** in that folder; other static assets can live under **`barevidweb/public/`**.
+- **Short-form / edu creators** — turn long articles into publishable explainer videos  
+- **Presenters** — one link opens fullscreen paging with **slide animations** built in; no PowerPoint install for the audience  
+- **English learners** — same topic: **native-sounding VO + script** for listen-and-repeat, then present from memory  
+- **Teachers** — materials work as self-study video *and* as a **click-through web deck**  
+- **Anyone** paying **~$50/month** for Gamma / HeyGen / Runway when all you need is **clear narration + voice + slides**  
+
+### Demo assets & where to put them
+
+- **Walkthrough (Bilibili, Chinese)**: [Barevid — open-source slide-style AI video + online trial](https://b23.tv/vvnQNTF)  
+- **In-repo (README / docs)**: **`docs/demo/`** for **gif / mp4 / webm** (hero GIF is **`docs/demo/barevid.gif`**). Large files: **Git LFS**, **Releases**, or external hosting.  
+- **Embedding**: Markdown images for gif/stills, or `<video controls src="docs/demo/example.mp4" width="600"></video>` (GitHub rules may change).  
+- **Marketing site (barevidweb)**: demo MP4s under **`barevidweb/public/vidsrc/`**, listed in **`manifest.json`**; other assets under **`barevidweb/public/`**.
 
 | Entry | Link |
 |------|------|
-| **Landing** | [barevidweb.creepender.top](https://barevidweb.creepender.top/) |
-| **App** | [barevid.creepender.top](https://barevid.creepender.top/) |
-| **Demo (Bilibili)** | [b23.tv/vvnQNTF](https://b23.tv/vvnQNTF) |
+| **Marketing site** (intro, pricing story, status) | [barevidweb.creepender.top](https://barevidweb.creepender.top/) |
+| **Web app** (edit projects, export) | [barevid.creepender.top](https://barevid.creepender.top/) |
+| **Desktop installer** | [GitHub Releases](https://github.com/apppplepie/barevid/releases) |
+| **Demo video (Bilibili)** | [b23.tv/vvnQNTF](https://b23.tv/vvnQNTF) |
 | **Source** | [github.com/apppplepie/barevid](https://github.com/apppplepie/barevid) |
-| **Author blog** | [creepender.top](https://creepender.top/) |
+| **Author blog** (feedback welcome; account required) | [creepender.top](https://creepender.top/) |
 
-### Current online limits
+### What makes Barevid different?
 
-The hosted app currently caps **single export length at ~3 minutes**, mainly due to **~30 GB disk** and a **4 GB RAM** box plus flaky network—longer videos stress storage, cache, upload/download, and retries. Self-hosters can raise **`MAX_TARGET_NARRATION_MINUTES`** in backend env.
+#### 1. Cost stays “linear”
+
+Spend goes mainly to **LLM-generated HTML slides** and **speech synthesis**—**not** per-second “fake video” vendor tax. Longer runs mostly mean **more narration and more HTML pages**.
+
+Versus **credits-per-second** pixel tools like Runway, Barevid fits **lectures, briefings, explainers, internal training**—high information density, **no need for film-grade frames**.
+
+#### 2. Automation-friendly
+
+The pipeline is **one prompt → script / VO / slides → a small video**—good if you want **less manual grind**.
+
+#### 3. Fine-grained control
+
+You can edit results without accepting a single prompt output wholesale:
+
+- **Per-slide script and pacing** — fix one slide without regenerating everything.  
+- **Retry any step** — rerun the LLM for a page, rerun TTS for a clip.  
+- **Style in the prompt** — tone, layout hints, and theme go in your instructions.
+
+---
+
+### How is this different from “one-click pixel AI video”?
+
+| Approach | What it does | Cost intuition |
+|----------|----------------|-----------------|
+| **Pixel text-to-video** | Generates shots, motion, lighting | Often **per second / credits**; one line change may **rerun the whole clip**. |
+| **Barevid** | **Slides + timeline + TTS** | Mostly **tokens + TTS**; duration tracks **“time to speak”**, not **every fake frame**. |
+
+### The tradeoff
+
+Saving money costs **time**. After segments are ready, **export** still means **Worker screen capture + ffmpeg** (typical) and **download**—often **~1.5× the video length** in wall-clock time (varies with load, resolution, network). A **10-minute** video might need **~15 minutes** to finish exporting; longer videos take longer, and manual tweaks add more.
+
+---
 
 ### What’s in the repo?
 
@@ -268,44 +346,127 @@ barevid/
 └── README.md
 ```
 
-- **SlideForge** is the historical folder name for the main app; it is still **Barevid** in product terms.
-- **worker** runs heavy export off the API process; one machine or many workers can pull jobs (shared secret with the backend).
+- **SlideForge** is the historical folder name for the main app; product name is still **Barevid**.
+- **worker** is the **heavy export node**—off the API; one machine or many workers can pull jobs (**shared secret** with the backend).
 
-Typical pipeline: messy text → LLM structures content → TTS per segment → LLM writes HTML per slide → frontend follows a real timeline → (optional) worker records/encodes **mp4**.
+Typical pipeline: messy text → LLM structures content → TTS per segment → LLM writes HTML per slide → frontend follows a real timeline → (optional) worker records/encodes **mp4**. **Per-segment duration write-back** reduces lip-sync drift.
 
-### Quick start (Docker, SlideForge + Worker)
+**Sharing:** **`/share/:token`** is a **manual, deck-style** player ([`SharePage.tsx`](SlideForge/frontend/src/play/SharePage.tsx)); chromeless shell ([`PlayLayout.tsx`](SlideForge/frontend/src/play/PlayLayout.tsx)). **TTS + subtitles + timeline** use the main editor/export path or **mp4** output.
 
-1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows: WSL2 backend recommended).
-2. Copy `SlideForge/backend/.env.example` → `SlideForge/backend/.env` (keys per [SlideForge/README.md](./SlideForge/README.md)).
-3. Copy repo root `.env.example` → `.env`; align **`EXPORT_WORKER_TOKEN`** with the backend file.
+---
+
+### Roadmap (cost-driven priority)
+
+1. **Local TTS (e.g. Coqui)** — drive speech cost toward **zero API spend**; may wait longer.  
+2. **Voice cloning / custom voices** — sound more like you (or your “ancient handmade video” persona).  
+3. **Auto-insert images** — rules or prompts to **drop assets on the right slides**.  
+4. **Auto charts** — feed data → **plots and tables** on slides.
+
+PRs welcome: **docs, i18n, Coqui examples, Docker Compose polish**, etc.
+
+---
+
+### Quick start
+
+#### Docker (SlideForge + Worker)
+
+Best for: **clone the full repo** and run edit + **video export** on one machine (Docker Compose **v2.24+** with `include`).
+
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows: WSL2 backend recommended).  
+2. Copy `SlideForge/backend/.env.example` → `SlideForge/backend/.env` — fill `DEEPSEEK_API_KEY`, Doubao TTS (`DOUBAO_*`), `EXPORT_WORKER_TOKEN`, etc. ([SlideForge/README.md](./SlideForge/README.md) “Setup”).  
+3. Copy repo root `.env.example` → `.env`; set **`EXPORT_WORKER_TOKEN`** (must match the backend file; root `.env` is injected into backend and Worker).  
 4. From the **repo root**:
 
    ```powershell
+   cd <your-repo-root>
    docker compose up -d --build --quiet-build
    ```
 
+   `--quiet-build` hides noisy build logs; add `--quiet-pull` if pulls are too chatty.
+
 5. Open **`http://127.0.0.1:3000`** (app), **`http://127.0.0.1:8000`** (API), MySQL **`127.0.0.1:3307`**.
 
-See **[SlideForge/README.md](./SlideForge/README.md)** for variants (no worker, pull-only, etc.).
+SlideForge **without** Worker, or pull-only flows: see **[SlideForge/README.md](./SlideForge/README.md)**.
 
-### Desktop app (Electron · Windows)
+**After pushing images** (e.g. `scripts/dbp.ps1`), on the server from repo root:
 
-The **`electron/`** folder builds a **Barevid Desktop** installer. From **`electron/`**:
+```powershell
+docker compose pull --policy always
+docker compose up -d --build --quiet-build
+```
 
-- **`npm run build`** — build web app + TypeScript + **electron-builder** → output under **`electron/release/`** (e.g. **`Barevid Setup x.y.z.exe`**; version from **`electron/package.json`**).
-- **`npm run build:win:nobackend`** — same without the full `build-win-full.ps1` script.
-- **`npm run build:win`** — runs **`scripts/build-win-full.ps1`** (full pipeline as maintained in-repo).
+`pull --policy always` avoids stale `:latest` layers; keep `--build` when Worker images must rebuild.
 
-**GitHub Release:** use a tag like **`v0.1.0`**, title e.g. **`Barevid Desktop v0.1.0 · Windows x64`**, describe OS support + highlights + known issues, attach the **`*.exe`** from **`electron/release/`**, and **never** paste real API keys in release notes.
+#### Flat server layout (not a full git clone)
+
+Docs often use **`SlideForge/`** as the compose root. If you only sync the main app, folder names can differ as long as paths match **`SlideForge/docker-compose.yml`**.
+
+Example:
+
+```
+/srv/barevid/
+├── docker-compose.yml      # Same idea as SlideForge/docker-compose.yml
+├── docker/                 # e.g. mysql-init/barevid.sql
+├── storage/
+├── backend/                # SlideForge/backend + .env
+├── barevidweb/             # Optional marketing site
+├── .env
+├── backend/.env
+└── nginx-test.conf         # Optional edge reverse proxy
+```
+
+Run `docker compose pull --policy always` and `docker compose up -d` from **`/srv/barevid`**; what matters is **`./storage`**, **`./docker/...`**, **`backend/.env`** relative to the compose file.
+
+The **repo root** `docker-compose.yml` (with Worker + `include`) needs a clone that includes **`SlideForge/`** and **`worker/`**; flat servers often run only the **SlideForge** compose and run Worker elsewhere or sync **`worker/`** separately.
+
+#### Local dev (no Docker)
+
+See **[SlideForge/README.md](./SlideForge/README.md)**:
+
+1. Run **SlideForge/backend** (Python) and **SlideForge/frontend** (Node).  
+2. Configure **`worker/.env`** and backend export env vars; run **`worker_export_video.py`** as needed.
+
+#### Desktop app (Electron · Windows)
+
+From **`electron/`**:
+
+| Command | Purpose |
+|--------|---------|
+| `npm install` | Install deps (first time) |
+| `npm run build` | Build web + TS + **Windows installer (NSIS)** → **`electron/release/`** |
+| `npm run build:win:nobackend` | Same without full `build-win-full.ps1` |
+| `npm run build:win` | Runs **`scripts/build-win-full.ps1`** |
+
+Installer names like **`Barevid Setup 0.1.0.exe`** (version from **`electron/package.json`**). Enter **DeepSeek / Doubao TTS** keys in-app or in user-data **`api-secrets.env`**.
+
+**GitHub Release:** tag **`v0.1.0`**, title e.g. **`Barevid Desktop v0.1.0 · Windows x64`**, OS + highlights + known issues; attach **`*.exe`** from **`electron/release/`**; **never** put real API keys in release notes.
+
+---
+
+### Hosted platform limits
+
+The public instance caps **single export length at ~3 minutes**, mainly due to **~30 GB disk**, a **4 GB RAM** box, and flaky network—longer videos stress storage, cache, transfers, and retries. Self-hosters can raise **`MAX_TARGET_NARRATION_MINUTES`**.
+
+The **export Worker is not on this server**—it runs on a **stronger local machine**. It’s only on **during the day** (nights off so the machine doesn’t stay noisy). **Before exporting, check that the Worker is online**; if it’s down, **export won’t run**.
+
+### Rather not DIY?
+
+If the network is flaky, you don’t want to self-host, or you need a video **now**, there is **paid custom help** on Chinese marketplaces (see the Chinese section for **闲鱼 / 小红书** links). The “tradeoff” section above applies if you’d rather not wait on exports yourself.
+
+---
 
 ### Naming
 
-- **Barevid**: product name (“whiteboard video” / 白板影像).
-- **SlideForge**: directory name for the main stack; server paths and image tags may still say SlideForge.
+- **Barevid**: product name (“whiteboard video”).  
+- **SlideForge**: folder name for the main stack; server paths and image tags may still say SlideForge.
+
+---
 
 ### License / openness
 
 Maintained as open source. PRs welcome: docs, i18n, Coqui TTS examples, Docker polish, etc.
+
+---
 
 ### Reference: “pixel video” pricing (check vendors)
 

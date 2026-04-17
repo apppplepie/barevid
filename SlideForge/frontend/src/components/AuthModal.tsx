@@ -124,7 +124,12 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
                 <button
                   type="submit"
                   disabled={loading || !username.trim() || !password.trim()}
-                  className="w-full mt-6 px-4 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-800 light:disabled:bg-slate-200 disabled:text-zinc-500 light:disabled:text-slate-400 text-white rounded-xl flex items-center justify-center gap-2 text-sm font-medium transition-all shadow-[0_0_15px_rgba(168,85,247,0.2)] hover:shadow-[0_0_20px_rgba(168,85,247,0.4)] disabled:shadow-none"
+                  className={
+                    'w-full mt-6 px-4 py-2.5 text-white rounded-xl flex items-center justify-center gap-2 text-sm font-medium transition-all disabled:bg-zinc-800 light:disabled:bg-slate-200 disabled:text-zinc-500 light:disabled:text-slate-400 disabled:shadow-none ' +
+                    (mode === 'login'
+                      ? 'bg-purple-600 hover:bg-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.2)] hover:shadow-[0_0_20px_rgba(168,85,247,0.4)]'
+                      : 'bg-blue-600 hover:bg-blue-500 shadow-[0_0_15px_rgba(37,99,235,0.2)] hover:shadow-[0_0_20px_rgba(37,99,235,0.35)]')
+                  }
                 >
                   {loading ? '请稍候…' : mode === 'login' ? '登录' : '注册'}
                   <ArrowRight className="w-4 h-4" />

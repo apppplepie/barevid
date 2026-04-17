@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
-import { Sparkles, ArrowLeft, ChevronDown, LogOut, Info } from 'lucide-react';
+import { ArrowLeft, ChevronDown, LogOut, Info } from 'lucide-react';
 import { WorkflowProgressBar, WorkflowStep } from './WorkflowProgressBar';
 import { APP_BRAND } from '../brand';
 import { AuthDialog } from './AuthDialog';
@@ -101,8 +101,8 @@ export function TopBar({
             <ArrowLeft className="h-4 w-4" />
           </button>
         ) : (
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.4)]">
-            <Sparkles className="w-4 h-4 text-white" />
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg shadow-[0_0_15px_rgba(168,85,247,0.4)] ring-1 ring-white/10">
+            <img src="/favicon.ico" alt="" className="h-full w-full object-contain" width={32} height={32} />
           </div>
         )}
         <div className="flex min-w-0 flex-col truncate">
