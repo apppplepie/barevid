@@ -1,7 +1,7 @@
 {
   "name": "barevid-desktop",
   "productName": "Barevid",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Barevid Desktop – 本地渲染节点 + 应用窗口",
   "main": "dist/main.js",
   "private": true,
@@ -84,6 +84,7 @@
       }
     ],
     "win": {
+      "icon": "resources/icon.ico",
       "target": [
         {
           "target": "nsis",

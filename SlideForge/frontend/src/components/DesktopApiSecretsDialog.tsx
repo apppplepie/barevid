@@ -46,7 +46,7 @@ export function DesktopApiSecretsDialog({
         doubaoTtsAccessToken,
       });
       setSavedHint(
-        '已保存到应用数据目录下的 api-secrets.env。若使用安装包内捆绑后端，请重启应用后生效。',
+        '已保存到应用数据目录。安装包内的捆绑后端会自动重启以加载新密钥；若仍异常可完全退出应用后再开。若你使用本机 uvicorn 跑 SlideForge/backend，请改该目录 .env 并重启 uvicorn。',
       );
     } finally {
       setLoading(false);
@@ -81,24 +81,51 @@ export function DesktopApiSecretsDialog({
           </button>
         </div>
         <form onSubmit={submit} className="flex flex-col gap-4 p-4">
-          <p className="text-xs leading-relaxed text-sf-muted">
-            对应环境变量{' '}
-            <code className="rounded bg-zinc-900/80 light:bg-slate-100 px-1 py-0.5 text-[11px]">
-              DEEPSEEK_API_KEY
-            </code>
-            、
-            <code className="rounded bg-zinc-900/80 light:bg-slate-100 px-1 py-0.5 text-[11px]">
-              DOUBAO_TTS_APP_ID
-            </code>
-            、
-            <code className="rounded bg-zinc-900/80 light:bg-slate-100 px-1 py-0.5 text-[11px]">
-              DOUBAO_TTS_ACCESS_TOKEN
-            </code>
-            。也可在用户数据目录直接编辑{' '}
-            <code className="rounded bg-zinc-900/80 light:bg-slate-100 px-1 py-0.5 text-[11px]">
-              api-secrets.env
-            </code>
-            。
+          <p className="text-xs leading-relaxed text-sf-muted space-y-2">
+            <span className="block">
+              对应环境变量{' '}
+              <code className="rounded bg-zinc-900/80 light:bg-slate-100 px-1 py-0.5 text-[11px]">
+                DEEPSEEK_API_KEY
+              </code>
+              、
+              <code className="rounded bg-zinc-900/80 light:bg-slate-100 px-1 py-0.5 text-[11px]">
+                DOUBAO_TTS_APP_ID
+              </code>
+              、
+              <code className="rounded bg-zinc-900/80 light:bg-slate-100 px-1 py-0.5 text-[11px]">
+                DOUBAO_TTS_ACCESS_TOKEN
+              </code>
+              。也可在用户数据目录直接编辑{' '}
+              <code className="rounded bg-zinc-900/80 light:bg-slate-100 px-1 py-0.5 text-[11px]">
+                api-secrets.env
+              </code>
+              。
+            </span>
+            <span className="block rounded-md border border-amber-500/25 bg-amber-950/20 px-2 py-2 text-amber-100/95 light:border-amber-600/30 light:bg-amber-50/90 light:text-amber-950">
+              <strong className="font-medium">请确认你改的是「当前实际在跑」的那套后端：</strong>
+              本机用{' '}
+              <code className="rounded bg-black/25 px-1 py-0.5 text-[11px] light:bg-black/10">
+                uvicorn
+              </code>{' '}
+              跑仓库里的 FastAPI（常见{' '}
+              <code className="rounded bg-black/25 px-1 py-0.5 text-[11px] light:bg-black/10">
+                127.0.0.1:8000
+              </code>
+              ）时，密钥必须写在仓库内{' '}
+              <code className="rounded bg-black/25 px-1 py-0.5 text-[11px] light:bg-black/10">
+                SlideForge/backend/.env
+              </code>
+              ，并<strong>重启 uvicorn 进程</strong>；仅重启 Electron 或只改此处<strong>不会</strong>更新该后端。
+              安装包里<strong>捆绑的 barevid-api</strong>（常见{' '}
+              <code className="rounded bg-black/25 px-1 py-0.5 text-[11px] light:bg-black/10">
+                127.0.0.1:18080
+              </code>
+              ）才会使用此处保存的密钥 /{' '}
+              <code className="rounded bg-black/25 px-1 py-0.5 text-[11px] light:bg-black/10">
+                api-secrets.env
+              </code>
+              ，改完后需<strong>完全退出并重启桌面应用</strong>。
+            </span>
           </p>
           {savedHint ? (
             <div className="rounded-lg border border-emerald-500/35 bg-emerald-950/25 px-3 py-2 text-xs text-emerald-200/95">

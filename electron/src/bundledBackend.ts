@@ -7,6 +7,7 @@ import * as cp from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
+import { execSync } from 'child_process';
 import { app } from 'electron';
 
 /** 与主进程约定的本机 API 端口（勿与常见 8000 冲突） */
@@ -50,6 +51,59 @@ function httpGetJson(url: string, timeoutMs: number): Promise<void> {
       reject(new Error('timeout'));
     });
   });
+}
+
+/**
+ * 若本机端口上仍有可响应的旧 barevid-api（例如上次异常退出未随 Electron 退出），
+ * 先结束占用进程，避免新实例继承不到新环境变量或端口冲突。
+ */
+export async function clearStaleBundledApiIfResponding(
+  port: number = BUNDLED_API_PORT
+): Promise<void> {
+  try {
+    await httpGetJson(`http://127.0.0.1:${port}/api/health`, 1500);
+  } catch {
+    return;
+  }
+  console.warn(
+    `[barevid-api] 检测到 ${port} 上仍有进程响应 /api/health，尝试清理残留实例…`
+  );
+  if (process.platform === 'win32') {
+    killWindowsProcessListeningOnPort(port);
+    await new Promise((r) => setTimeout(r, 500));
+  }
+}
+
+/** 解析 netstat -ano，结束监听指定端口的进程（Windows）。 */
+function killWindowsProcessListeningOnPort(port: number): void {
+  try {
+    const out = execSync('netstat -ano', {
+      encoding: 'utf-8',
+      windowsHide: true,
+      maxBuffer: 2 * 1024 * 1024,
+    });
+    for (const line of out.split(/\r?\n/)) {
+      const t = line.trim();
+      if (!t.includes('LISTENING')) continue;
+      if (!t.includes(`:${port}`)) continue;
+      const parts = t.split(/\s+/).filter(Boolean);
+      const pid = parts[parts.length - 1];
+      if (!/^\d+$/.test(pid)) continue;
+      try {
+        execSync(`taskkill /PID ${pid} /T /F`, {
+          encoding: 'utf-8',
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        console.warn(`[barevid-api] 已结束占用端口 ${port} 的进程 PID=${pid}`);
+      } catch {
+        /* 可能已退出或权限不足 */
+      }
+      return;
+    }
+  } catch (e) {
+    console.warn('[barevid-api] killWindowsProcessListeningOnPort', e);
+  }
 }
 
 /** 轮询直到 /api/health 可用 */

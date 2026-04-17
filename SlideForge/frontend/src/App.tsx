@@ -33,6 +33,7 @@ import {
   ManualTextPrepDialog,
 } from './components/ManualWorkflowDialogs';
 import { ProjectDetailsModal } from './components/ProjectDetailsModal';
+import { DesktopApiSecretsDialog } from './components/DesktopApiSecretsDialog';
 import { ApiError, apiFetch, apiUrl, getAuthBearerToken, getStoredAuthToken, setStoredAuthToken } from './api';
 import {
   buildTimelineFromPlayManifest,
@@ -405,6 +406,41 @@ export default function App() {
   const [narrationDraftMap, setNarrationDraftMap] = useState<
     Record<string, NarrationDraftEntry>
   >({});
+
+  /** 桌面端：API 密钥弹窗（未在桌面配置 DeepSeek 时，进入主界面后自动打开） */
+  const [desktopApiSecretsOpen, setDesktopApiSecretsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isBarevidDesktop()) return;
+    const unsub = window.electronAPI?.onOpenApiSecrets?.(() => {
+      setDesktopApiSecretsOpen(true);
+    });
+    return () => {
+      unsub?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!sessionReady) return;
+    if (!isBarevidDesktop()) return;
+    const api = window.electronAPI;
+    if (!api?.getApiSecrets) return;
+    let cancelled = false;
+    void api
+      .getApiSecrets()
+      .then((s) => {
+        if (cancelled) return;
+        if (!(s.deepseekApiKey ?? '').trim()) {
+          setDesktopApiSecretsOpen(true);
+        }
+      })
+      .catch(() => {
+        /* IPC 未就绪或桌面外调用失败时忽略，避免未处理的 Promise 拒绝 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionReady]);
 
   useEffect(() => {
     if (!sessionReady) return;
@@ -2658,6 +2694,14 @@ export default function App() {
       : 'success'
     : null;
 
+  /** 桌面端单例，避免在 home / editor 两个分支重复声明同一弹窗 */
+  const desktopApiSecretsDialogEl = isBarevidDesktop() ? (
+    <DesktopApiSecretsDialog
+      open={desktopApiSecretsOpen}
+      onClose={() => setDesktopApiSecretsOpen(false)}
+    />
+  ) : null;
+
   if (!sessionReady) {
     return (
       <div className="sf-bg-base flex h-screen w-full items-center justify-center font-sans sf-text-muted">
@@ -2711,7 +2755,9 @@ export default function App() {
           onCopyProject={(id) => void handleCopyProject(id)}
           onUploadProject={(id) => void handleUploadProject(id)}
           onDownloadProject={(id) => void handleDownloadProject(id)}
+          onOpenDesktopApiSecrets={() => setDesktopApiSecretsOpen(true)}
         />
+        {desktopApiSecretsDialogEl}
       </div>
     );
   }
@@ -3080,6 +3126,8 @@ export default function App() {
         onPlay={onPlay}
         onPause={onPause}
       />
+
+      {desktopApiSecretsDialogEl}
     </div>
   );
 }

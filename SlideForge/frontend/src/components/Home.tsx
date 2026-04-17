@@ -50,7 +50,6 @@ import {
   projectPipelineTagTone,
 } from '../utils/projectPipelineTagTone';
 import { SfTag } from './ui/SfTag';
-import { DesktopApiSecretsDialog } from './DesktopApiSecretsDialog';
 
 export interface Project {
   id: string;
@@ -198,6 +197,8 @@ interface HomeProps {
   onCopyProject: (id: string) => void | Promise<void>;
   onUploadProject: (id: string) => void | Promise<void>;
   onDownloadProject: (id: string) => void | Promise<void>;
+  /** 桌面端：打开 API 密钥弹窗（由 App 挂载全局弹窗） */
+  onOpenDesktopApiSecrets?: () => void;
 }
 
 export function Home({
@@ -214,6 +215,7 @@ export function Home({
   onCopyProject,
   onUploadProject,
   onDownloadProject,
+  onOpenDesktopApiSecrets,
 }: HomeProps) {
   const narrationCapSeconds =
     typeof narrationCapSecondsProp === 'number' &&
@@ -263,21 +265,10 @@ export function Home({
   const [deleteDialog, setDeleteDialog] = useState<{ id: string; name: string } | null>(null);
   const [exportWorkerAlive, setExportWorkerAlive] = useState<number | null>(null);
   const [exportWorkerStatusErr, setExportWorkerStatusErr] = useState(false);
-  const [apiSecretsOpen, setApiSecretsOpen] = useState(false);
 
   /** Electron：视频导出由本机子进程完成，不依赖向 FastAPI 心跳的「远程 Worker」 */
   const isBarevidDesktop =
     typeof window !== 'undefined' && Boolean(window.electronAPI?.isDesktop);
-
-  useEffect(() => {
-    if (!isBarevidDesktop) return;
-    const unsub = window.electronAPI?.onOpenApiSecrets?.(() =>
-      setApiSecretsOpen(true),
-    );
-    return () => {
-      unsub?.();
-    };
-  }, [isBarevidDesktop]);
 
   useEffect(() => {
     if (isBarevidDesktop) {
@@ -1082,7 +1073,7 @@ export function Home({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  setApiSecretsOpen(true);
+                  onOpenDesktopApiSecrets?.();
                 }}
                 className="pointer-events-auto absolute left-4 top-4 z-[60] inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-zinc-600/60 bg-zinc-900/90 px-3 py-1.5 text-xs font-medium text-zinc-200 shadow-sm backdrop-blur-sm transition select-none hover:border-violet-500/45 hover:bg-violet-950/30 hover:text-violet-100 light:border-slate-300 light:bg-white/95 light:text-slate-700 light:hover:border-violet-400 light:hover:bg-violet-50 light:hover:text-violet-900 light:shadow-slate-200/40"
               >
@@ -1474,10 +1465,6 @@ export function Home({
           </div>
         </div>
       ) : null}
-      <DesktopApiSecretsDialog
-        open={apiSecretsOpen}
-        onClose={() => setApiSecretsOpen(false)}
-      />
     </div>
   );
 }

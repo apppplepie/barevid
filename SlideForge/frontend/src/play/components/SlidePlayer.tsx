@@ -369,72 +369,16 @@ export function SlidePlayer({
     }
   }, [activePageIndex, selectedPageIndex]);
 
-  // 手动模式：大页跳转
-  const goNextPage = useCallback(() => {
-    const next = pageMeta[activePageIndex + 1];
-    if (next) goTo(next.firstStepIndex);
-  }, [pageMeta, activePageIndex, goTo]);
-
-  const goPrevPage = useCallback(() => {
-    const prev = pageMeta[activePageIndex - 1];
-    if (prev) goTo(prev.firstStepIndex);
-  }, [pageMeta, activePageIndex, goTo]);
-
-  /**
-   * 滚动当前 iframe 页面；滚到顶/底时才真正翻页。
-   * iframe 用 srcdoc + allow-same-origin，可直接访问 contentDocument。
-   */
-  const scrollOrNext = useCallback(() => {
-    const iframe = deckIframeRef.current;
-    if (domStage && iframe) {
-      const doc = iframe.contentDocument;
-      const win = iframe.contentWindow;
-      if (doc && win) {
-        const el = doc.scrollingElement ?? doc.documentElement;
-        const h = el.clientHeight;
-        // 对齐到下一个整屏边界（100vh snap）
-        const nextTop = Math.ceil((el.scrollTop + 1) / h) * h;
-        if (nextTop < el.scrollHeight - 8) {
-          win.scrollTo({ top: nextTop, behavior: "smooth" });
-          return;
-        }
-      }
-    }
-    goNextPage();
-  }, [domStage, goNextPage]);
-
-  const scrollOrPrev = useCallback(() => {
-    const iframe = deckIframeRef.current;
-    if (domStage && iframe) {
-      const doc = iframe.contentDocument;
-      const win = iframe.contentWindow;
-      if (doc && win) {
-        const el = doc.scrollingElement ?? doc.documentElement;
-        const h = el.clientHeight;
-        // 对齐到上一个整屏边界
-        const prevTop = Math.floor((el.scrollTop - 1) / h) * h;
-        if (prevTop > 0) {
-          win.scrollTo({ top: prevTop, behavior: "smooth" });
-          return;
-        }
-        if (el.scrollTop > 8) {
-          win.scrollTo({ top: 0, behavior: "smooth" });
-          return;
-        }
-      }
-    }
-    goPrevPage();
-  }, [domStage, goPrevPage]);
-
   // 手动模式：始终在 window 挂键盘监听，不依赖焦点
+  // 心智与 worker 录制一致：一次按键 = 推进一段（= 一段音频 clip = 一个 step）
   useEffect(() => {
     if (!manualMode) return;
     const onKeyWindow = (e: KeyboardEvent) => {
-      handleManualNavKeydown(e, scrollOrNext, scrollOrPrev);
+      handleManualNavKeydown(e, goNext, goPrev);
     };
     window.addEventListener("keydown", onKeyWindow);
     return () => window.removeEventListener("keydown", onKeyWindow);
-  }, [manualMode, scrollOrNext, scrollOrPrev]);
+  }, [manualMode, goNext, goPrev]);
 
   const scopeStartMs =
     scope === "page" && selectedPage
@@ -491,8 +435,14 @@ export function SlidePlayer({
     el?.scrollIntoView({ block: "nearest", behavior: "auto" });
   }, [activeCueIndex, currentStep]);
 
-  // 手动放映模式：简洁翻页 footer
+  // 手动放映模式：按"段"(= 一段音频 clip)推进，心智与 worker 录制一致
   if (manualMode) {
+    const manualStepLabel = steps.length > 0
+      ? `段 ${Math.min(currentStep + 1, steps.length)} / ${steps.length}`
+      : "段 0 / 0";
+    const manualPageLabel = pageMeta.length > 0
+      ? `第 ${activePageIndex + 1} / ${pageMeta.length} 页`
+      : "";
     return (
       <SlideView
         deckTitle={deckTitle}
@@ -502,30 +452,28 @@ export function SlidePlayer({
               <button
                 type="button"
                 className="sf-btn sf-btn-ghost sf-manual-btn"
-                onClick={goPrevPage}
-                disabled={activePageIndex <= 0}
-                aria-label="上一页"
+                onClick={() => goPrev()}
+                disabled={currentStep <= rangeStart}
+                aria-label="上一段音频"
               >
-                ← 上一页
+                ← 上一段
               </button>
               <span className="sf-manual-page-label">
-                {activePageIndex + 1} / {pageMeta.length}
-                {pageMeta[activePageIndex]?.title
-                  ? `  ${pageMeta[activePageIndex].title}`
-                  : ""}
+                {manualStepLabel}
+                {manualPageLabel ? `  ${manualPageLabel}` : ""}
               </span>
               <button
                 type="button"
                 className="sf-btn sf-manual-btn"
-                onClick={goNextPage}
-                disabled={activePageIndex >= pageMeta.length - 1}
-                aria-label="下一页"
+                onClick={() => goNext()}
+                disabled={currentStep >= rangeEnd}
+                aria-label="下一段音频"
               >
-                下一页 →
+                下一段 →
               </button>
             </div>
             <p className="sf-manual-hint">
-              方向键、空格、PgUp/PgDn、Enter 翻页；点击画面上任意处下一页
+              方向键、空格、PgUp/PgDn、Enter 推进到下一段音频
             </p>
           </div>
         }
@@ -561,26 +509,27 @@ export function SlidePlayer({
             </div>
           </div>
         </div>
-        {/* 悬浮翻页按钮，始终在最顶层 */}
+        {/* 悬浮翻段按钮：按段推进，与 worker 录制一致 */}
         <div className="sf-manual-float-nav">
           <button
             type="button"
             className="sf-manual-float-btn"
-            onClick={scrollOrPrev}
-            disabled={activePageIndex <= 0}
-            aria-label="上一页"
+            onClick={() => goPrev()}
+            disabled={currentStep <= rangeStart}
+            aria-label="上一段音频"
           >
             ‹
           </button>
           <span className="sf-manual-float-label">
-            {activePageIndex + 1} / {pageMeta.length}
+            {steps.length > 0 ? Math.min(currentStep + 1, steps.length) : 0} /{" "}
+            {steps.length}
           </span>
           <button
             type="button"
             className="sf-manual-float-btn sf-manual-float-btn--next"
-            onClick={scrollOrNext}
-            disabled={activePageIndex >= pageMeta.length - 1}
-            aria-label="下一页"
+            onClick={() => goNext()}
+            disabled={currentStep >= rangeEnd}
+            aria-label="下一段音频"
           >
             ›
           </button>

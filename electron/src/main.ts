@@ -5,9 +5,10 @@
  * 启动流程：
  *   1. 读/写本地配置（后端 URL、worker key 等）
  *   2. ffmpeg / Playwright Chromium 由用户按需自行安装；仅在导出时检测并提示
- *   3. 若 resources/barevid-api/barevid-api.exe 存在 → 启动捆绑 FastAPI（SQLite 在 userData）
+ *   3. 若 resources/barevid-api/barevid-api.exe 存在 → 清理端口残留后启动捆绑 FastAPI（SQLite 在 userData）
  *   4. 启动本地 HTTP server（前端静态文件 + API 代理 + 导出拦截）
  *   5. 打开主窗口加载 http://127.0.0.1:<port>
+ *  保存 API 密钥时若使用捆绑后端 → 主进程会结束旧进程并以新环境变量重启，无需整应用重启。
  */
 
 import {
@@ -31,6 +32,7 @@ import {
 } from './server';
 import {
   BUNDLED_API_PORT,
+  clearStaleBundledApiIfResponding,
   resolveBundledBackendExe,
   startBundledBackend,
   waitForBundledApiReady,
@@ -113,7 +115,7 @@ function formatEnvLine(key: string, value: string): string {
 function writeSecretsEnvFile(cfg: AppConfig): void {
   const body = [
     '# Barevid 桌面端 — DeepSeek 与豆包语音；与设置界面同步。',
-    '# 修改后请重启应用，捆绑后端 barevid-api 才会加载新密钥。',
+    '# 在应用内保存密钥会重启捆绑后端；若手动编辑本文件，请重启 Barevid。',
     formatEnvLine('DEEPSEEK_API_KEY', cfg.deepseekApiKey ?? ''),
     formatEnvLine('DOUBAO_TTS_APP_ID', cfg.doubaoTtsAppId ?? ''),
     formatEnvLine('DOUBAO_TTS_ACCESS_TOKEN', cfg.doubaoTtsAccessToken ?? ''),
@@ -171,12 +173,19 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('will-quit', () => {
-  if (bundledBackendHandle) {
+/** 退出前结束捆绑 barevid-api，避免残留进程占用端口且环境变量不更新 */
+function shutdownBundledBackendChild(): void {
+  if (!bundledBackendHandle) return;
+  try {
     bundledBackendHandle.kill();
-    bundledBackendHandle = null;
+  } catch {
+    /* ignore */
   }
-});
+  bundledBackendHandle = null;
+}
+
+app.on('before-quit', shutdownBundledBackendChild);
+app.on('will-quit', shutdownBundledBackendChild);
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0 && localPort) {
@@ -198,6 +207,7 @@ async function bootstrap(): Promise<void> {
   const expressListenPort = await getFreePort();
 
   if (bundledExe) {
+    await clearStaleBundledApiIfResponding(BUNDLED_API_PORT);
     const token = ensureExportWorkerToken(cfg);
     bundledBackendHandle = startBundledBackend(bundledExe, {
       expressPort: expressListenPort,
@@ -274,6 +284,7 @@ function createMainWindow(port: number): void {
     minWidth: 1024,
     minHeight: 640,
     title: 'Barevid',
+    autoHideMenuBar: true,
     backgroundColor: '#0d1117',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -300,6 +311,36 @@ function createMainWindow(port: number): void {
   });
 }
 
+/**
+ * 用户保存 API 密钥后，结束旧 barevid-api 并以新环境变量重新拉起（无需整应用重启）。
+ * 无捆绑后端或未启动子进程时不操作。
+ */
+async function restartBundledBackendAfterConfigUpdate(
+  cfg: AppConfig
+): Promise<void> {
+  const exe = resolveBundledBackendExe();
+  if (!exe || bundledBackendHandle == null || localPort == null) return;
+  const token = ensureExportWorkerToken(cfg);
+  try {
+    bundledBackendHandle.kill();
+  } catch {
+    /* ignore */
+  }
+  bundledBackendHandle = null;
+  await new Promise((r) => setTimeout(r, 450));
+  bundledBackendHandle = startBundledBackend(exe, {
+    expressPort: localPort,
+    exportWorkerToken: token,
+    apiPort: BUNDLED_API_PORT,
+    apiSecrets: {
+      deepseekApiKey: cfg.deepseekApiKey,
+      doubaoTtsAppId: cfg.doubaoTtsAppId,
+      doubaoTtsAccessToken: cfg.doubaoTtsAccessToken,
+    },
+  });
+  await waitForBundledApiReady(BUNDLED_API_PORT);
+}
+
 // ── IPC Handlers ──────────────────────────────────────────────────────────────
 
 function registerIpc(cfg: AppConfig, exportManager: ExportManager): void {
@@ -324,7 +365,7 @@ function registerIpc(cfg: AppConfig, exportManager: ExportManager): void {
 
   ipcMain.handle(
     'cfg:setApiSecrets',
-    (
+    async (
       _e,
       s: {
         deepseekApiKey?: string;
@@ -336,6 +377,11 @@ function registerIpc(cfg: AppConfig, exportManager: ExportManager): void {
       cfg.doubaoTtsAppId = s.doubaoTtsAppId ?? '';
       cfg.doubaoTtsAccessToken = s.doubaoTtsAccessToken ?? '';
       saveConfig(cfg);
+      try {
+        await restartBundledBackendAfterConfigUpdate(cfg);
+      } catch (e) {
+        console.error('[barevid] 捆绑后端重启失败（密钥已写入磁盘，可退出应用后重试）', e);
+      }
     }
   );
 
