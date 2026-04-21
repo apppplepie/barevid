@@ -12,6 +12,8 @@ import httpx
 from app.config import settings
 
 _DOUBAO_TTS_V1_URL = "https://openspeech.bytedance.com/api/v1/tts"
+# V3 单向流式接口，若模型更新到 3.0 版本，需确认 endpoint 是否有变化
+# 新的 3.0 接口可能为 "https://openspeech.bytedance.com/api/v3/tts" 或其他路径
 _DOUBAO_TTS_V3_URL = "https://openspeech.bytedance.com/api/v3/tts/unidirectional"
 
 
@@ -313,6 +315,8 @@ async def _synthesize_v3_to_file(text: str, out_path: Path, voice_type: str) -> 
         else:
             audio_params["enable_timestamp"] = True
 
+    # V3 请求体结构，若升级到 3.0 模型需要确认字段是否有变化
+    # 可能的变化：新增版本字段、speaker 改 voice、audio_params 结构调整等
     body: dict[str, Any] = {
         "user": {"uid": settings.doubao_tts_uid},
         "req_params": {
