@@ -1,5 +1,14 @@
 # Barevid
 
+> [!CAUTION]
+> **本仓库已停止维护。在线网页已下线，打不开了。**
+>
+> 后续开发已迁到功能更完整的新版本：**[BareVid Enterprise](https://github.com/apppplepie/barevid-enterprise)**  
+> 文稿 → 分镜 → 配音 → 动画 → 字幕 → MP4；可观测 DAG、页级 Agent、版本回滚与失败恢复。
+>
+> **This repository is no longer maintained.** The hosted website is offline.
+> Please use **[barevid-enterprise](https://github.com/apppplepie/barevid-enterprise)** instead.
+
 **Paste any article → One Barevid project gives you three ways to use the same content:**
 
 - **A video** — timed playback with **TTS voiceover**, **subtitles**, and animated slides (in the editor / export pipeline, and **mp4** export when you need a file).  
@@ -8,7 +17,9 @@
 
 **Same pipeline. Three workflows.** **~$0.015 per 10 minutes** of typical API spend—on the order of **3000× cheaper** than Runway-style per-second pixel billing (see the charts below).
 
-[▶ Try online](https://barevid.creepender.top) · [🌐 Marketing site](https://barevidweb.creepender.top/) · [📦 Desktop app](https://github.com/apppplepie/barevid/releases) · [🎬 See it in action](https://b23.tv/vvnQNTF)
+[▶ 新版本 / Successor](https://github.com/apppplepie/barevid-enterprise) · [📦 Desktop app (archived)](https://github.com/apppplepie/barevid/releases) · [🎬 See it in action](https://b23.tv/vvnQNTF)
+
+在线应用 `barevid.creepender.top` 与宣传站 `barevidweb.creepender.top` **已下线**。请使用 [BareVid Enterprise](https://github.com/apppplepie/barevid-enterprise)。
 
 ![demo](docs/demo/barevid.gif)
 
@@ -62,11 +73,12 @@ Instead of burning credits generating pixel-perfect video frames, Barevid uses *
 
 | 入口 | 链接 |
 |------|------|
-| **宣传站**（介绍、定价叙事、状态页） | [barevidweb.creepender.top](https://barevidweb.creepender.top/) |
-| **在线应用**（直接做项目、出片） | [barevid.creepender.top](https://barevid.creepender.top/) |
-| **桌面版安装包** | [GitHub Releases](https://github.com/apppplepie/barevid/releases) |
+| **后续版本（推荐）** | **[github.com/apppplepie/barevid-enterprise](https://github.com/apppplepie/barevid-enterprise)** |
+| **宣传站** | ~~[barevidweb.creepender.top](https://barevidweb.creepender.top/)~~ **已下线** |
+| **在线应用** | ~~[barevid.creepender.top](https://barevid.creepender.top/)~~ **已下线** |
+| **桌面版安装包（本仓库存档）** | [GitHub Releases](https://github.com/apppplepie/barevid/releases) |
 | **演示视频**（B 站 · 项目讲解与试用） | [b23.tv/vvnQNTF](https://b23.tv/vvnQNTF) |
-| **源码** | [github.com/apppplepie/barevid](https://github.com/apppplepie/barevid) |
+| **本仓库源码（已停维）** | [github.com/apppplepie/barevid](https://github.com/apppplepie/barevid) |
 | **作者博客**（有反馈往这边放，但需要注册账号） | [creepender.top](https://creepender.top/) |
 
 ## 我们的优势？
@@ -127,14 +139,9 @@ barevid/
 
 ## 后期计划？
 
-优先级按成本排：
+**本仓库已停止维护。** 后续能力请看 [BareVid Enterprise](https://github.com/apppplepie/barevid-enterprise)。
 
-1. **Coqui 等本地 TTS**：把语音合成压到 **零 API 账单**。代价可能是更长的等待时间（但为了降低成本这是可接受的，毕竟原本就已经等的够长了，不少那几分钟）。
-2. **声线克隆 / 自定义音色**：这意味着你可以克隆自己的语音假装视频是自己古法制作~~更好的糊弄任务~~。
-3. **自动塞图**：提示词或规则驱动，把给定素材 **插进对应页**。
-4. **自动图表**：数据进来 → 页面上 **出图、出表**，更精准的数据对比。
-
-欢迎 PR：**文档、国际化、Coqui 集成示例、Docker Compose 一键起全栈** 等。
+原先排过的方向（本地 TTS、声线克隆、自动塞图、自动图表等）不再在此推进。历史文档仍保留，方便自部署或对照阅读。
 
 ---
 
@@ -220,15 +227,11 @@ docker compose up -d --build --quiet-build
 
 ---
 
-## 线上平台当前小限制
+## 线上平台
 
-在线版目前先把 **单个视频时长限制在 3 分钟内**。
+**在线网页已下线，无法访问。** 本仓库不再提供托管服务。
 
-主要是服务器眼下只剩 **30G 存储空间**，而且还是一台 **4G 小机器**，网络偶尔也会失联术。视频一长，导出文件、缓存、上传下载和重试都会明显变重，所以这个限制属于**迫不得已的配置**。
-
-worker节点没办法放在我的服务器上，只能放在我本地cpu好一点的主机上，但是由于我晚上要睡觉，主机吵的我睡不着，只有白天的时候worker才开着。这意味着**导出视频前需要先看worker是否在线，如果不在线，那就无法导出视频**。
-
-如果你是自部署玩家，这个限制可以在后端环境变量里自己调大：`MAX_TARGET_NARRATION_MINUTES`。
+若仍想自部署本仓库代码，时长上限可在后端环境变量里自己调：`MAX_TARGET_NARRATION_MINUTES`。新项目请直接用 [BareVid Enterprise](https://github.com/apppplepie/barevid-enterprise)。
 
 ## 不想折腾？有代办
 
@@ -258,7 +261,7 @@ worker节点没办法放在我的服务器上，只能放在我本地cpu好一�
 
 ## 开源说明
 
-作者以开源形式维护本仓库。**第一次用这个我也不知道怎么搞**。
+本仓库曾以开源形式维护，**现已停止维护**。新版本见 [BareVid Enterprise](https://github.com/apppplepie/barevid-enterprise)。
 
 ---
 
@@ -291,11 +294,12 @@ worker节点没办法放在我的服务器上，只能放在我本地cpu好一�
 
 | Entry | Link |
 |------|------|
-| **Marketing site** (intro, pricing story, status) | [barevidweb.creepender.top](https://barevidweb.creepender.top/) |
-| **Web app** (edit projects, export) | [barevid.creepender.top](https://barevid.creepender.top/) |
-| **Desktop installer** | [GitHub Releases](https://github.com/apppplepie/barevid/releases) |
+| **Successor (recommended)** | **[github.com/apppplepie/barevid-enterprise](https://github.com/apppplepie/barevid-enterprise)** |
+| **Marketing site** | ~~[barevidweb.creepender.top](https://barevidweb.creepender.top/)~~ **offline** |
+| **Web app** | ~~[barevid.creepender.top](https://barevid.creepender.top/)~~ **offline** |
+| **Desktop installer (archived)** | [GitHub Releases](https://github.com/apppplepie/barevid/releases) |
 | **Demo video (Bilibili)** | [b23.tv/vvnQNTF](https://b23.tv/vvnQNTF) |
-| **Source** | [github.com/apppplepie/barevid](https://github.com/apppplepie/barevid) |
+| **This repo (unmaintained)** | [github.com/apppplepie/barevid](https://github.com/apppplepie/barevid) |
 | **Author blog** (feedback welcome; account required) | [creepender.top](https://creepender.top/) |
 
 ### What makes Barevid different?
@@ -355,14 +359,9 @@ Typical pipeline: messy text → LLM structures content → TTS per segment → 
 
 ---
 
-### Roadmap (cost-driven priority)
+### Roadmap
 
-1. **Local TTS (e.g. Coqui)** — drive speech cost toward **zero API spend**; may wait longer.  
-2. **Voice cloning / custom voices** — sound more like you (or your “ancient handmade video” persona).  
-3. **Auto-insert images** — rules or prompts to **drop assets on the right slides**.  
-4. **Auto charts** — feed data → **plots and tables** on slides.
-
-PRs welcome: **docs, i18n, Coqui examples, Docker Compose polish**, etc.
+**This repo is unmaintained.** Further work lives in [BareVid Enterprise](https://github.com/apppplepie/barevid-enterprise). Docs below remain as a historical snapshot.
 
 ---
 
@@ -443,11 +442,11 @@ Installer names like **`Barevid Setup 0.1.0.exe`** (version from **`electron/pac
 
 ---
 
-### Hosted platform limits
+### Hosted platform
 
-The public instance caps **single export length at ~3 minutes**, mainly due to **~30 GB disk**, a **4 GB RAM** box, and flaky network—longer videos stress storage, cache, transfers, and retries. Self-hosters can raise **`MAX_TARGET_NARRATION_MINUTES`**.
+**The public website is offline.** This repository no longer ships a hosted service.
 
-The **export Worker is not on this server**—it runs on a **stronger local machine**. It’s only on **during the day** (nights off so the machine doesn’t stay noisy). **Before exporting, check that the Worker is online**; if it’s down, **export won’t run**.
+Self-hosters can still raise **`MAX_TARGET_NARRATION_MINUTES`**. New work should go to [BareVid Enterprise](https://github.com/apppplepie/barevid-enterprise).
 
 ### Rather not DIY?
 
@@ -464,7 +463,7 @@ If the network is flaky, you don’t want to self-host, or you need a video **no
 
 ### License / openness
 
-Maintained as open source. PRs welcome: docs, i18n, Coqui TTS examples, Docker polish, etc.
+This repository is **no longer maintained**. Continued development is in [BareVid Enterprise](https://github.com/apppplepie/barevid-enterprise).
 
 ---
 
